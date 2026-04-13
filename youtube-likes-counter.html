@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>YouTube Likes Counter — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+
+    :root { --accent-h: 0; --accent-s: 80%; --accent-l: 50%;
+      --accent: hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light: hsl(var(--accent-h), 80%, 94%);
+      --accent-mid: hsl(var(--accent-h), 70%, 88%);
+      --accent-text: hsl(var(--accent-h), var(--accent-s), 32%);
+      --accent-border: hsl(var(--accent-h), 60%, 80%);
+      --hl-yellow:#fff0a0; --hl-yellow-dark:#a07a00;
+      --hl-accent: hsl(var(--accent-h), 90%, 88%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 30%);
+      --bg:#fff; --bg-subtle:#f7f7f5; --bg-raised:#f0eeeb; --bg-code:#f4f3f0;
+      --border:#e4e2de; --border-strong:#ccc9c4;
+      --text-primary:#111110; --text-secondary:#4a4845; --text-muted:#878480;
+      --font-serif:'Instrument Serif',Georgia,serif;
+      --font-sans:'Geist',system-ui,sans-serif;
+      --font-mono:'JetBrains Mono','Fira Code',monospace;
+      --radius-sm:4px; --radius-md:8px; --radius-lg:12px;
+    }
+    .req-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px; }
+    .req-box { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 20px; }
+    .req-box-head { display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size: 12px; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent-text); margin-bottom:10px; font-weight:500; }
+    .req-box-head.nonfunc { color:hsl(38,80%,30%); }
+    .req-list { padding-left:20px; font-size: 15px; color:var(--text-secondary); }
+    .req-list li { margin-bottom:6px; }
+    .endpoint { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px 18px; margin-bottom:10px; }
+    .endpoint-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+    .method { font-family:var(--font-mono); font-size: 11px; font-weight:600; padding:2px 8px; border-radius:3px; letter-spacing:0.05em; }
+    .method.get { background:hsl(190,70%,90%); color:hsl(190,70%,28%); }
+    .method.post { background:hsl(145,55%,90%); color:hsl(145,55%,28%); }
+    .method.delete { background:hsl(0,70%,92%); color:hsl(0,70%,38%); }
+    .ep-path { font-family:var(--font-mono); font-size: 15px; color:var(--text-primary); font-weight:500; }
+    .ep-desc { font-size: 15px; color:var(--text-secondary); margin:6px 0 0; }
+    .failure { display:flex; gap:14px; padding:14px 18px; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); margin-bottom:10px; }
+    .failure-icon { font-size:18px; flex-shrink:0; margin-top:2px; }
+    .failure-title { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .failure-desc { font-size: 15px; color:var(--text-secondary); margin-bottom:4px; }
+    .mitigation { font-family:var(--font-mono); font-size: 12px; color:hsl(145,55%,28%); }
+    .similar-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+    .similar-card { display:block; text-decoration:none; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 18px; transition:all 0.15s; }
+    .similar-card:hover { border-color:var(--accent-border); background:var(--accent-light); }
+    .similar-card h4 { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .similar-card p { font-size: 13.5px; color:var(--text-muted); margin:0; }
+    .evolution-step { display:flex; gap:14px; margin-bottom:18px; }
+    .evolution-marker { width:32px; height:32px; border-radius:50%; background:var(--accent-light); border:2px solid var(--accent-border); display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size: 12px; font-weight:600; color:var(--accent-text); flex-shrink:0; }
+    .evolution-content h4 { font-size: 16px; font-weight:600; margin-bottom:4px; }
+    .evolution-content p { font-size: 15px; color:var(--text-secondary); margin:0; }
+  </style>
+</head>
+<body>
+
+<main>
+
+  <div class="hero" id="problem">
+    <div class="hero-kicker">System Design — Distributed Counting at Massive Write Scale</div>
+    <h1 class="hero-title">Design <em>YouTube Likes Counter</em></h1>
+    <p class="hero-desc">
+      A distributed counter system that handles 10M+ increments per second across 10B+ videos with eventual consistency for display.
+      The hard parts: a <span class="hl">sharded counter architecture</span> that absorbs bursty write traffic without hot rows,
+      a <span class="hl-accent">deduplication layer</span> ensuring each user can like a video only once,
+      and a read path from <span class="hl">Redis cache</span> that serves stale-but-fast counts within ~5 seconds of real-time.
+      Instagram solved media pipelines; this problem isolates the counter subsystem at YouTube's write volume.
+    </p>
+    <div class="hero-tags">
+      <span class="tag accent">Core: Sharded Counters + Dedup</span>
+      <span class="tag">10B+ videos</span>
+      <span class="tag">~500K likes/sec peak</span>
+      <span class="tag">~5s eventual consistency</span>
+      <span class="tag">Write-heavy</span>
+    </div>
+  </div>
+
+  <section class="section" id="requirements">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Requirements</h2></div>
+    <div class="req-grid">
+      <div class="req-box">
+        <div class="req-box-head">Functional</div>
+        <ul class="req-list">
+          <li>User can <span class="hl-accent">like a video</span> (toggle on)</li>
+          <li>User can <span class="hl-accent">unlike a video</span> (toggle off)</li>
+          <li>Retrieve the <span class="hl-accent">total like count</span> for any video</li>
+          <li>Each user can like a given video <strong>at most once</strong> (deduplication)</li>
+          <li>Display count is eventually consistent; exact value not required for display (&gt;100K shown as "1.2M")</li>
+          <li>User's own like status must be strongly consistent (if I liked, I see the filled thumb)</li>
+        </ul>
+      </div>
+      <div class="req-box">
+        <div class="req-box-head nonfunc">Non-Functional</div>
+        <ul class="req-list">
+          <li><span class="hl">Write throughput: ~500K likes/sec</span> peak (viral events, BTS comeback)</li>
+          <li><span class="hl">Read latency &lt; 10 ms</span> p99 for count retrieval</li>
+          <li>Display count within <span class="hl">~5 seconds</span> of real-time</li>
+          <li>99.99% availability for reads; 99.95% for writes</li>
+          <li>Scale to 10B+ videos, 2B+ users</li>
+          <li>Dedup must prevent double-counting even under retries and network partitions</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="scale">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Scale Estimation</h2></div>
+    <div class="prose">
+      <p>2B logged-in users. Average user likes ~5 videos/day. That's <strong>10B likes/day ~ 115K writes/sec average, ~500K peak</strong>. Reads are heavier: every video page load fetches the like count. At 5B video views/day, that's <strong>~58K count reads/sec</strong>, but most are served from cache. The dedup set is ~5 TB (300B entries at 16 bytes each over 30 days).</p>
+    </div>
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-val">10B+</div><div class="kv-lbl">total videos</div></div>
+      <div class="kv-card"><div class="kv-val">~500K</div><div class="kv-lbl">peak likes/sec</div></div>
+      <div class="kv-card"><div class="kv-val">~58K</div><div class="kv-lbl">count reads/sec</div></div>
+      <div class="kv-card"><div class="kv-val">~5 TB</div><div class="kv-lbl">dedup state (30-day window)</div></div>
+      <div class="kv-card"><div class="kv-val">~5s</div><div class="kv-lbl">max display staleness</div></div>
+      <div class="kv-card"><div class="kv-val">~10B</div><div class="kv-lbl">likes/day</div></div>
+      <div class="kv-card"><div class="kv-val">&lt; 10 ms</div><div class="kv-lbl">p99 read latency (cached)</div></div>
+      <div class="kv-card"><div class="kv-val">2B+</div><div class="kv-lbl">registered users</div></div>
+    </div>
+    <div class="prose"><p>The dominant challenge is write volume. A single Cassandra row per video becomes a hot partition instantly. The entire design revolves around distributing writes across shards and reconciling periodically.</p></div>
+  </section>
+
+  <section class="section" id="api">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">API Design</h2></div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/v1/videos/{id}/like</span></div>
+      <p class="ep-desc">Like a video. Idempotent — re-liking a video you already liked returns 200 with no side effect. Requires authenticated user. Publishes event to Kafka after dedup check passes.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method delete">DELETE</span><span class="ep-path">/v1/videos/{id}/like</span></div>
+      <p class="ep-desc">Unlike a video. Removes the user from the like-set and publishes a decrement event. Idempotent — unliking when not liked returns 200.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/v1/videos/{id}/stats</span></div>
+      <p class="ep-desc">Returns <code>{ like_count, dislike_count, view_count, user_liked: bool }</code>. Count fields are eventually consistent (~5s staleness). <code>user_liked</code> is strongly consistent, read from dedup store.</p>
+    </div>
+  </section>
+
+  <section class="section" id="architecture">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">High-Level Architecture</h2></div>
+    <div class="prose">
+      <p>Two paths diverge from the API gateway:</p>
+      <ul>
+        <li><strong>Write path</strong>: Like request → dedup check (Bloom filter + Redis SET) → publish to Kafka → counter aggregator consumes and increments sharded counters → periodic flush to Cassandra → cache invalidation in Redis.</li>
+        <li><strong>Read path</strong>: Stats request → Redis cache hit (most cases) → on miss, read from Cassandra counter table + rebuild cache. User's own like status read directly from dedup store.</li>
+      </ul>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head"><span class="diagram-label">Architecture — Like Write + Count Read</span><span class="diagram-type">SVG</span></div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 760 400" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="yt-arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#9ca3af"/></marker>
+          </defs>
+          <g font-family="Geist, system-ui, sans-serif" font-size="11">
+            <!-- Row 1: Client → API GW → Like Service -->
+            <rect x="20" y="30" width="100" height="40" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="70" y="54" text-anchor="middle" font-weight="500">Client</text>
+
+            <rect x="160" y="30" width="120" height="40" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="220" y="54" text-anchor="middle" font-weight="500">API Gateway</text>
+
+            <rect x="320" y="30" width="120" height="40" rx="6" fill="hsl(0,70%,92%)" stroke="hsl(0,70%,40%)"/>
+            <text x="380" y="54" text-anchor="middle" font-weight="500">Like Service</text>
+
+            <!-- Row 1 right: Dedup -->
+            <rect x="500" y="30" width="120" height="40" rx="6" fill="hsl(45,80%,90%)" stroke="hsl(45,75%,45%)"/>
+            <text x="560" y="48" text-anchor="middle" font-weight="500">Dedup Check</text>
+            <text x="560" y="60" text-anchor="middle" font-size="9" fill="#878480">Bloom + Redis SET</text>
+
+            <!-- Row 2: Kafka -->
+            <rect x="200" y="120" width="180" height="40" rx="6" fill="hsl(0,0%,15%)" stroke="hsl(0,0%,15%)"/>
+            <text x="290" y="144" text-anchor="middle" fill="#fff" font-weight="500">Kafka (like-events topic)</text>
+
+            <!-- Row 2 right: Counter Aggregator -->
+            <rect x="440" y="120" width="160" height="40" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="520" y="138" text-anchor="middle" font-weight="500">Counter Aggregator</text>
+            <text x="520" y="150" text-anchor="middle" font-size="9" fill="#878480">sharded in-memory</text>
+
+            <!-- Row 3: Cassandra + Redis Cache -->
+            <rect x="120" y="220" width="160" height="40" rx="6" fill="hsl(217,80%,90%)" stroke="hsl(217,80%,42%)"/>
+            <text x="200" y="244" text-anchor="middle" font-weight="500">Cassandra (counters)</text>
+
+            <rect x="340" y="220" width="140" height="40" rx="6" fill="hsl(0,72%,90%)" stroke="hsl(0,70%,40%)"/>
+            <text x="410" y="244" text-anchor="middle" font-weight="500">Redis (count cache)</text>
+
+            <rect x="540" y="220" width="140" height="40" rx="6" fill="hsl(0,72%,90%)" stroke="hsl(0,70%,40%)"/>
+            <text x="610" y="238" text-anchor="middle" font-weight="500">Redis (dedup SET)</text>
+            <text x="610" y="250" text-anchor="middle" font-size="9" fill="#878480">user:video membership</text>
+
+            <!-- Row 4: Read path label -->
+            <rect x="200" y="310" width="280" height="40" rx="6" fill="hsl(190,70%,92%)" stroke="hsl(190,60%,42%)"/>
+            <text x="340" y="334" text-anchor="middle" font-weight="500">Read path: Redis cache → fallback Cassandra</text>
+
+            <!-- Arrows: Row 1 -->
+            <line x1="120" y1="50" x2="160" y2="50" stroke="#9ca3af" marker-end="url(#yt-arr)"/>
+            <line x1="280" y1="50" x2="320" y2="50" stroke="#9ca3af" marker-end="url(#yt-arr)"/>
+            <line x1="440" y1="50" x2="500" y2="50" stroke="#9ca3af" marker-end="url(#yt-arr)"/>
+
+            <!-- Like Service → Kafka -->
+            <line x1="380" y1="70" x2="290" y2="120" stroke="#9ca3af" marker-end="url(#yt-arr)"/>
+            <!-- Kafka → Aggregator -->
+            <line x1="380" y1="140" x2="440" y2="140" stroke="#9ca3af" marker-end="url(#yt-arr)"/>
+
+            <!-- Aggregator → Cassandra (flush) -->
+            <line x1="520" y1="160" x2="200" y2="220" stroke="#9ca3af" stroke-dasharray="3 3" marker-end="url(#yt-arr)"/>
+            <!-- Aggregator → Redis cache (invalidate) -->
+            <line x1="520" y1="160" x2="410" y2="220" stroke="#9ca3af" stroke-dasharray="3 3" marker-end="url(#yt-arr)"/>
+
+            <!-- Like Service → dedup Redis -->
+            <line x1="440" y1="70" x2="610" y2="220" stroke="#9ca3af" stroke-dasharray="3 3"/>
+
+            <!-- Read path connections -->
+            <line x1="410" y1="260" x2="340" y2="310" stroke="#9ca3af" marker-end="url(#yt-arr)"/>
+            <line x1="200" y1="260" x2="340" y2="310" stroke="#9ca3af" stroke-dasharray="3 3"/>
+            <line x1="340" y1="350" x2="220" y2="70" stroke="#9ca3af" stroke-dasharray="3 3"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Deep Dive — Sharded Counters &amp; Dedup</h2></div>
+    <div class="callout">
+      <div class="callout-label">The Core Question</div>
+      <p>How do you handle 500K counter increments per second without creating hot rows in your database, while guaranteeing each user can only like once?</p>
+    </div>
+
+    <div class="prose">
+      <p><strong>Step 1 — Dedup check.</strong> Two-tier: Bloom filter (in-memory, ~1% FP) rejects obvious duplicates instantly. On "maybe," check Redis SET <code>likes:{video_id}</code>. False positive from Bloom = one extra Redis lookup. Prevents double-counting under retries.</p>
+
+      <p><strong>Step 2 — Publish to Kafka.</strong> Publish <code>LikeEvent{video_id, user_id, LIKE|UNLIKE}</code> to a topic partitioned by video_id. Kafka provides durability and ordering. Partitioning ensures all likes for one video go to the same consumer.</p>
+
+      <p><strong>Step 3 — Sharded in-memory aggregation.</strong> Each aggregator instance holds a local shard counter per video. 50 aggregators handling a viral video at 100K likes/sec = ~2K increments/sec each — trivial in memory.</p>
+
+      <p><strong>Step 4 — Periodic flush to Cassandra.</strong> Every ~5s, flush accumulated deltas. Table: <code>video_id, shard_id, count_delta</code>. Total = SUM(shards). Turns 500K writes/sec into ~10K batch writes every 5s.</p>
+
+      <p><strong>Step 5 — Cache invalidation.</strong> After flush, update Redis <code>count:{video_id}</code>. Reads hit cache (sub-ms); on miss, sum shards from Cassandra. Staleness: at most ~5s.</p>
+
+      <p>The <span class="hl">unlike path</span> mirrors the like path: dedup confirms user liked it, publishes decrement, aggregator subtracts.</p>
+
+      <div class="diagram-wrap">
+        <div class="diagram-head"><span class="diagram-label">Sequence — Like Request Flow</span><span class="diagram-type">Mermaid.js</span></div>
+        <div class="diagram-body">
+          <div class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant API as API Gateway
+    participant LS as Like Service
+    participant BF as Bloom Filter
+    participant RS as Redis (dedup SET)
+    participant K as Kafka
+    participant AG as Counter Aggregator
+    participant CA as Cassandra
+    participant RC as Redis (count cache)
+
+    C->>API: POST /videos/{id}/like
+    API->>LS: forward (auth validated)
+    LS->>BF: check(user_id, video_id)
+    BF-->>LS: maybe new
+    LS->>RS: SISMEMBER likes:{vid} user_id
+    RS-->>LS: 0 (not member)
+    LS->>RS: SADD likes:{vid} user_id
+    LS->>K: publish LikeEvent{vid, uid, LIKE}
+    LS-->>C: 200 OK
+    K->>AG: consume (partitioned by vid)
+    AG->>AG: increment in-memory shard counter
+    Note over AG: every ~5 seconds
+    AG->>CA: batch flush shard deltas
+    AG->>RC: SET count:{vid} new_total
+    Note over RC: reads serve from here
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Key Design Decisions &amp; Tradeoffs</h2></div>
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">Sharded counters + periodic rollup</div>
+        <h4>Distribute writes across N shards, sum on read</h4>
+        <p>Each aggregator holds a local counter per video. Flush deltas every ~5s. Total = SUM(shards). Write throughput scales linearly.</p>
+      </div>
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">Single atomic counter per video</div>
+        <h4>One row, UPDATE count = count + 1</h4>
+        <p>Simple but fatal at scale. A viral video becomes a hot partition. Even Cassandra LWTs can't handle 100K concurrent increments on one row.</p>
+      </div>
+    </div>
+
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">Async writes via Kafka</div>
+        <h4>Publish like event; aggregate asynchronously</h4>
+        <p>Kafka absorbs write bursts; provides durability and replay. Like request returns in ~10ms (dedup + publish). Perfect for ~5s staleness tolerance.</p>
+      </div>
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">Synchronous DB write on every like</div>
+        <h4>Direct Cassandra UPDATE on each request</h4>
+        <p>Strong consistency but 500K writes/sec directly to Cassandra is expensive. API latency tied to DB performance. A Cassandra hiccup = user-facing errors.</p>
+      </div>
+    </div>
+
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">Bloom filter + Redis SET dedup</div>
+        <h4>Two-tier: fast reject, then exact check</h4>
+        <p>Bloom filter rejects ~99% of duplicate likes in nanoseconds (in-memory). The remaining 1% false-positives fall through to Redis SISMEMBER — one network hop. Handles 500K checks/sec without breaking a sweat.</p>
+      </div>
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">DB-only dedup (query before write)</div>
+        <h4>Check Cassandra for existing like row</h4>
+        <p>Correct but slow. Every like requires a Cassandra read-before-write. At 500K/sec, that's 500K random reads — high latency, wastes DB capacity.</p>
+      </div>
+    </div>
+
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">Redis cache with ~5s TTL refresh</div>
+        <h4>Serve stale counts from cache</h4>
+        <p>Aggregator pushes updated totals to Redis every flush cycle. Sub-ms reads. For "1.2M likes," 5 seconds of drift is invisible.</p>
+      </div>
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">Read-through sum from Cassandra</div>
+        <h4>Sum all shards on every read</h4>
+        <p>Always fresh but 50 shard reads per video per request. At 58K reads/sec = 2.9M Cassandra reads/sec. Cache is the obvious win.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="failures">
+    <div class="section-head"><span class="section-n">08</span><h2 class="section-title">What Can Go Wrong</h2></div>
+    <div class="failure">
+      <div class="failure-icon">🐌</div>
+      <div>
+        <div class="failure-title">Kafka consumer lag — stale counts</div>
+        <div class="failure-desc">Aggregator can't keep up with burst traffic. Displayed count lags by minutes instead of seconds.</div>
+        <div class="mitigation">-> Mitigation: auto-scale consumers on lag metric. Tune partition count for peak. Alert at > 10s lag.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🏚</div>
+      <div>
+        <div class="failure-title">Redis cache miss stampede</div>
+        <div class="failure-desc">Viral video's cache key expires. 10K concurrent reads slam Cassandra to rebuild count.</div>
+        <div class="mitigation">-> Mitigation: jitter TTL + single-flight rebuild (one goroutine rebuilds, others wait). Pre-warm trending videos.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">⚖</div>
+      <div>
+        <div class="failure-title">Counter shard imbalance</div>
+        <div class="failure-desc">Kafka partitions skewed: one partition gets all BTS likes, one aggregator overloaded.</div>
+        <div class="mitigation">-> Mitigation: partition by video_id hash. For extreme hotspots, sub-partition with random suffix.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🎯</div>
+      <div>
+        <div class="failure-title">Bloom filter false positive — lost likes</div>
+        <div class="failure-desc">Bloom filter says "already liked" for a new user. Like silently dropped if Bloom is sole authority.</div>
+        <div class="mitigation">-> Mitigation: always fall through to Redis SET on Bloom positive. Bloom is an optimization, not a gatekeeper.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">💥</div>
+      <div>
+        <div class="failure-title">Aggregator crash before flush</div>
+        <div class="failure-desc">5 seconds of in-memory increments lost on crash. Counter drifts permanently low.</div>
+        <div class="mitigation">-> Mitigation: commit Kafka offsets only after flush. On restart, replay from last offset. No data loss.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🔁</div>
+      <div>
+        <div class="failure-title">Dedup Redis SET memory explosion</div>
+        <div class="failure-desc">A video with 100M likes = 100M SET entries = 800 MB per key. Top 1000 videos = 800 GB in Redis.</div>
+        <div class="mitigation">-> Mitigation: per-video Bloom filters or HyperLogLog for approximate dedup. Shard across Redis cluster. Evict cold video sets to Cassandra.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="antipatterns">
+    <div class="section-head"><span class="section-n">⚠</span><h2 class="section-title">Anti-patterns</h2></div>
+    <div class="prose">
+
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Single row UPDATE counter per video (hot row)</div>
+        <p class="why">Every like for a viral video contends on the same row. At 100K likes/sec, even Cassandra's last-write-wins semantics lose increments. The row becomes a global bottleneck.</p>
+      </div>
+      <div class="good"><strong>Better:</strong> Sharded counters — distribute increments across N shard rows; sum on read. No single row sees more than write_rate / N operations/sec.</div>
+    </div>
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Synchronous Cassandra write on every like</div>
+        <p class="why">500K direct writes/sec with quorum consistency. Each like adds 5-10ms of DB latency to the request path. A slow Cassandra node = user-facing 500s.</p>
+      </div>
+      <div class="good"><strong>Better:</strong> Publish to Kafka (fire-and-forget from the user's perspective); aggregate and batch-flush to Cassandra every ~5s. API latency drops to ~10ms.</div>
+    </div>
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">No dedup — user likes a video 1000 times</div>
+        <p class="why">Without membership checks, a malicious user (or buggy client with retry loops) can inflate counts arbitrarily. Advertiser trust destroyed; engagement metrics meaningless.</p>
+      </div>
+      <div class="good"><strong>Better:</strong> Two-tier dedup: Bloom filter for fast rejection of known duplicates, Redis SET for authoritative membership. Check before publishing to Kafka.</div>
+    </div>
+    </div>
+  </section>
+
+  <section class="section" id="interview-tips">
+    <div class="section-head"><span class="section-n">09</span><h2 class="section-title">Interview Tips</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>Start with the write path, not the read path.</strong> The hard part is absorbing 500K writes/sec without hot rows. Most candidates jump to "use Redis INCR" — which works until you need durability, dedup, and crash recovery.</li>
+        <li><strong>Name the sharded counter pattern explicitly.</strong> "I'll use N counter shards per video, flush deltas periodically" shows you understand distributed counting. This is the key insight the interviewer is looking for.</li>
+        <li><strong>Don't forget dedup.</strong> A counter without dedup is a broken counter. Mention Bloom filter + authoritative store as a two-tier approach. Discuss the false-positive tradeoff.</li>
+        <li><strong>Clarify consistency requirements early.</strong> "Is exact real-time count needed, or is ~5s eventual consistency OK?" This question shows maturity. YouTube shows approximate counts — that's a hint.</li>
+        <li><strong>Kafka is the shock absorber.</strong> Explain why async is safe here: unlike a payment, a like being delayed by 5 seconds is invisible to the user. Kafka decouples the write spike from the DB capacity.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="similar">
+    <div class="section-head"><span class="section-n">10</span><h2 class="section-title">Similar Problems</h2></div>
+    <div class="similar-grid">
+      <a href="count-active-users.html" class="similar-card"><h4>Count Active Users</h4><p>Same distributed counting pattern at different granularity</p></a>
+      <a href="twitter-trending.html" class="similar-card"><h4>Twitter Trending</h4><p>Counting + ranking over sliding time windows</p></a>
+      <a href="leaderboard.html" class="similar-card"><h4>Leaderboard</h4><p>Sorted counters with rank queries — similar sharding challenges</p></a>
+      <a href="instagram.html" class="similar-card"><h4>Instagram</h4><p>Like counters are a subsystem of the full Instagram design</p></a>
+      <a href="002-news-feed/index.html" class="similar-card"><h4>News Feed</h4><p>Fan-out patterns and engagement counters overlap</p></a>
+    </div>
+  </section>
+
+  <section class="section" id="evolution">
+    <div class="section-head"><span class="section-n">11</span><h2 class="section-title">Evolution</h2></div>
+    <div class="evolution-step">
+      <div class="evolution-marker">1</div>
+      <div class="evolution-content">
+        <h4>Single DB counter column</h4>
+        <p>One row per video with a <code>like_count</code> integer. UPDATE on every like. Works fine at ~100 likes/sec. Simple, strongly consistent. This is where every startup begins.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">2</div>
+      <div class="evolution-content">
+        <h4>Redis INCR + periodic DB flush</h4>
+        <p>Move hot counter to Redis (INCR is atomic, single-threaded, ~100K ops/sec). Background job flushes Redis value to DB every 30s for durability. Handles ~50K likes/sec on one Redis instance.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">3</div>
+      <div class="evolution-content">
+        <h4>Kafka + sharded aggregator</h4>
+        <p>Kafka absorbs write bursts. Multiple aggregator instances each hold a shard counter in memory; batch-flush to Cassandra. Dedup via Redis SET. Scales to ~500K likes/sec. This is the core design described above.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">4</div>
+      <div class="evolution-content">
+        <h4>Per-region counters + global rollup</h4>
+        <p>Each geographic region (US, EU, APAC) runs its own aggregator cluster with local Kafka + Cassandra. A global rollup job merges regional totals every ~30s. Reduces cross-region latency; improves write locality.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">5</div>
+      <div class="evolution-content">
+        <h4>Real-time streaming counters (Flink) + approximate display</h4>
+        <p>Replace batch aggregators with Apache Flink streaming jobs. Counters update in real-time with exactly-once semantics. Display uses HyperLogLog for approximate unique counts. Counts shown as "~1.2M" — nobody needs the exact number.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const FLOW_NODES = [
+  { label: 'Client',             sub: 'Web / Mobile' },
+  { label: 'API Gateway',        sub: 'Auth + rate-limit' },
+  { label: 'Like Service',       sub: 'Dedup + publish' },
+  { label: 'Bloom Filter',       sub: 'Fast reject dupes' },
+  { label: 'Kafka',              sub: 'like-events topic' },
+  { label: 'Counter Aggregator', sub: 'Sharded in-memory' },
+  { label: 'Cassandra',          sub: 'Durable counter store' },
+];
+const FLOW_DESCS = [
+  'User taps like button; client sends POST /videos/{id}/like',
+  'API gateway validates auth token and applies per-user rate limit',
+  'Like service checks Bloom filter + Redis SET for dedup, publishes to Kafka',
+  'Bloom filter rejects obvious duplicates in nanoseconds; falls through to Redis SET on maybe',
+  'Kafka durably queues LikeEvent, partitioned by video_id for ordering',
+  'Aggregator consumes events, increments in-memory shard counter, flushes every ~5s',
+  'Cassandra stores shard deltas; Redis cache updated with new total on each flush',
+];
+</script>
+
+</body>
+</html>

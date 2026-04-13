@@ -6,7 +6,9 @@
     "recommendation-algorithm",
     "leaderboard",
     "instagram",
-    "twitter-trending"
+    "twitter-trending",
+    "youtube-likes-counter",
+    "reddit-full"
   ],
   "Storage & Data": [
     "003-google-drive",
@@ -20,7 +22,9 @@
     "notification-system",
     "video-conferencing",
     "slack-discord",
-    "gmail"
+    "gmail",
+    "google-calendar",
+    "reminder-alert"
   ],
   "Media & Streaming": [
     "005-youtube-netflix",
@@ -31,7 +35,8 @@
     "008-web-crawler",
     "009-yelp-google-places",
     "google-maps",
-    "search-engine"
+    "search-engine",
+    "google-news"
   ],
   "Infrastructure": [
     "007-rate-limiter",
@@ -39,7 +44,9 @@
     "distributed-locking",
     "distributed-queue",
     "count-active-users",
-    "design-cdn"
+    "design-cdn",
+    "unique-id-generator",
+    "leetcode-judge"
   ],
   "Financial & Trading": [
     "bidding-platform",
@@ -55,7 +62,8 @@
     "ticketmaster-system-design",
     "uber-system-design",
     "doordash-uber-eats",
-    "airbnb"
+    "airbnb",
+    "flash-sale"
   ],
   "Gaming": [
     "pubg-system-design"

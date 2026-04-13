@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Flash Sale System — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+    :root { --accent-h: 350; --accent-s: 80%; --accent-l: 50%;
+      --accent: hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light: hsl(var(--accent-h), 80%, 95%);
+      --accent-mid: hsl(var(--accent-h), 70%, 88%);
+      --accent-text: hsl(var(--accent-h), var(--accent-s), 38%);
+      --accent-border: hsl(var(--accent-h), 60%, 80%);
+      --hl-yellow:#fff0a0; --hl-yellow-dark:#a07a00;
+      --hl-accent: hsl(var(--accent-h), 90%, 90%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 35%);
+      --bg:#fff; --bg-subtle:#f7f7f5; --bg-raised:#f0eeeb; --bg-code:#f4f3f0;
+      --border:#e4e2de; --border-strong:#ccc9c4;
+      --text-primary:#111110; --text-secondary:#4a4845; --text-muted:#878480;
+      --font-serif:'Instrument Serif',Georgia,serif;
+      --font-sans:'Geist',system-ui,sans-serif;
+      --font-mono:'JetBrains Mono','Fira Code',monospace;
+      --radius-sm:4px; --radius-md:8px; --radius-lg:12px;
+    }
+    .req-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px; }
+    .req-box { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 20px; }
+    .req-box-head { display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size: 12px; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent-text); margin-bottom:10px; font-weight:500; }
+    .req-box-head.nonfunc { color:hsl(38,80%,30%); }
+    .req-list { padding-left:20px; font-size: 15px; color:var(--text-secondary); }
+    .req-list li { margin-bottom:6px; }
+    .endpoint { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px 18px; margin-bottom:10px; }
+    .endpoint-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+    .method { font-family:var(--font-mono); font-size: 11px; font-weight:600; padding:2px 8px; border-radius:3px; letter-spacing:0.05em; }
+    .method.get { background:hsl(190,70%,90%); color:hsl(190,70%,28%); }
+    .method.post { background:hsl(145,55%,90%); color:hsl(145,55%,28%); }
+    .method.delete { background:hsl(0,70%,92%); color:hsl(0,70%,38%); }
+    .ep-path { font-family:var(--font-mono); font-size: 15px; color:var(--text-primary); font-weight:500; }
+    .ep-desc { font-size: 15px; color:var(--text-secondary); margin:6px 0 0; }
+    .failure { display:flex; gap:14px; padding:14px 18px; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); margin-bottom:10px; }
+    .failure-icon { font-size:18px; flex-shrink:0; margin-top:2px; }
+    .failure-title { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .failure-desc { font-size: 15px; color:var(--text-secondary); margin-bottom:4px; }
+    .mitigation { font-family:var(--font-mono); font-size: 12px; color:hsl(145,55%,28%); }
+    .similar-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+    .similar-card { display:block; text-decoration:none; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 18px; transition:all 0.15s; }
+    .similar-card:hover { border-color:var(--accent-border); background:var(--accent-light); }
+    .similar-card h4 { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .similar-card p { font-size: 13.5px; color:var(--text-muted); margin:0; }
+    .evolution-step { display:flex; gap:14px; margin-bottom:18px; }
+    .evolution-marker { width:32px; height:32px; border-radius:50%; background:var(--accent-light); border:2px solid var(--accent-border); display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size: 12px; font-weight:600; color:var(--accent-text); flex-shrink:0; }
+    .evolution-content h4 { font-size: 16px; font-weight:600; margin-bottom:4px; }
+    .evolution-content p { font-size: 15px; color:var(--text-secondary); margin:0; }
+  </style>
+</head>
+<body>
+
+<main>
+
+  <div class="hero" id="problem">
+    <div class="hero-kicker">System Design — Extreme Inventory Contention</div>
+    <h1 class="hero-title">Design a <em>Flash Sale</em> System</h1>
+    <p class="hero-desc">
+      100K users hit "Buy" at the exact same second for 1K limited items. <strong>No overselling.</strong> The hard parts:
+      a <span class="hl">waiting room</span> that absorbs the thundering herd without crashing your backend,
+      <span class="hl-accent">atomic inventory decrement</span> that never goes negative even under 100K concurrent requests,
+      and a <span class="hl-accent">payment pipeline</span> that pre-authorizes cards before entering the queue so checkout is instant for winners.
+      Amazon Prime Day, Xiaomi phone drops, Supreme releases — same pattern, different merch.
+    </p>
+    <div class="hero-tags">
+      <span class="tag accent">⚡ Core: Waiting Room + Atomic Inventory + Fair Queue</span>
+      <span class="tag">100K concurrent users</span>
+      <span class="tag">1K items</span>
+      <span class="tag">Sub-second checkout</span>
+      <span class="tag">Zero oversell</span>
+    </div>
+  </div>
+
+  <section class="section" id="requirements">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Requirements</h2></div>
+    <div class="req-grid">
+      <div class="req-box">
+        <div class="req-box-head">Functional</div>
+        <ul class="req-list">
+          <li>Admin creates a <span class="hl-accent">flash sale event</span>: product, quantity, start time, duration</li>
+          <li>Users enter a <span class="hl-accent">waiting room</span> before sale starts; admitted in controlled batches at T=0</li>
+          <li>Admitted user sees <span class="hl-accent">product page</span> with live inventory count → clicks Buy → instant checkout</li>
+          <li>Payment pre-authorized during queue wait; <span class="hl-accent">charge on successful purchase</span> only</li>
+          <li>Fair ordering: FIFO within the waiting room; no advantage to page-refresh spam</li>
+          <li>Sold-out notification to remaining queued users immediately</li>
+        </ul>
+      </div>
+      <div class="req-box">
+        <div class="req-box-head nonfunc">Non-Functional</div>
+        <ul class="req-list">
+          <li><span class="hl">Zero oversell</span> — never sell item #1001 of 1000</li>
+          <li>Checkout latency &lt; <span class="hl">500 ms</span> for admitted users</li>
+          <li>Waiting room absorbs <span class="hl">100K+ concurrent connections</span></li>
+          <li>Sale start within &lt; 1 sec of configured time (clock-accurate)</li>
+          <li>Survive bot attacks: CAPTCHA + rate-limit + proof-of-work</li>
+          <li>Graceful: sold-out ≠ error; it's a clean UX state</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="scale">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Scale Estimation</h2></div>
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-k">Concurrent users at T=0</div><div class="kv-v">~100K</div><div class="kv-sub">all hitting the same endpoint within 1 second</div></div>
+      <div class="kv-card"><div class="kv-k">Inventory</div><div class="kv-v">1K</div><div class="kv-sub">flash-sale items; sometimes as low as 10 for hype drops</div></div>
+      <div class="kv-card"><div class="kv-k">Admission rate</div><div class="kv-v">~500/sec</div><div class="kv-sub">controlled drain from waiting room to checkout</div></div>
+      <div class="kv-card"><div class="kv-k">Checkout latency</div><div class="kv-v">&lt; 500 ms</div><div class="kv-sub">pre-authed payment → atomic decrement → confirm</div></div>
+      <div class="kv-card"><div class="kv-k">Bot traffic</div><div class="kv-v">~60%</div><div class="kv-sub">of total requests during hype drops; must be filtered</div></div>
+      <div class="kv-card"><div class="kv-k">Sale duration</div><div class="kv-v">~2–30 min</div><div class="kv-sub">popular items sell out in seconds; long-tail in minutes</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="api">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">API Design</h2></div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/flash-sales/{sale_id}/enter-queue</span></div>
+      <p class="ep-desc">User enters waiting room. Returns <code>{queue_ticket, position, estimated_wait_sec}</code>. Ticket is a signed JWT with enqueue timestamp — proves FIFO position. Requires CAPTCHA token.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/api/flash-sales/{sale_id}/status?ticket=TOKEN</span></div>
+      <p class="ep-desc">Poll queue status. Returns <code>{status: waiting|admitted|sold_out, position, inventory_remaining}</code>. Client polls every 2 s or receives SSE push.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/flash-sales/{sale_id}/purchase</span></div>
+      <p class="ep-desc">Admitted user purchases. Body: <code>{ticket, payment_token, quantity: 1}</code>. Atomic inventory decrement + payment capture. Returns <code>{order_id, status: success|sold_out}</code>. Idempotency via ticket — can't buy twice.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/flash-sales/{sale_id}/pre-auth</span></div>
+      <p class="ep-desc">Pre-authorize payment while in queue. Returns <code>{auth_id}</code>. If user doesn't win, auth voided automatically after 30 min.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/api/flash-sales/{sale_id}/inventory</span></div>
+      <p class="ep-desc">Live inventory count. Served from Redis; eventually consistent (~1 s lag). Used for countdown UI.</p>
+    </div>
+  </section>
+
+  <section class="section" id="architecture">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Architecture</h2></div>
+    <div class="prose"><p>Three tiers isolated by concern: <strong>queue tier</strong> (absorb + order the herd), <strong>checkout tier</strong> (atomic purchase), <strong>payment tier</strong> (pre-auth + capture). A CDN serves the static product page; only the queue-enter and purchase calls hit the backend.</p></div>
+    <div class="diagram-wrap">
+      <div class="diagram-head"><span class="diagram-label">Flash Sale Architecture</span><span class="diagram-type">SVG</span></div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 840 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Flash sale architecture">
+          <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="hsl(350,30%,40%)"/></marker></defs>
+          <style>
+/* ux-v2-bumped */
+            .lbl { font-family:'Geist',sans-serif; font-size: 12px; fill:#111; }
+            .sub { font-family:'JetBrains Mono',monospace; font-size: 10.5px; fill:#555; }
+            .box { fill:#fff; stroke:hsl(350,40%,72%); stroke-width:1.2; rx:6; }
+            .box-accent { fill:hsl(350,80%,95%); stroke:hsl(350,80%,50%); stroke-width:1.5; rx:6; }
+            .box-data { fill:hsl(38,70%,94%); stroke:hsl(38,60%,60%); stroke-width:1.2; rx:6; }
+            .edge { stroke:hsl(350,30%,40%); stroke-width:1.2; fill:none; }
+          </style>
+          <rect x="20" y="30" width="110" height="50" class="box"/><text x="75" y="52" text-anchor="middle" class="lbl">Users (100K)</text><text x="75" y="67" text-anchor="middle" class="sub">browsers + bots</text>
+          <rect x="160" y="30" width="120" height="50" class="box-accent"/><text x="220" y="52" text-anchor="middle" class="lbl">CDN + WAF</text><text x="220" y="67" text-anchor="middle" class="sub">static page + CAPTCHA</text>
+          <rect x="310" y="30" width="130" height="50" class="box-accent"/><text x="375" y="52" text-anchor="middle" class="lbl">API Gateway</text><text x="375" y="67" text-anchor="middle" class="sub">rate-limit + bot filter</text>
+          <rect x="470" y="20" width="150" height="70" class="box-accent"/><text x="545" y="45" text-anchor="middle" class="lbl">Queue Service</text><text x="545" y="60" text-anchor="middle" class="sub">Redis Sorted Set</text><text x="545" y="75" text-anchor="middle" class="sub">FIFO by enqueue_ts</text>
+          <rect x="650" y="30" width="170" height="50" class="box"/><text x="735" y="52" text-anchor="middle" class="lbl">Admission Controller</text><text x="735" y="67" text-anchor="middle" class="sub">drains N/sec</text>
+          <rect x="310" y="140" width="130" height="55" class="box-accent"/><text x="375" y="162" text-anchor="middle" class="lbl">Payment svc</text><text x="375" y="177" text-anchor="middle" class="sub">pre-auth + capture</text>
+          <rect x="470" y="140" width="150" height="55" class="box-accent"/><text x="545" y="162" text-anchor="middle" class="lbl">Checkout svc</text><text x="545" y="177" text-anchor="middle" class="sub">atomic purchase</text>
+          <rect x="650" y="140" width="170" height="55" class="box-data"/><text x="735" y="162" text-anchor="middle" class="lbl">Redis: inventory</text><text x="735" y="177" text-anchor="middle" class="sub">DECR if &gt; 0 (Lua)</text>
+          <rect x="470" y="240" width="150" height="50" class="box-data"/><text x="545" y="262" text-anchor="middle" class="lbl">Postgres: orders</text><text x="545" y="277" text-anchor="middle" class="sub">authoritative ledger</text>
+          <rect x="650" y="240" width="170" height="50" class="box-data"/><text x="735" y="262" text-anchor="middle" class="lbl">Kafka: events</text><text x="735" y="277" text-anchor="middle" class="sub">order created / sold out</text>
+          <rect x="310" y="320" width="510" height="50" class="box"/><text x="565" y="347" text-anchor="middle" class="lbl">Notification: push sold-out to all remaining queue users via SSE / WebSocket</text>
+          <path class="edge" d="M130,55 L160,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M280,55 L310,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M440,55 L470,45" marker-end="url(#arr)"/>
+          <path class="edge" d="M620,55 L650,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M735,80 L545,140" marker-end="url(#arr)"/>
+          <path class="edge" d="M375,110 L375,140" marker-end="url(#arr)"/>
+          <path class="edge" d="M620,165 L650,165" marker-end="url(#arr)"/>
+          <path class="edge" d="M545,195 L545,240" marker-end="url(#arr)"/>
+          <path class="edge" d="M620,270 L650,265" marker-end="url(#arr)"/>
+          <path class="edge" d="M735,290 L735,320" marker-end="url(#arr)"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Deep Dive — Atomic Inventory + Waiting Room</h2></div>
+    <div class="prose">
+      <p><strong>The single hardest problem:</strong> 100K users all call <code>POST /purchase</code> in 1 second. If each checks inventory, sees "999 remaining," and then decrements — you sell 100K items instead of 1K. Classic lost-update / check-then-act race.</p>
+      <p><strong>Solution: Redis Lua atomic decrement.</strong></p>
+      <pre><code>-- Redis Lua script: atomic decrement-if-positive
+local stock = redis.call('GET', KEYS[1])
+if tonumber(stock) > 0 then
+  redis.call('DECR', KEYS[1])
+  return 1  -- success
+else
+  return 0  -- sold out
+end</code></pre>
+      <p>This runs atomically inside Redis (single-threaded). No race. No oversell. Each call either gets a unit or doesn't. The caller gets a definitive answer in &lt; 1 ms.</p>
+
+      <p><strong>Waiting room.</strong> Without it, 100K users slam the checkout tier simultaneously — even if inventory check is atomic, the backend can't handle 100K DB writes/sec. Solution: a <em>queue that controls admission rate</em>.</p>
+      <ol>
+        <li><strong>User enters queue.</strong> Redis ZADD with score = enqueue timestamp. Returns ticket (signed JWT) + position.</li>
+        <li><strong>Admission controller</strong> (a cron or timer) pops the top N users per second (e.g., 500/sec) from the sorted set. Marks them "admitted" in Redis.</li>
+        <li><strong>Admitted user's next poll</strong> returns status=admitted. Client-side JS transitions to checkout page.</li>
+        <li><strong>User calls <code>POST /purchase</code></strong> with ticket. Checkout service verifies ticket is admitted, calls Redis Lua decrement, on success writes order to Postgres + captures pre-authed payment.</li>
+        <li><strong>When inventory hits 0</strong>, admission controller stops admitting. Kafka event fires. SSE/WS pushes "sold out" to all remaining queue connections.</li>
+      </ol>
+
+      <div class="diagram-wrap">
+        <div class="diagram-head"><span class="diagram-label">Purchase Sequence — Queue to Checkout</span><span class="diagram-type">Mermaid</span></div>
+        <div class="diagram-body">
+          <div class="mermaid">
+sequenceDiagram
+    participant U as User
+    participant Q as Queue svc
+    participant AC as Admission ctrl
+    participant C as Checkout svc
+    participant R as Redis (inventory)
+    participant P as Payment svc
+
+    U->>Q: POST /enter-queue (CAPTCHA)
+    Q-->>U: ticket + position=4521
+    U->>Q: GET /status (poll)
+    Q-->>U: waiting, position=312
+    AC->>Q: pop top 500 from ZSET
+    Q-->>AC: [user_tokens...]
+    AC->>Q: mark admitted
+    U->>Q: GET /status
+    Q-->>U: admitted
+    U->>C: POST /purchase (ticket)
+    C->>R: Lua DECR-if-positive
+    R-->>C: 1 (success)
+    C->>P: capture pre-auth
+    P-->>C: captured
+    C-->>U: order confirmed
+          </div>
+        </div>
+      </div>
+
+      <p><strong>Pre-authorization.</strong> While user is in queue, client silently calls <code>POST /pre-auth</code> with their saved card. If they win a slot, capture is instant — no "enter your card" delay at checkout. If they lose, auth auto-voids after 30 min. UX: "You're in line. We'll charge your card only if you get one."</p>
+
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"CDN serves the product page. Users enter a FIFO waiting room (Redis sorted set by enqueue timestamp). An admission controller drains N users/sec into checkout. Inventory is a single Redis key decremented atomically via a Lua script — no oversell possible. Payment is pre-authorized during queue wait; on admission + successful decrement, payment captured instantly. When inventory hits 0, 'sold out' pushed to all remaining queue users via SSE. Total purchase latency for admitted user: &lt; 500 ms."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="antipatterns">
+    <div class="section-head"><span class="section-n">⚠</span><h2 class="section-title">Anti-patterns</h2></div>
+    <div class="prose">
+      <div class="antipattern"><div class="icon">🚫</div><div><div class="bad">SELECT stock FROM products WHERE id=X; if stock > 0 then UPDATE stock = stock - 1</div><p class="why">Classic check-then-act race. 100K users all see stock=999 simultaneously; all decrement. You sell 100K items.</p></div><div class="good"><strong>✓ Better:</strong> Redis Lua atomic DECR-if-positive. Single-threaded, no race, sub-ms.</div></div>
+      <div class="antipattern"><div class="icon">🚫</div><div><div class="bad">Let all 100K users hit checkout simultaneously — "the server will handle it"</div><p class="why">No server handles 100K concurrent DB writes/sec gracefully. You get 503s, timeouts, and angry customers.</p></div><div class="good"><strong>✓ Better:</strong> Waiting room with controlled admission rate (500/sec). Backend sees a smooth stream, not a spike.</div></div>
+      <div class="antipattern"><div class="icon">🚫</div><div><div class="bad">Checkout asks user to enter card info after winning the slot</div><p class="why">User takes 30 seconds to type card number. Slot is wasted. Others in queue wait longer. Conversion drops.</p></div><div class="good"><strong>✓ Better:</strong> Pre-authorize payment while in queue. Checkout = one-click capture. Sub-second.</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Tradeoffs &amp; Design Choices</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Redis atomic vs Postgres FOR UPDATE.</strong> Redis Lua: ~50K ops/sec on single key, sub-ms. Postgres pessimistic lock: ~5K/sec, 2–5 ms. Redis wins overwhelmingly for the hot path. Postgres is the authoritative ledger written after Redis succeeds.</li>
+        <li><strong>Waiting room (fair, controlled) vs first-come-first-served (unfair, chaotic).</strong> Without a queue, users with lower latency (closer server, faster network) win. Queue equalizes: everyone gets a ticket; admission is FIFO. Supreme and Nike SNKRS both adopted queues for this reason.</li>
+        <li><strong>Per-item vs per-SKU inventory.</strong> Flash sales typically have one SKU. Single Redis key works. Multi-SKU (sizes, colors) needs one key per variant — same Lua pattern, multiple keys.</li>
+        <li><strong>Optimistic (check-and-set) vs pessimistic (lock).</strong> At 100K contenders, optimistic = 99K retries. Pessimistic = sequential. Redis Lua is effectively "pessimistic within a single thread" — no retries, no contention, because there's only one thread.</li>
+        <li><strong>Pre-auth cost.</strong> Pre-authorizing 100K cards when only 1K win = 99K void auths. Payment processors charge ~$0.01 per auth. 100K × $0.01 = $1K per sale — acceptable for high-value items; questionable for $5 items.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="failures">
+    <div class="section-head"><span class="section-n">08</span><h2 class="section-title">Failure Modes</h2></div>
+    <div class="failure"><div class="failure-icon">🤖</div><div><div class="failure-title">Bot army floods the queue</div><div class="failure-desc">Scalper bots create 10K queue entries in 1 second with different IPs / accounts.</div><div class="mitigation">→ Mitigation: CAPTCHA on queue entry; proof-of-work (client computes hash challenge); device fingerprinting; rate-limit per account + IP; ban known bot ASNs.</div></div></div>
+    <div class="failure"><div class="failure-icon">💥</div><div><div class="failure-title">Redis crashes mid-sale</div><div class="failure-desc">Inventory key lost. Remaining stock unknown. Oversell risk if we guess wrong.</div><div class="mitigation">→ Mitigation: Redis with AOF persistence (fsync every second). On crash-restart, replay AOF to recover inventory count. Belt: Postgres order count provides authoritative floor — never sell more than Postgres says remaining.</div></div></div>
+    <div class="failure"><div class="failure-icon">🔁</div><div><div class="failure-title">User retries purchase on timeout</div><div class="failure-desc">Network hiccup between checkout svc and user. User retries. Charged twice.</div><div class="mitigation">→ Mitigation: ticket-based idempotency. Each ticket can purchase exactly once. Retry with same ticket returns the same order_id.</div></div></div>
+    <div class="failure"><div class="failure-icon">⏰</div><div><div class="failure-title">Clock skew — sale starts early on some servers</div><div class="failure-desc">Server A's clock is 2 seconds ahead of Server B. Users on A enter queue 2 seconds early → unfair advantage.</div><div class="mitigation">→ Mitigation: queue-open time enforced by a single Redis key (admin sets flag at T=0 via one write). Servers check Redis, not local clock, for "is queue open?"</div></div></div>
+    <div class="failure"><div class="failure-icon">📉</div><div><div class="failure-title">Admitted user abandons checkout</div><div class="failure-desc">User is admitted but never calls /purchase. Slot wasted; users behind them wait longer.</div><div class="mitigation">→ Mitigation: admission ticket expires in 60 seconds. If not used, admission is revoked and next user in queue is admitted.</div></div></div>
+  </section>
+
+  <section class="section" id="interview-tips">
+    <div class="section-head"><span class="section-n">09</span><h2 class="section-title">Interview Tips</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>Lead with the waiting room.</strong> "100K users → 500/sec admission rate → smooth backend load." This is the insight that separates good from great.</li>
+        <li><strong>Redis Lua for atomic inventory.</strong> Name it explicitly — "single Redis key, Lua DECR-if-positive, no race." Shows you've actually built these systems.</li>
+        <li><strong>Pre-auth payment in queue.</strong> This UX detail (checkout = one click, not "enter card") is the kind of production nuance interviewers love.</li>
+        <li><strong>Bot mitigation is load-bearing.</strong> Without it, bots take all 1K items. CAPTCHA + proof-of-work + device fingerprinting. Don't skip this.</li>
+        <li><strong>Distinguish from Ticketmaster.</strong> Ticketmaster = seat selection + hold pattern. Flash sale = single SKU + atomic counter. Simpler inventory model, harder contention model.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="similar">
+    <div class="section-head"><span class="section-n">10</span><h2 class="section-title">Similar Problems</h2></div>
+    <div class="similar-grid">
+      <a href="../ticketmaster-system-design/index.html" class="similar-card"><h4>Ticketmaster</h4><p>Seat reservation under contention — more complex inventory model</p></a>
+      <a href="../ecommerce-system-design/index.html" class="similar-card"><h4>E-commerce</h4><p>Normal checkout without the extreme contention</p></a>
+      <a href="../payment-gateway/index.html" class="similar-card"><h4>Payment Gateway</h4><p>Pre-auth + capture lifecycle</p></a>
+      <a href="../007-rate-limiter/index.html" class="similar-card"><h4>Rate Limiter</h4><p>Admission control is a rate limiter on checkout</p></a>
+      <a href="../007-rate-limiter/index.html" class="similar-card"><h4>Distributed Locking</h4><p>Inventory decrement is effectively a lock-free atomic op</p></a>
+    </div>
+  </section>
+
+  <section class="section" id="evolution">
+    <div class="section-head"><span class="section-n">11</span><h2 class="section-title">Evolution</h2></div>
+    <div class="evolution-step"><div class="evolution-marker">1</div><div class="evolution-content"><h4>MVP — Postgres UPDATE with row lock</h4><p>Single DB, UPDATE stock = stock - 1 WHERE stock &gt; 0. Works to ~100 concurrent users. Falls over at 1K.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">2</div><div class="evolution-content"><h4>Redis atomic counter + DB sync</h4><p>Redis DECR for the hot path. Async write confirmed orders to Postgres. Handles ~10K/sec.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">3</div><div class="evolution-content"><h4>Waiting room + admission control</h4><p>Queue absorbs the herd. Controlled drain rate keeps backend healthy. Fair FIFO ordering.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">4</div><div class="evolution-content"><h4>Pre-auth + one-click checkout</h4><p>Payment authorized during queue wait. Winners checkout in &lt; 500 ms. Losers' auths auto-void.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">5</div><div class="evolution-content"><h4>Bot mitigation + regional queues</h4><p>CAPTCHA + proof-of-work + device fingerprinting. Per-region queue shards for global sales (Xiaomi India vs Xiaomi China).</p></div></div>
+  </section>
+
+</main>
+
+<script>
+const FLOW_NODES = [
+  { label: 'User',          sub: 'enters queue' },
+  { label: 'CDN + WAF',     sub: 'CAPTCHA + static' },
+  { label: 'Queue svc',     sub: 'Redis ZADD' },
+  { label: 'Admission ctrl', sub: 'drains N/sec' },
+  { label: 'Checkout svc',  sub: 'atomic purchase' },
+  { label: 'Redis inventory',sub: 'Lua DECR' },
+  { label: 'Payment',       sub: 'capture pre-auth' },
+];
+const FLOW_DESCS = [
+  'User loads product page from CDN; clicks "Enter queue" with CAPTCHA token',
+  'CDN serves static page; WAF blocks known-bad IPs + rate-limits',
+  'Queue service ZADD user to Redis sorted set with score = enqueue timestamp',
+  'Admission controller pops top N users/sec from sorted set; marks admitted',
+  'Admitted user calls POST /purchase with signed ticket + pre-auth ID',
+  'Checkout runs Redis Lua: DECR inventory if > 0; returns 1 (success) or 0 (sold out)',
+  'On success: capture the pre-authorized payment; write order to Postgres; push confirmation',
+];
+</script>
+
+</body>
+</html>

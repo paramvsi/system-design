@@ -85,6 +85,48 @@
     "readMinutes": 9
   },
   {
+    "slug": "google-calendar",
+    "title": "Google Calendar",
+    "difficulty": null,
+    "accent": {
+      "h": 210,
+      "s": 80,
+      "l": 55
+    },
+    "tags": [
+      "Core: RRULE Expansion + Free/Busy",
+      "1.5B users",
+      "~500M events/day",
+      "~10K free/busy QPS",
+      "Cross-timezone complexity"
+    ],
+    "category": "Communication",
+    "blurb": "A calendar and scheduling platform handling recurring events, calendar sharing, and free/busy queries for 1.5 billion users across every timezone. The hard parts: an RRULE recurrence engine that expands \"every Monday for",
+    "problemNumber": null,
+    "readMinutes": 10
+  },
+  {
+    "slug": "reminder-alert",
+    "title": "Reminder Alert",
+    "difficulty": null,
+    "accent": {
+      "h": 30,
+      "s": 85,
+      "l": 50
+    },
+    "tags": [
+      "⚡ Core: Time Buckets + Timezone + At-Least-Once",
+      "~100M reminders/day",
+      "DST-safe",
+      "Multi-channel (push/SMS/email)",
+      "Recurring support"
+    ],
+    "category": "Communication",
+    "blurb": "Schedule a reminder for \"Thursday 9am in America/New_York\" and have it arrive on the user's phone at exactly that local time — even when DST changes, the user moves timezones, or the delivery channel is flaky. The hard p",
+    "problemNumber": null,
+    "readMinutes": 8
+  },
+  {
     "slug": "slack-discord",
     "title": "Slack / Discord",
     "difficulty": null,
@@ -361,6 +403,27 @@
     "readMinutes": 9
   },
   {
+    "slug": "leetcode-judge",
+    "title": "LeetCode",
+    "difficulty": null,
+    "accent": {
+      "h": 38,
+      "s": 90,
+      "l": 48
+    },
+    "tags": [
+      "⚡ Core: Sandbox + Judge Queue + Verdicts",
+      "10M submissions/day",
+      "15+ languages",
+      "Strict time/mem limits",
+      "Live contests"
+    ],
+    "category": "Infrastructure",
+    "blurb": "Users submit code solutions in 15+ languages. The system compiles, runs against hidden test cases with strict time/memory limits, and returns a verdict — all within seconds. The hard parts: sandboxed execution that preve",
+    "problemNumber": null,
+    "readMinutes": 9
+  },
+  {
     "slug": "007-rate-limiter",
     "title": "Rate Limiter",
     "difficulty": "MEDIUM",
@@ -380,6 +443,27 @@
     "blurb": "A rate limiter controls how frequently a client can make requests to an API — protecting backend services from being overwhelmed by traffic spikes, malicious abuse, or runaway retry loops. The challenge is enforcing limi",
     "problemNumber": null,
     "readMinutes": 14
+  },
+  {
+    "slug": "unique-id-generator",
+    "title": "Unique ID Generator",
+    "difficulty": null,
+    "accent": {
+      "h": 270,
+      "s": 60,
+      "l": 52
+    },
+    "tags": [
+      "Core: Snowflake-style Distributed IDs",
+      "1M+ IDs/sec",
+      "64-bit / ~11 chars base62",
+      "Sub-ms latency per ID",
+      "Zero coordination"
+    ],
+    "category": "Infrastructure",
+    "blurb": "Generate globally unique, k-sortable, compact identifiers at over 1 million IDs per second across N machines with zero coordination. The hard parts: a bit-layout balancing timestamp, machine, and sequence that stays uniq",
+    "problemNumber": null,
+    "readMinutes": 8
   },
   {
     "slug": "ticketmaster-system-design",
@@ -487,6 +571,27 @@
     "readMinutes": 9
   },
   {
+    "slug": "flash-sale",
+    "title": "Flash Sale",
+    "difficulty": null,
+    "accent": {
+      "h": 350,
+      "s": 80,
+      "l": 50
+    },
+    "tags": [
+      "⚡ Core: Waiting Room + Atomic Inventory + Fair Queue",
+      "100K concurrent users",
+      "1K items",
+      "Sub-second checkout",
+      "Zero oversell"
+    ],
+    "category": "Marketplace & Booking",
+    "blurb": "100K users hit \"Buy\" at the exact same second for 1K limited items. No overselling. The hard parts: a waiting room that absorbs the thundering herd without crashing your backend, atomic inventory decrement that never goe",
+    "problemNumber": null,
+    "readMinutes": 8
+  },
+  {
     "slug": "001-url-shortener",
     "title": "URL Shortener",
     "difficulty": "MEDIUM",
@@ -571,6 +676,27 @@
     "blurb": "Design a global mapping platform that renders interactive maps, computes optimal routes in milliseconds, and ingests real-time GPS data from millions of phones to estimate live traffic and ETAs.",
     "problemNumber": "06",
     "readMinutes": 11
+  },
+  {
+    "slug": "google-news",
+    "title": "Google News",
+    "difficulty": null,
+    "accent": {
+      "h": 215,
+      "s": 85,
+      "l": 48
+    },
+    "tags": [
+      "Core: Crawl + Cluster + Rank + Personalize",
+      "1B users",
+      "100K articles/day",
+      "200K feed QPS",
+      "10B indexed articles"
+    ],
+    "category": "Search & Discovery",
+    "blurb": "Crawl 50K+ news sources worldwide, rank by freshness + authority + personalization, and serve a unique feed to each of 1B users. The hard parts: near-duplicate clustering so users see one card per story with \"N sources\" ",
+    "problemNumber": null,
+    "readMinutes": 12
   },
   {
     "slug": "006-typeahead-suggestions",
@@ -786,6 +912,27 @@
     "readMinutes": 14
   },
   {
+    "slug": "reddit-full",
+    "title": "Reddit",
+    "difficulty": null,
+    "accent": {
+      "h": 16,
+      "s": 100,
+      "l": 50
+    },
+    "tags": [
+      "Core: Hot Ranking + Comment Trees + Vote Pipeline",
+      "1.7B monthly visits",
+      "100K posts/day",
+      "2M comments/day",
+      "50K vote QPS peak"
+    ],
+    "category": "Social & Feed",
+    "blurb": "1.7 billion monthly visits across millions of subreddit communities. The hard parts: a Hot ranking algorithm that decays old posts and surfaces fresh content without scanning every post on every page load, nested comment",
+    "problemNumber": null,
+    "readMinutes": 14
+  },
+  {
     "slug": "twitter-trending",
     "title": "Twitter Trending",
     "difficulty": null,
@@ -803,6 +950,27 @@
     ],
     "category": "Social & Feed",
     "blurb": "Surface the top-10 trending topics — hashtags, phrases, named entities — from the firehose of all tweets, refreshed every few minutes, per geo and per user. The hard parts: approximate top-K over a high-velocity stream w",
+    "problemNumber": null,
+    "readMinutes": 8
+  },
+  {
+    "slug": "youtube-likes-counter",
+    "title": "YouTube Likes Counter",
+    "difficulty": null,
+    "accent": {
+      "h": 0,
+      "s": 80,
+      "l": 50
+    },
+    "tags": [
+      "Core: Sharded Counters + Dedup",
+      "10B+ videos",
+      "~500K likes/sec peak",
+      "~5s eventual consistency",
+      "Write-heavy"
+    ],
+    "category": "Social & Feed",
+    "blurb": "A distributed counter system that handles 10M+ increments per second across 10B+ videos with eventual consistency for display. The hard parts: a sharded counter architecture that absorbs bursty write traffic without hot ",
     "problemNumber": null,
     "readMinutes": 8
   },

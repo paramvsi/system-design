@@ -92,6 +92,7 @@ const PROBLEM_CATEGORIES = {
   "Social & Feed": [
     "002-news-feed", "reddit-comments", "mutual-connections",
     "recommendation-algorithm", "leaderboard", "instagram", "twitter-trending",
+    "youtube-likes-counter", "reddit-full",
   ],
   "Storage & Data": [
     "003-google-drive", "google-docs", "distributed-logging", "dropbox-sync",
@@ -99,18 +100,19 @@ const PROBLEM_CATEGORIES = {
   ],
   "Communication": [
     "004-whatsapp-system-design", "notification-system", "video-conferencing",
-    "slack-discord", "gmail",
+    "slack-discord", "gmail", "google-calendar", "reminder-alert",
   ],
   "Media & Streaming": [
     "005-youtube-netflix", "live-streaming",
   ],
   "Search & Discovery": [
     "006-typeahead-suggestions", "008-web-crawler", "009-yelp-google-places", "google-maps",
-    "search-engine",
+    "search-engine", "google-news",
   ],
   "Infrastructure": [
     "007-rate-limiter", "distributed-job-scheduler", "distributed-locking",
     "distributed-queue", "count-active-users", "design-cdn",
+    "unique-id-generator", "leetcode-judge",
   ],
   "Financial & Trading": [
     "bidding-platform", "payment-gateway", "stock-exchange", "stock-trading-platform",
@@ -118,7 +120,7 @@ const PROBLEM_CATEGORIES = {
   ],
   "Marketplace & Booking": [
     "001-url-shortener", "ecommerce-system-design", "ticketmaster-system-design", "uber-system-design",
-    "doordash-uber-eats", "airbnb",
+    "doordash-uber-eats", "airbnb", "flash-sale",
   ],
   "Gaming": [
     "pubg-system-design",
