@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cd portfolio && npm install && npm run extract && npm run build",
+  "outputDirectory": "portfolio/out",
+  "installCommand": "echo \"skip-root-install (handled in buildCommand)\"",
+  "framework": null,
+  "trailingSlash": true
+}
