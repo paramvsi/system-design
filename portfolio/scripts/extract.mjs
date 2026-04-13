@@ -92,15 +92,16 @@ const PROBLEM_CATEGORIES = {
   "Social & Feed": [
     "002-news-feed", "reddit-comments", "mutual-connections",
     "recommendation-algorithm", "leaderboard", "instagram", "twitter-trending",
-    "youtube-likes-counter", "reddit-full",
+    "youtube-likes-counter", "reddit-full", "ad-click-aggregator",
   ],
   "Storage & Data": [
     "003-google-drive", "google-docs", "distributed-logging", "dropbox-sync",
-    "s3-object-storage",
+    "s3-object-storage", "key-value-store",
   ],
   "Communication": [
     "004-whatsapp-system-design", "notification-system", "video-conferencing",
     "slack-discord", "gmail", "google-calendar", "reminder-alert",
+    "collaborative-whiteboard",
   ],
   "Media & Streaming": [
     "005-youtube-netflix", "live-streaming",
@@ -113,14 +114,15 @@ const PROBLEM_CATEGORIES = {
     "007-rate-limiter", "distributed-job-scheduler", "distributed-locking",
     "distributed-queue", "count-active-users", "design-cdn",
     "unique-id-generator", "leetcode-judge",
+    "distributed-cache", "metrics-monitoring", "code-deployment", "design-chatgpt",
   ],
   "Financial & Trading": [
     "bidding-platform", "payment-gateway", "stock-exchange", "stock-trading-platform",
-    "crypto-exchange", "fraud-detection",
+    "crypto-exchange", "fraud-detection", "google-ads",
   ],
   "Marketplace & Booking": [
     "001-url-shortener", "ecommerce-system-design", "ticketmaster-system-design", "uber-system-design",
-    "doordash-uber-eats", "airbnb", "flash-sale",
+    "doordash-uber-eats", "airbnb", "flash-sale", "shopping-cart",
   ],
   "Gaming": [
     "pubg-system-design",

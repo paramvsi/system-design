@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Design ChatGPT — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+    :root { --accent-h: 170; --accent-s: 65%; --accent-l: 42%;
+      --accent: hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light: hsl(var(--accent-h), 80%, 95%);
+      --accent-mid: hsl(var(--accent-h), 70%, 88%);
+      --accent-text: hsl(var(--accent-h), var(--accent-s), 38%);
+      --accent-border: hsl(var(--accent-h), 60%, 80%);
+      --hl-yellow:#fff0a0; --hl-yellow-dark:#a07a00;
+      --hl-accent: hsl(var(--accent-h), 90%, 90%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 35%);
+      --bg:#fff; --bg-subtle:#f7f7f5; --bg-raised:#f0eeeb; --bg-code:#f4f3f0;
+      --border:#e4e2de; --border-strong:#ccc9c4;
+      --text-primary:#111110; --text-secondary:#4a4845; --text-muted:#878480;
+      --font-serif:'Instrument Serif',Georgia,serif;
+      --font-sans:'Geist',system-ui,sans-serif;
+      --font-mono:'JetBrains Mono','Fira Code',monospace;
+      --radius-sm:4px; --radius-md:8px; --radius-lg:12px;
+    }
+    .req-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px; }
+    .req-box { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 20px; }
+    .req-box-head { display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size: 12px; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent-text); margin-bottom:10px; font-weight:500; }
+    .req-box-head.nonfunc { color:hsl(38,80%,30%); }
+    .req-list { padding-left:20px; font-size: 15px; color:var(--text-secondary); }
+    .req-list li { margin-bottom:6px; }
+    .endpoint { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px 18px; margin-bottom:10px; }
+    .endpoint-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+    .method { font-family:var(--font-mono); font-size: 11px; font-weight:600; padding:2px 8px; border-radius:3px; letter-spacing:0.05em; }
+    .method.get { background:hsl(190,70%,90%); color:hsl(190,70%,28%); }
+    .method.post { background:hsl(145,55%,90%); color:hsl(145,55%,28%); }
+    .method.delete { background:hsl(0,70%,92%); color:hsl(0,70%,38%); }
+    .ep-path { font-family:var(--font-mono); font-size: 15px; color:var(--text-primary); font-weight:500; }
+    .ep-desc { font-size: 15px; color:var(--text-secondary); margin:6px 0 0; }
+    .failure { display:flex; gap:14px; padding:14px 18px; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); margin-bottom:10px; }
+    .failure-icon { font-size:18px; flex-shrink:0; margin-top:2px; }
+    .failure-title { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .failure-desc { font-size: 15px; color:var(--text-secondary); margin-bottom:4px; }
+    .mitigation { font-family:var(--font-mono); font-size: 12px; color:hsl(145,55%,28%); }
+    .similar-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+    .similar-card { display:block; text-decoration:none; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 18px; transition:all 0.15s; }
+    .similar-card:hover { border-color:var(--accent-border); background:var(--accent-light); }
+    .similar-card h4 { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .similar-card p { font-size: 13.5px; color:var(--text-muted); margin:0; }
+    .evolution-step { display:flex; gap:14px; margin-bottom:18px; }
+    .evolution-marker { width:32px; height:32px; border-radius:50%; background:var(--accent-light); border:2px solid var(--accent-border); display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size: 12px; font-weight:600; color:var(--accent-text); flex-shrink:0; }
+    .evolution-content h4 { font-size: 16px; font-weight:600; margin-bottom:4px; }
+    .evolution-content p { font-size: 15px; color:var(--text-secondary); margin:0; }
+  </style>
+</head>
+<body>
+
+<main>
+
+  <div class="hero" id="problem">
+    <div class="hero-kicker">System Design — LLM Inference at Scale</div>
+    <h1 class="hero-title">Design <em>ChatGPT</em></h1>
+    <p class="hero-desc">
+      User sends a prompt. API gateway routes it through a tokenizer to a <span class="hl">GPU cluster of ~10K A100s</span>
+      running autoregressive inference. Tokens stream back via server-sent events — the user sees words appearing
+      one by one. The hard parts: a <span class="hl-accent">KV-cache</span> that avoids O(N&sup2;) recomputation on every token,
+      <span class="hl-accent">continuous batching</span> (vLLM/Orca) that keeps GPU utilization at ~80% instead of ~30%,
+      <span class="hl-accent">tensor + pipeline parallelism</span> to shard 70B+ parameter models across multiple GPUs,
+      a <span class="hl-accent">safety pipeline</span> (pre-classifier + post-classifier + RLHF alignment), and
+      per-token billing that meters usage accurately at 1B tokens/day.
+    </p>
+    <div class="hero-tags">
+      <span class="tag accent">Core: KV-Cache + Continuous Batching + Tensor Parallelism</span>
+      <span class="tag">~100M users</span>
+      <span class="tag">~1B tokens/day</span>
+      <span class="tag">~10K A100 GPUs</span>
+      <span class="tag">Streaming SSE</span>
+    </div>
+  </div>
+
+  <section class="section" id="requirements">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Requirements</h2></div>
+    <div class="req-grid">
+      <div class="req-box">
+        <div class="req-box-head">Functional</div>
+        <ul class="req-list">
+          <li>User sends a <span class="hl-accent">prompt</span> (text + optional images); receives a streamed completion</li>
+          <li><span class="hl-accent">Multi-turn conversation</span>: full chat history sent as context on each request</li>
+          <li>Streaming response via <span class="hl-accent">server-sent events</span> — tokens appear word-by-word</li>
+          <li><span class="hl-accent">Safety pipeline</span>: pre-inference classifier rejects harmful prompts; post-inference classifier filters toxic output</li>
+          <li>Per-token <span class="hl-accent">billing</span>: meter input tokens + output tokens; charge per 1K tokens</li>
+          <li>Conversation storage: users can view, continue, and delete past chats</li>
+        </ul>
+      </div>
+      <div class="req-box">
+        <div class="req-box-head nonfunc">Non-Functional</div>
+        <ul class="req-list">
+          <li><span class="hl">Time-to-first-token</span> &lt; 1 sec — the key UX metric for perceived speed</li>
+          <li>Throughput: <span class="hl">~10K concurrent inference</span> requests across the GPU cluster</li>
+          <li>GPU utilization &gt; <span class="hl">70%</span> — GPUs cost $2/hr each; idle = burning money</li>
+          <li>Support context windows up to <span class="hl">128K tokens</span> per request</li>
+          <li>99.9% availability — degraded mode (shorter context, slower model) over downtime</li>
+          <li>Safety: &lt; 0.1% harmful output rate; multi-layer defense</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="scale">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Scale Estimation</h2></div>
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-k">Registered users</div><div class="kv-v">~100M</div><div class="kv-sub">DAU ~10M; concurrent sessions ~500K at peak</div></div>
+      <div class="kv-card"><div class="kv-k">Tokens per day</div><div class="kv-v">~1B</div><div class="kv-sub">input + output combined; ~60% input, ~40% output</div></div>
+      <div class="kv-card"><div class="kv-k">GPU cluster</div><div class="kv-v">~10K A100s</div><div class="kv-sub">80 GB HBM each; NVLink + InfiniBand interconnect</div></div>
+      <div class="kv-card"><div class="kv-k">Concurrent inferences</div><div class="kv-v">~10K</div><div class="kv-sub">requests actively generating tokens at any moment</div></div>
+      <div class="kv-card"><div class="kv-k">KV-cache per request</div><div class="kv-v">~1.5 GB</div><div class="kv-sub">for 100K-context on a 70B model; scales linearly with context</div></div>
+      <div class="kv-card"><div class="kv-k">Time-to-first-token</div><div class="kv-v">&lt; 1 sec</div><div class="kv-sub">prefill (encode prompt) dominates; decode is ~30 ms/token</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="api">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">API Design</h2></div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/chat/completions</span></div>
+      <p class="ep-desc">Send a prompt. Body: <code>{model, messages: [{role, content}], max_tokens, temperature, stream: true}</code>. Returns SSE stream: <code>data: {"choices":[{"delta":{"content":"Hello"}}]}</code>.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/api/conversations/{conv_id}</span></div>
+      <p class="ep-desc">Retrieve conversation history. Returns <code>{id, messages: [{role, content, created_at}], model, total_tokens}</code>.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method delete">DELETE</span><span class="ep-path">/api/conversations/{conv_id}</span></div>
+      <p class="ep-desc">Delete a conversation. Soft-delete; purged from storage after 30 days.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/api/usage</span></div>
+      <p class="ep-desc">Token usage and billing. Returns <code>{period, input_tokens, output_tokens, cost_usd}</code>. Metered per-request via billing pipeline.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/api/models</span></div>
+      <p class="ep-desc">List available models with context window sizes, pricing, and capabilities.</p>
+    </div>
+  </section>
+
+  <section class="section" id="architecture">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Architecture</h2></div>
+    <div class="prose"><p>Four tiers: <strong>API tier</strong> (gateway, auth, rate-limit, routing), <strong>Inference tier</strong> (GPU cluster with tensor/pipeline parallelism), <strong>Safety tier</strong> (pre + post classifiers), <strong>Storage tier</strong> (conversations, billing, model weights). Streaming SSE connects API tier directly to client.</p></div>
+    <div class="diagram-wrap">
+      <div class="diagram-head"><span class="diagram-label">ChatGPT Inference Architecture</span><span class="diagram-type">SVG</span></div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 840 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ChatGPT inference architecture">
+          <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="hsl(170,30%,40%)"/></marker></defs>
+          <style>
+/* ux-v2-bumped */
+            .lbl { font-family:'Geist',sans-serif; font-size: 12px; fill:#111; }
+            .sub { font-family:'JetBrains Mono',monospace; font-size: 10.5px; fill:#555; }
+            .box { fill:#fff; stroke:hsl(170,40%,72%); stroke-width:1.2; rx:6; }
+            .box-accent { fill:hsl(170,80%,95%); stroke:hsl(170,65%,42%); stroke-width:1.5; rx:6; }
+            .box-data { fill:hsl(38,70%,94%); stroke:hsl(38,60%,60%); stroke-width:1.2; rx:6; }
+            .edge { stroke:hsl(170,30%,40%); stroke-width:1.2; fill:none; }
+          </style>
+          <rect x="20" y="30" width="110" height="50" class="box"/><text x="75" y="52" text-anchor="middle" class="lbl">User (100M)</text><text x="75" y="67" text-anchor="middle" class="sub">browser / API client</text>
+          <rect x="160" y="30" width="120" height="50" class="box-accent"/><text x="220" y="52" text-anchor="middle" class="lbl">API Gateway</text><text x="220" y="67" text-anchor="middle" class="sub">auth + rate-limit</text>
+          <rect x="310" y="30" width="130" height="50" class="box-accent"/><text x="375" y="52" text-anchor="middle" class="lbl">Safety Pre-filter</text><text x="375" y="67" text-anchor="middle" class="sub">reject harmful prompts</text>
+          <rect x="470" y="20" width="150" height="70" class="box-accent"/><text x="545" y="42" text-anchor="middle" class="lbl">Tokenizer + Router</text><text x="545" y="57" text-anchor="middle" class="sub">encode prompt</text><text x="545" y="72" text-anchor="middle" class="sub">select GPU shard</text>
+          <rect x="650" y="20" width="170" height="70" class="box-accent"/><text x="735" y="42" text-anchor="middle" class="lbl">GPU Inference</text><text x="735" y="57" text-anchor="middle" class="sub">10K A100s, TP + PP</text><text x="735" y="72" text-anchor="middle" class="sub">KV-cache + cont. batch</text>
+          <rect x="470" y="140" width="150" height="55" class="box-accent"/><text x="545" y="162" text-anchor="middle" class="lbl">Safety Post-filter</text><text x="545" y="177" text-anchor="middle" class="sub">filter toxic output</text>
+          <rect x="650" y="140" width="170" height="55" class="box"/><text x="735" y="162" text-anchor="middle" class="lbl">SSE Streamer</text><text x="735" y="177" text-anchor="middle" class="sub">token-by-token to client</text>
+          <rect x="310" y="140" width="130" height="55" class="box-data"/><text x="375" y="162" text-anchor="middle" class="lbl">Billing Pipeline</text><text x="375" y="177" text-anchor="middle" class="sub">meter per token</text>
+          <rect x="310" y="240" width="310" height="50" class="box-data"/><text x="465" y="262" text-anchor="middle" class="lbl">Conversation Store: Postgres + Redis cache</text><text x="465" y="277" text-anchor="middle" class="sub">chat history, user prefs, model configs</text>
+          <rect x="650" y="240" width="170" height="50" class="box-data"/><text x="735" y="262" text-anchor="middle" class="lbl">Model Weight Store</text><text x="735" y="277" text-anchor="middle" class="sub">S3 &rarr; GPU HBM on load</text>
+          <rect x="310" y="330" width="510" height="50" class="box"/><text x="565" y="357" text-anchor="middle" class="lbl">Kafka: token events &rarr; billing aggregation + usage analytics + abuse detection</text>
+          <path class="edge" d="M130,55 L160,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M280,55 L310,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M440,55 L470,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M620,55 L650,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M735,90 L545,140" marker-end="url(#arr)"/>
+          <path class="edge" d="M620,165 L650,165" marker-end="url(#arr)"/>
+          <path class="edge" d="M375,110 L375,140" marker-end="url(#arr)"/>
+          <path class="edge" d="M375,195 L375,240" marker-end="url(#arr)"/>
+          <path class="edge" d="M735,290 L735,330" marker-end="url(#arr)"/>
+          <path class="edge" d="M545,195 L545,240" marker-end="url(#arr)"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Deep Dive — KV-Cache, Continuous Batching &amp; Parallelism</h2></div>
+    <div class="prose">
+      <p><strong>(a) KV-Cache.</strong> During autoregressive generation, each new token's attention layer needs the keys and values from ALL prior tokens. Without a cache, generating token N requires recomputing attention over all N-1 previous tokens — O(N&sup2;) total work for a sequence of length N. The KV-cache stores the K and V tensors from every prior layer/token in GPU HBM. Each new token only computes its own K/V, appends to the cache, and attends over the cached values. Cost: ~1.5 GB of GPU memory per 100K-context request on a 70B model. This is why long-context requests are expensive — they consume GPU memory, not just compute.</p>
+
+      <pre><code>// KV-cache pseudocode per attention layer
+cache_k[layer].append(new_token_k)  // shape: [seq_len, head_dim]
+cache_v[layer].append(new_token_v)
+attn_output = softmax(new_token_q @ cache_k.T / sqrt(d)) @ cache_v
+// Only new_token_q is computed fresh; cache_k, cache_v are reused</code></pre>
+
+      <p><strong>(b) Continuous Batching (Orca/vLLM).</strong> Static batching: group N requests, wait for ALL to finish before accepting new ones. Problem: a 10-token request finishes in 300 ms; a 2000-token request takes 60 seconds. The GPU idles on the short request's slot for 59.7 seconds. Continuous batching: new requests join the batch mid-flight, and finished requests leave immediately. GPU utilization jumps from ~30% (static) to ~80% (continuous). vLLM's PagedAttention further optimizes by managing KV-cache memory like OS virtual memory pages — no fragmentation, no wasted HBM.</p>
+
+      <p>PagedAttention detail: traditional KV-cache allocates a contiguous block of GPU memory per request, sized for max_tokens. A 128K-context request reserves ~2 GB even if it only generates 50 tokens. Wasted memory = fewer concurrent requests. PagedAttention splits the KV-cache into fixed-size pages (e.g., 16 tokens each). Pages are allocated on demand and can be non-contiguous — exactly like virtual memory. A request that generates 50 tokens only uses 4 pages (~30 MB), not the full 2 GB reservation. This alone increases throughput by ~2-4x on long-context workloads.</p>
+
+      <pre><code># Continuous batching pseudocode (simplified)
+while True:
+    # Check for finished requests — remove from batch
+    for req in active_batch:
+        if req.last_token == EOS or req.num_tokens >= req.max_tokens:
+            active_batch.remove(req)
+            send_done(req)
+            free_kv_pages(req)
+
+    # Fill empty slots with waiting requests
+    while len(active_batch) < max_batch_size and queue.not_empty():
+        new_req = queue.pop()
+        allocate_kv_pages(new_req)
+        prefill(new_req)               # encode prompt
+        active_batch.add(new_req)
+
+    # One decode step for all active requests in parallel
+    next_tokens = decode_step(active_batch)  # single GPU kernel
+    for req, token in zip(active_batch, next_tokens):
+        stream_token(req, token)</code></pre>
+
+      <p><strong>(c) Tensor + Pipeline Parallelism.</strong> A 70B-parameter model doesn't fit on one A100 (80 GB HBM — model weights alone are ~140 GB in FP16). <em>Tensor parallelism (TP)</em>: split each layer across N GPUs. Each GPU computes 1/N of each layer, then all-reduce to sync. Low latency but high bandwidth requirement (NVLink). <em>Pipeline parallelism (PP)</em>: split layers sequentially across GPUs. GPU 1 handles layers 1-20, GPU 2 handles 21-40, etc. Lower bandwidth needs but introduces pipeline bubbles. In practice: combine TP=8 within a node (NVLink) + PP=4 across nodes (InfiniBand) for a 70B model on 32 GPUs.</p>
+
+      <p><strong>(d) Safety Pipeline.</strong> Three layers: (1) <em>Pre-inference classifier</em> — a lightweight model (~1B params) screens the prompt. Obviously harmful prompts rejected before reaching the expensive 70B model. (2) <em>Post-inference classifier</em> — scans generated output token-by-token for harmful content; can halt generation mid-stream. (3) <em>RLHF alignment</em> — the model itself is trained via reinforcement learning from human feedback to refuse harmful requests politely.</p>
+
+      <p><strong>(e) Streaming.</strong> Server-sent events (SSE) stream each token as it's generated. The client receives <code>data: {"delta": "Hello"}</code> events ~30 ms apart. Time-to-first-token (TTFT) — the delay before the first token appears — is the critical UX metric. TTFT is dominated by the "prefill" phase: encoding the entire prompt through all layers. For a 10K-token prompt on a 70B model, prefill takes ~500 ms. After that, each subsequent token takes ~30 ms (decode phase).</p>
+
+      <div class="diagram-wrap">
+        <div class="diagram-head"><span class="diagram-label">Inference Request Lifecycle</span><span class="diagram-type">Mermaid</span></div>
+        <div class="diagram-body">
+          <div class="mermaid">
+sequenceDiagram
+    participant U as User
+    participant GW as API Gateway
+    participant SF as Safety Pre-filter
+    participant TK as Tokenizer
+    participant GPU as GPU Cluster
+    participant PF as Safety Post-filter
+    participant SSE as SSE Streamer
+
+    U->>GW: POST /chat/completions (stream:true)
+    GW->>SF: classify prompt
+    SF-->>GW: safe
+    GW->>TK: tokenize prompt
+    TK->>GPU: prefill (encode all tokens)
+    GPU-->>SSE: token 1 (TTFT ~500ms)
+    GPU-->>PF: token 1 safety check
+    PF-->>SSE: pass
+    SSE-->>U: data: token 1
+    GPU-->>SSE: token 2 (~30ms later)
+    SSE-->>U: data: token 2
+    Note over GPU,SSE: continues until EOS or max_tokens
+    SSE-->>U: data: [DONE]
+          </div>
+        </div>
+      </div>
+
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"User sends a prompt to the API gateway. After safety pre-screening, it's tokenized and sent to a GPU cluster running the 70B model with tensor parallelism (8-way within node) and pipeline parallelism (across nodes). KV-cache avoids O(N squared) recomputation — each new token only computes its own attention against cached K/V from prior tokens. Continuous batching (vLLM-style) keeps GPU utilization at ~80% by letting requests join/leave the batch dynamically. Tokens stream back via SSE; TTFT under 1 second. Post-inference safety classifier filters output mid-stream. Billing meters input + output tokens via Kafka."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="antipatterns">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Anti-patterns</h2></div>
+    <div class="prose">
+      <div class="antipattern"><div class="icon">&#x1F6AB;</div><div><div class="bad">Static batching — wait for the longest request in the batch to finish before accepting new ones</div><p class="why">A 10-token request finishes in 300 ms but the GPU slot sits idle for 59.7 seconds waiting for the 2000-token request in the same batch. GPU utilization drops to ~30%. You're paying $20K/hr for a 10K-GPU cluster at 30% utilization.</p></div><div class="good"><strong>Better:</strong> Continuous batching. Finished requests leave immediately; new requests join mid-batch. GPU utilization ~80%.</div></div>
+      <div class="antipattern"><div class="icon">&#x1F6AB;</div><div><div class="bad">No KV-cache — recompute all attention from scratch for every new token</div><p class="why">Generating a 1000-token response requires 1000 forward passes. Without cache, pass N recomputes attention over all N-1 prior tokens. Total: O(N squared) compute. A response that takes 30 seconds with cache takes 50+ minutes without it.</p></div><div class="good"><strong>Better:</strong> KV-cache stores prior K/V tensors in GPU HBM. Each new token computes only its own attention. O(N) total.</div></div>
+      <div class="antipattern"><div class="icon">&#x1F6AB;</div><div><div class="bad">Safety filter only after full generation — harmful content already generated and cached</div><p class="why">The model generates a complete harmful response, stores it in the conversation cache, then the filter catches it. The harmful content existed in memory and may have been logged. Wasted GPU compute on content that gets thrown away.</p></div><div class="good"><strong>Better:</strong> Pre-inference classifier rejects harmful prompts before touching the expensive GPU. Post-inference filter runs token-by-token mid-stream and can halt early.</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">08</span><h2 class="section-title">Tradeoffs &amp; Design Choices</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>KV-cache memory vs compute.</strong> Caching K/V tensors uses ~1.5 GB per 100K-context request. On an 80 GB A100, this limits concurrent requests per GPU. But the alternative (recompute) is 100x slower. The tradeoff: serve fewer concurrent long-context requests, or more concurrent short-context requests.</li>
+        <li><strong>Tensor parallelism vs pipeline parallelism.</strong> TP: lower latency (all GPUs work on each token), but requires high-bandwidth NVLink (~600 GB/s). PP: works over slower InfiniBand (~200 GB/s), but pipeline bubbles waste ~20% of compute. Combine both: TP within a node, PP across nodes.</li>
+        <li><strong>Streaming vs batch response.</strong> Streaming (SSE) reduces perceived latency dramatically — user starts reading immediately. But it complicates safety filtering (must check mid-stream) and billing (tokens counted incrementally). Non-streaming is simpler but feels 10x slower to the user.</li>
+        <li><strong>Model size vs latency.</strong> Larger models (70B+) produce higher-quality output but have higher TTFT and lower throughput. Smaller models (7B) are 10x faster but less capable. Solution: route simple queries to small models, complex queries to large models. Cost optimization.</li>
+        <li><strong>Safety strictness vs utility.</strong> Overly aggressive pre-filters reject legitimate queries (false positives). Under-filtering allows harmful content. The balance: high-recall pre-filter (catch obviously harmful), nuanced post-filter (context-aware), and RLHF alignment (model learns appropriate refusals).</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="failures">
+    <div class="section-head"><span class="section-n">09</span><h2 class="section-title">Failure Modes</h2></div>
+    <div class="failure"><div class="failure-icon">&#x1F4A5;</div><div><div class="failure-title">GPU node failure mid-inference</div><div class="failure-desc">One of 8 GPUs in a tensor-parallel group dies. The entire request fails because all 8 GPUs must synchronize.</div><div class="mitigation">&rarr; Mitigation: request-level retry on a different GPU group. Checkpoint prefill state so retry skips prompt encoding. Spare GPU pools for fast failover.</div></div></div>
+    <div class="failure"><div class="failure-icon">&#x1F525;</div><div><div class="failure-title">KV-cache OOM — too many long-context requests</div><div class="failure-desc">50 concurrent 128K-context requests on one node; each needs ~2 GB of KV-cache. 100 GB total exceeds 80 GB HBM. OOM crash.</div><div class="mitigation">&rarr; Mitigation: admission control per GPU based on available HBM. Queue long-context requests. vLLM's PagedAttention swaps cold KV pages to CPU memory.</div></div></div>
+    <div class="failure"><div class="failure-icon">&#x1F504;</div><div><div class="failure-title">Prompt injection bypasses safety filter</div><div class="failure-desc">Adversarial prompt tricks the pre-classifier into rating it safe. Model generates harmful content.</div><div class="mitigation">&rarr; Mitigation: defense in depth — pre-filter + post-filter + RLHF. Post-filter catches what pre-filter misses. Regular red-teaming to update classifiers.</div></div></div>
+    <div class="failure"><div class="failure-icon">&#x23F0;</div><div><div class="failure-title">Thundering herd after outage recovery</div><div class="failure-desc">GPU cluster comes back online after 10-min outage. 500K queued requests hit simultaneously. Cluster overloads again.</div><div class="mitigation">&rarr; Mitigation: rate-limited drain of queued requests. Priority tiers (paid users first). Exponential backoff on client retries.</div></div></div>
+    <div class="failure"><div class="failure-icon">&#x1F4B8;</div><div><div class="failure-title">Billing pipeline lag — tokens generated but not metered</div><div class="failure-desc">Kafka consumer falls behind. Users generate tokens that aren't billed. Revenue leakage.</div><div class="mitigation">&rarr; Mitigation: synchronous token count in the response path (best-effort billing inline). Kafka for authoritative reconciliation. Alert on consumer lag &gt; 5 min.</div></div></div>
+  </section>
+
+  <section class="section" id="interview-tips">
+    <div class="section-head"><span class="section-n">10</span><h2 class="section-title">Interview Tips</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>Lead with KV-cache.</strong> "Without it, generation is O(N squared). With it, O(N). This is the single most important optimization." Shows you understand transformer internals.</li>
+        <li><strong>Name continuous batching.</strong> "vLLM-style continuous batching keeps GPU utilization at 80% vs 30% for static batching." This is the insight that separates candidates who've worked with inference systems.</li>
+        <li><strong>Explain the parallelism strategy.</strong> "Tensor parallelism within a node (NVLink), pipeline parallelism across nodes (InfiniBand). Combine both for 70B+ models." Concrete and correct.</li>
+        <li><strong>TTFT is the UX metric.</strong> "Time-to-first-token matters more than tokens-per-second for user perception. Prefill dominates TTFT." Shows product thinking.</li>
+        <li><strong>Safety is multi-layer.</strong> "Pre-filter rejects before GPU, post-filter catches mid-stream, RLHF aligns the model itself." Don't just say "add a filter" — describe the pipeline.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="similar">
+    <div class="section-head"><span class="section-n">11</span><h2 class="section-title">Similar Problems</h2></div>
+    <div class="similar-grid">
+      <a href="recommendation-algorithm.html" class="similar-card"><h4>Recommendation Algorithm</h4><p>ML inference at scale with similar GPU serving challenges</p></a>
+      <a href="search-engine.html" class="similar-card"><h4>Search Engine</h4><p>Query processing pipeline with ranking and streaming results</p></a>
+      <a href="fraud-detection.html" class="similar-card"><h4>Fraud Detection</h4><p>Real-time ML inference with safety-critical classification</p></a>
+      <a href="distributed-job-scheduler.html" class="similar-card"><h4>Distributed Job Scheduler</h4><p>Orchestrating GPU workloads across a heterogeneous cluster</p></a>
+      <a href="video-conferencing.html" class="similar-card"><h4>Video Conferencing</h4><p>Real-time streaming with low-latency delivery constraints</p></a>
+    </div>
+  </section>
+
+  <section class="section" id="evolution">
+    <div class="section-head"><span class="section-n">12</span><h2 class="section-title">Evolution</h2></div>
+    <div class="evolution-step"><div class="evolution-marker">1</div><div class="evolution-content"><h4>MVP — Single GPU, one request at a time</h4><p>7B model on one A100. No batching. No KV-cache optimization. Handles ~1 request/sec. Good for a demo.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">2</div><div class="evolution-content"><h4>Static batching + KV-cache</h4><p>Batch 8 requests together. KV-cache avoids recomputation. Throughput ~10 req/sec. GPU utilization ~30%.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">3</div><div class="evolution-content"><h4>Continuous batching + tensor parallelism</h4><p>vLLM-style continuous batching. 70B model across 8 GPUs with tensor parallelism. GPU utilization ~80%. Throughput ~100 req/sec per node.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">4</div><div class="evolution-content"><h4>Multi-node cluster + pipeline parallelism + streaming</h4><p>10K GPUs across hundreds of nodes. TP within node, PP across nodes. SSE streaming. Safety pipeline. ~10K concurrent requests.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">5</div><div class="evolution-content"><h4>Model routing + speculative decoding + multimodal</h4><p>Route simple queries to small models, complex to large. Speculative decoding (draft model proposes, large model verifies) for 2x throughput. Vision + audio inputs.</p></div></div>
+  </section>
+
+</main>
+
+<script>
+const FLOW_NODES = [
+  { label: 'User',            sub: 'sends prompt' },
+  { label: 'API Gateway',     sub: 'auth + rate-limit' },
+  { label: 'Safety Pre-filter', sub: 'reject harmful' },
+  { label: 'Tokenizer',       sub: 'encode prompt' },
+  { label: 'GPU Cluster',     sub: 'KV-cache + cont. batch' },
+  { label: 'Safety Post-filter', sub: 'filter output' },
+  { label: 'SSE Streamer',    sub: 'token-by-token' },
+];
+const FLOW_DESCS = [
+  'User sends a prompt via POST /chat/completions with stream:true; multi-turn history included',
+  'API gateway authenticates, rate-limits, checks quota, and routes to the inference cluster',
+  'Lightweight pre-inference classifier screens the prompt; rejects obviously harmful inputs before GPU',
+  'Tokenizer encodes the prompt into token IDs; router selects a GPU shard with available KV-cache memory',
+  'GPU cluster runs prefill (encode all prompt tokens), then autoregressive decode with KV-cache; continuous batching maximizes utilization',
+  'Post-inference classifier checks each generated token for harmful content; can halt generation mid-stream',
+  'SSE streamer sends each token to the client as it is generated; TTFT under 1 sec; billing pipeline meters tokens via Kafka',
+];
+</script>
+
+</body>
+</html>

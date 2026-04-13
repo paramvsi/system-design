@@ -64,6 +64,27 @@
     "readMinutes": 13
   },
   {
+    "slug": "collaborative-whiteboard",
+    "title": "Collaborative Whiteboard",
+    "difficulty": null,
+    "accent": {
+      "h": 38,
+      "s": 85,
+      "l": 50
+    },
+    "tags": [
+      "Core: CRDT + Spatial Index + Real-Time Cursors + Per-User Undo",
+      "100K+ canvas objects",
+      "50+ concurrent users",
+      "Sub-100ms sync",
+      "Offline support"
+    ],
+    "category": "Communication",
+    "blurb": "Infinite canvas. Shapes, text, freehand drawing. Multiple users see each other's cursors in real time. Undo/redo, zoom/pan, offline edits that sync when reconnected. Like Miro or FigJam. The hard parts: a CRDT for canvas",
+    "problemNumber": null,
+    "readMinutes": 10
+  },
+  {
     "slug": "gmail",
     "title": "Gmail",
     "difficulty": null,
@@ -209,6 +230,27 @@
     "blurb": "A cryptocurrency exchange like Coinbase or Binance: order-book trading across hundreds of coin pairs, wallets for hundreds of coins, deposits + withdrawals to the public blockchain, 24/7 operation. The hard parts: a matc",
     "problemNumber": "24",
     "readMinutes": 9
+  },
+  {
+    "slug": "google-ads",
+    "title": "Google Ads",
+    "difficulty": null,
+    "accent": {
+      "h": 145,
+      "s": 75,
+      "l": 42
+    },
+    "tags": [
+      "Core: Auction + Quality Score + Budget Pacing + Click Tracking",
+      "10M+ auctions/sec",
+      "Sub-100ms latency",
+      "CPC billing",
+      "Fraud detection"
+    ],
+    "category": "Financial & Trading",
+    "blurb": "Advertiser creates a campaign. Every search query or page-view triggers an ad auction in under 100 ms. The winner's ad is shown, the click is tracked, and the advertiser is billed on a CPC basis. Scale: 10M+ auctions per",
+    "problemNumber": null,
+    "readMinutes": 10
   },
   {
     "slug": "stock-exchange",
@@ -403,6 +445,69 @@
     "readMinutes": 9
   },
   {
+    "slug": "design-chatgpt",
+    "title": "ChatGPT",
+    "difficulty": null,
+    "accent": {
+      "h": 170,
+      "s": 65,
+      "l": 42
+    },
+    "tags": [
+      "Core: KV-Cache + Continuous Batching + Tensor Parallelism",
+      "~100M users",
+      "~1B tokens/day",
+      "~10K A100 GPUs",
+      "Streaming SSE"
+    ],
+    "category": "Infrastructure",
+    "blurb": "User sends a prompt. API gateway routes it through a tokenizer to a GPU cluster of ~10K A100s running autoregressive inference. Tokens stream back via server-sent events — the user sees words appearing one by one. The ha",
+    "problemNumber": null,
+    "readMinutes": 10
+  },
+  {
+    "slug": "code-deployment",
+    "title": "Code Deployment Pipeline",
+    "difficulty": null,
+    "accent": {
+      "h": 200,
+      "s": 70,
+      "l": 48
+    },
+    "tags": [
+      "Core: Hermetic Build + Immutable Artifact + Canary Analysis",
+      "~10K deploys/day",
+      "~1000 concurrent builds",
+      "Artifact store ~50 TB",
+      "Auto-rollback on regression"
+    ],
+    "category": "Infrastructure",
+    "blurb": "Developer pushes code. CI builds and tests inside isolated ephemeral containers. An immutable, SHA-tagged artifact is stored in an S3-backed content-addressed store. CD does a canary deploy to 1% of traffic, runs automat",
+    "problemNumber": null,
+    "readMinutes": 8
+  },
+  {
+    "slug": "distributed-cache",
+    "title": "Distributed Cache",
+    "difficulty": null,
+    "accent": {
+      "h": 0,
+      "s": 70,
+      "l": 52
+    },
+    "tags": [
+      "Core: Hash-Slot Sharding + Eviction + Replication",
+      "~1M ops/sec per node",
+      "Sub-ms p99 reads",
+      "~100 GB RAM per node",
+      "16384 hash slots"
+    ],
+    "category": "Infrastructure",
+    "blurb": "An in-memory key-value store serving ~1M ops/sec per node with sub-millisecond latency. The hard parts: hash-slot sharding across a cluster of ~100 nodes so any key routes deterministically, eviction policies (LRU/LFU) t",
+    "problemNumber": null,
+    "readMinutes": 13
+  },
+  {
     "slug": "leetcode-judge",
     "title": "LeetCode",
     "difficulty": null,
@@ -422,6 +527,27 @@
     "blurb": "Users submit code solutions in 15+ languages. The system compiles, runs against hidden test cases with strict time/memory limits, and returns a verdict — all within seconds. The hard parts: sandboxed execution that preve",
     "problemNumber": null,
     "readMinutes": 9
+  },
+  {
+    "slug": "metrics-monitoring",
+    "title": "Metrics & Monitoring",
+    "difficulty": null,
+    "accent": {
+      "h": 145,
+      "s": 60,
+      "l": 45
+    },
+    "tags": [
+      "Core: Agents + TSDB + Query Engine + Alerting",
+      "1M hosts",
+      "10M unique series",
+      "100M pts/sec ingest",
+      "Sub-second queries"
+    ],
+    "category": "Infrastructure",
+    "blurb": "1M hosts each running an agent that collects CPU, memory, disk, and custom application metrics every 10-15 seconds. That is ~100M data points/sec flowing into your ingest pipeline. The hard parts: a time-series database ",
+    "problemNumber": null,
+    "readMinutes": 15
   },
   {
     "slug": "007-rate-limiter",
@@ -592,6 +718,27 @@
     "readMinutes": 8
   },
   {
+    "slug": "shopping-cart",
+    "title": "Shopping Cart",
+    "difficulty": null,
+    "accent": {
+      "h": 30,
+      "s": 80,
+      "l": 48
+    },
+    "tags": [
+      "Core: Add/Remove/Merge + Soft Hold + Price Lock",
+      "~500M carts/day",
+      "~50K ops/sec",
+      "~500M active carts",
+      "Cross-device sync"
+    ],
+    "category": "Marketplace & Booking",
+    "blurb": "500M carts updated daily across every device. Never lose a cart. The hard parts: a hybrid storage layer that keeps hot carts in Redis for sub-ms reads while persisting to DynamoDB for durability, guest-to-authenticated c",
+    "problemNumber": null,
+    "readMinutes": 10
+  },
+  {
     "slug": "001-url-shortener",
     "title": "URL Shortener",
     "difficulty": "MEDIUM",
@@ -696,7 +843,7 @@
     "category": "Search & Discovery",
     "blurb": "Crawl 50K+ news sources worldwide, rank by freshness + authority + personalization, and serve a unique feed to each of 1B users. The hard parts: near-duplicate clustering so users see one card per story with \"N sources\" ",
     "problemNumber": null,
-    "readMinutes": 12
+    "readMinutes": 13
   },
   {
     "slug": "006-typeahead-suggestions",
@@ -869,6 +1016,27 @@
     "readMinutes": 13
   },
   {
+    "slug": "ad-click-aggregator",
+    "title": "Ad Click Aggregator",
+    "difficulty": null,
+    "accent": {
+      "h": 270,
+      "s": 65,
+      "l": 50
+    },
+    "tags": [
+      "Core: Stream Aggregate + Fraud Filter + OLAP Query",
+      "~10B clicks/day",
+      "~115K clicks/sec avg",
+      "~500K/sec peak",
+      "Minute granularity"
+    ],
+    "category": "Social & Feed",
+    "blurb": "10 billion clicks per day, counted in real-time for billing and analytics. Every click is money. The hard parts: a streaming aggregation pipeline that groups clicks by campaign, ad, geo, and minute with exactly-once sema",
+    "problemNumber": null,
+    "readMinutes": 9
+  },
+  {
     "slug": "instagram",
     "title": "Instagram",
     "difficulty": null,
@@ -930,7 +1098,7 @@
     "category": "Social & Feed",
     "blurb": "1.7 billion monthly visits across millions of subreddit communities. The hard parts: a Hot ranking algorithm that decays old posts and surfaces fresh content without scanning every post on every page load, nested comment",
     "problemNumber": null,
-    "readMinutes": 14
+    "readMinutes": 15
   },
   {
     "slug": "twitter-trending",
@@ -1079,5 +1247,26 @@
     "blurb": "A cloud file storage and synchronisation service that lets users upload any file, access it from any device, share it with others, and keep it in sync across all their machines — even after offline edits. The hard part i",
     "problemNumber": null,
     "readMinutes": 12
+  },
+  {
+    "slug": "key-value-store",
+    "title": "Key-Value Store",
+    "difficulty": null,
+    "accent": {
+      "h": 215,
+      "s": 75,
+      "l": 48
+    },
+    "tags": [
+      "Core: Consistent Hashing + LSM Engine + Quorum Replication",
+      "~10M req/sec",
+      "~100 TB data",
+      "Single-digit ms p99",
+      "Auto-scaling partitions"
+    ],
+    "category": "Storage & Data",
+    "blurb": "10 million requests per second, 100 TB of data, single-digit millisecond p99 at any scale. The hard parts: a consistent hash ring that routes every request to the right partition without a central coordinator, an LSM sto",
+    "problemNumber": null,
+    "readMinutes": 15
   }
 ]

@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Metrics &amp; Monitoring System — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+    :root { --accent-h: 145; --accent-s: 60%; --accent-l: 45%;
+      --accent: hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light: hsl(var(--accent-h), 80%, 95%);
+      --accent-mid: hsl(var(--accent-h), 70%, 88%);
+      --accent-text: hsl(var(--accent-h), var(--accent-s), 38%);
+      --accent-border: hsl(var(--accent-h), 60%, 80%);
+      --hl-yellow:#fff0a0; --hl-yellow-dark:#a07a00;
+      --hl-accent: hsl(var(--accent-h), 90%, 90%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 35%);
+      --bg:#fff; --bg-subtle:#f7f7f5; --bg-raised:#f0eeeb; --bg-code:#f4f3f0;
+      --border:#e4e2de; --border-strong:#ccc9c4;
+      --text-primary:#111110; --text-secondary:#4a4845; --text-muted:#878480;
+      --font-serif:'Instrument Serif',Georgia,serif;
+      --font-sans:'Geist',system-ui,sans-serif;
+      --font-mono:'JetBrains Mono','Fira Code',monospace;
+      --radius-sm:4px; --radius-md:8px; --radius-lg:12px;
+    }
+    .req-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px; }
+    .req-box { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 20px; }
+    .req-box-head { display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size: 12px; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent-text); margin-bottom:10px; font-weight:500; }
+    .req-box-head.nonfunc { color:hsl(38,80%,30%); }
+    .req-list { padding-left:20px; font-size: 15px; color:var(--text-secondary); }
+    .req-list li { margin-bottom:6px; }
+    .endpoint { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px 18px; margin-bottom:10px; }
+    .endpoint-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+    .method { font-family:var(--font-mono); font-size: 11px; font-weight:600; padding:2px 8px; border-radius:3px; letter-spacing:0.05em; }
+    .method.get { background:hsl(190,70%,90%); color:hsl(190,70%,28%); }
+    .method.post { background:hsl(145,55%,90%); color:hsl(145,55%,28%); }
+    .method.delete { background:hsl(0,70%,92%); color:hsl(0,70%,38%); }
+    .ep-path { font-family:var(--font-mono); font-size: 15px; color:var(--text-primary); font-weight:500; }
+    .ep-desc { font-size: 15px; color:var(--text-secondary); margin:6px 0 0; }
+    .failure { display:flex; gap:14px; padding:14px 18px; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); margin-bottom:10px; }
+    .failure-icon { font-size:18px; flex-shrink:0; margin-top:2px; }
+    .failure-title { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .failure-desc { font-size: 15px; color:var(--text-secondary); margin-bottom:4px; }
+    .mitigation { font-family:var(--font-mono); font-size: 12px; color:hsl(145,55%,28%); }
+    .similar-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+    .similar-card { display:block; text-decoration:none; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 18px; transition:all 0.15s; }
+    .similar-card:hover { border-color:var(--accent-border); background:var(--accent-light); }
+    .similar-card h4 { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .similar-card p { font-size: 13.5px; color:var(--text-muted); margin:0; }
+    .evolution-step { display:flex; gap:14px; margin-bottom:18px; }
+    .evolution-marker { width:32px; height:32px; border-radius:50%; background:var(--accent-light); border:2px solid var(--accent-border); display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size: 12px; font-weight:600; color:var(--accent-text); flex-shrink:0; }
+    .evolution-content h4 { font-size: 16px; font-weight:600; margin-bottom:4px; }
+    .evolution-content p { font-size: 15px; color:var(--text-secondary); margin:0; }
+  </style>
+</head>
+<body>
+
+<main>
+
+  <div class="hero" id="problem">
+    <div class="hero-kicker">System Design — Observability Infrastructure</div>
+    <h1 class="hero-title">Design a <em>Metrics &amp; Monitoring</em> System</h1>
+    <p class="hero-desc">
+      1M hosts each running an agent that collects CPU, memory, disk, and custom application metrics every 10-15 seconds. That is <strong>~100M data points/sec</strong> flowing into your ingest pipeline. The hard parts:
+      a <span class="hl">time-series database</span> that stores 10M unique series with columnar compression (delta-of-delta timestamps, XOR-encoded floats),
+      a <span class="hl-accent">query engine</span> that fans out across time-partitioned shards and returns aggregated results in &lt;1 second over weeks of data,
+      and an <span class="hl-accent">alert evaluator</span> that runs thousands of threshold and anomaly-detection rules every 15-60 seconds without missing a single breach.
+      Datadog, Prometheus, New Relic, VictoriaMetrics — same architecture, different trade-offs.
+    </p>
+    <div class="hero-tags">
+      <span class="tag accent">Core: Agents + TSDB + Query Engine + Alerting</span>
+      <span class="tag">1M hosts</span>
+      <span class="tag">10M unique series</span>
+      <span class="tag">100M pts/sec ingest</span>
+      <span class="tag">Sub-second queries</span>
+    </div>
+  </div>
+
+  <section class="section" id="requirements">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Requirements</h2></div>
+    <div class="req-grid">
+      <div class="req-box">
+        <div class="req-box-head">Functional</div>
+        <ul class="req-list">
+          <li>Agents on every host collect <span class="hl-accent">system + custom app metrics</span> (CPU, mem, disk, request latency, queue depth, etc.)</li>
+          <li>Batch ingest via <span class="hl-accent">POST /metrics/ingest</span> — each payload: metric_name, tags, value, timestamp</li>
+          <li>Flexible query language: <span class="hl-accent">avg(cpu.usage{host=X, region=us-east})</span> over arbitrary time ranges</li>
+          <li>Dashboard builder: users compose panels of queries, refresh live every 10-30 seconds</li>
+          <li>Alerting: threshold rules (CPU &gt; 90% for 5 min) and <span class="hl-accent">anomaly detection</span> (rolling mean + 3 sigma)</li>
+          <li>Notification channels: PagerDuty, Slack, email, webhooks on alert fire/resolve</li>
+          <li>Tag-based filtering: every metric has key-value tags (host, region, env, service) for slicing</li>
+          <li>Downsampling: automatic resolution reduction for older data to bound storage growth</li>
+        </ul>
+      </div>
+      <div class="req-box">
+        <div class="req-box-head nonfunc">Non-Functional</div>
+        <ul class="req-list">
+          <li>Ingest throughput: <span class="hl">100M data points/sec</span> sustained</li>
+          <li>Query latency: <span class="hl">&lt; 1 second</span> for 1-hour range over 10K series</li>
+          <li>Cardinality: handle <span class="hl">10M unique time series</span> without OOM</li>
+          <li>Retention: 7 days full resolution, 30 days at 5-min, 1 year at 1-hour</li>
+          <li>Alert evaluation latency &lt; 60 seconds end-to-end (metric emitted to alert fired)</li>
+          <li>99.9% ingest availability — dropping metrics = blind spot during incidents</li>
+          <li>Horizontally scalable: add writer/reader nodes to handle more series and queries</li>
+          <li>Multi-tenant isolation: one org's cardinality bomb must not affect other tenants</li>
+          <li>Durable: no data loss on single-node failure;
+            replicated writes across availability zones</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="scale">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Scale Estimation</h2></div>
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-k">Reporting hosts</div><div class="kv-v">~1M</div><div class="kv-sub">each running an agent pushing metrics every 10-15 sec</div></div>
+      <div class="kv-card"><div class="kv-k">Unique time series</div><div class="kv-v">~10M</div><div class="kv-sub">each combo of (metric_name, tag_key=tag_value) is one series</div></div>
+      <div class="kv-card"><div class="kv-k">Ingest rate</div><div class="kv-v">~100M pts/sec</div><div class="kv-sub">1M hosts x ~100 metrics/host x 1 sample/10s</div></div>
+      <div class="kv-card"><div class="kv-k">Query latency</div><div class="kv-v">&lt; 1 sec</div><div class="kv-sub">fan-out across time shards, merge, return</div></div>
+      <div class="kv-card"><div class="kv-k">Storage (7-day raw)</div><div class="kv-v">~60 TB</div><div class="kv-sub">100M pts/sec x 10 bytes x 86400s x 7 / compression ~10x</div></div>
+      <div class="kv-card"><div class="kv-k">Alert rules</div><div class="kv-v">~50K</div><div class="kv-sub">evaluated every 15-60 sec; each runs a TSDB query</div></div>
+      <div class="kv-card"><div class="kv-k">Compression ratio</div><div class="kv-v">~12:1</div><div class="kv-sub">Gorilla encoding: ~1.37 bytes/point vs 16 bytes raw (8B ts + 8B float)</div></div>
+      <div class="kv-card"><div class="kv-k">Concurrent dashboards</div><div class="kv-v">~10K</div><div class="kv-sub">each auto-refreshing every 10-30 sec = ~500 queries/sec sustained</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="api">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">API Design</h2></div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/v1/metrics/ingest</span></div>
+      <p class="ep-desc">Batch ingest. Body: <code>[{metric_name, tags: {host, region, ...}, value: float, timestamp: epoch_sec}, ...]</code>. Agents batch 100-500 samples per request. Returns <code>{accepted: N}</code>. Authenticated via API key per org.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/api/v1/query?expr=avg(cpu.usage{host=X})&amp;start=T1&amp;end=T2&amp;step=60</span></div>
+      <p class="ep-desc">Time-series query. Expression uses PromQL-like syntax: aggregation functions, label matchers, rate/increase transforms. Returns <code>{series: [{tags, datapoints: [[ts, val], ...]}]}</code>.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/v1/alerts</span></div>
+      <p class="ep-desc">Create alert rule. Body: <code>{name, expr: "avg(cpu.usage{env=prod}) > 90", for: "5m", severity: "critical", notify: ["pagerduty://team-infra", "slack://#alerts"]}</code>. Supports threshold + anomaly detection rules.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/api/v1/dashboards/{id}</span></div>
+      <p class="ep-desc">Fetch dashboard definition. Returns <code>{panels: [{title, queries: [...], viz_type: "line|heatmap|gauge"}]}</code>. Frontend renders and auto-refreshes every 10-30 sec.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/api/v1/alerts/{id}/history?start=T1&amp;end=T2</span></div>
+      <p class="ep-desc">Alert state history. Returns <code>[{timestamp, state: "ok|pending|firing|resolved", value}]</code>. Useful for post-incident review: "when did the alert first fire? how long was it pending?"</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/api/v1/metadata/metrics?search=cpu</span></div>
+      <p class="ep-desc">Search available metric names and their tag keys. Returns <code>[{metric_name, type: "gauge|counter|histogram", tags: ["host","region",...], series_count}]</code>. Powers autocomplete in dashboard builder.</p>
+    </div>
+  </section>
+
+  <section class="section" id="architecture">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Architecture</h2></div>
+    <div class="prose">
+      <p>Two primary data paths: <strong>ingest path</strong> (agents push metrics through a gateway into Kafka, then TSDB writers compress and store in time-bucketed blocks) and <strong>query path</strong> (user queries fan out to TSDB readers across time shards, merge results). A separate <strong>alert evaluator</strong> runs on a cron loop, executing queries and firing notifications on threshold breach.</p>
+      <p><strong>Ingest path detail:</strong> Each agent batches 100-500 samples and POSTs to the ingest gateway. The gateway validates the payload (metric name format, tag count limits, cardinality checks), authenticates via API key, and publishes to Kafka. Kafka is partitioned by hash(metric_name + sorted_tags) so all samples for the same series land on the same partition — this gives TSDB writers write locality. Writers consume from Kafka, buffer in memory for the current time block (2 hours), and periodically flush compressed chunks to disk.</p>
+      <p><strong>Query path detail:</strong> The query gateway parses the expression, resolves label matchers against the metadata index to find matching series IDs, determines which time blocks overlap the requested time range, and fans out read requests to TSDB readers that own those blocks. Each reader decompresses the relevant chunks, computes partial aggregates, and streams results back. The gateway merges partial results and returns the final answer. For very wide time ranges, the gateway automatically routes to downsampled data.</p>
+      <p><strong>Alert path detail:</strong> The alert evaluator is a stateful cron service that reads rules from a Postgres-backed rules DB. Each evaluation cycle, it partitions rules across evaluator instances (sharded by rule ID hash for horizontal scaling). Each instance runs its assigned rules as TSDB queries, tracks state transitions (ok/pending/firing/resolved), and publishes firing alerts to the notification service. The notification service handles deduplication, grouping (multiple related alerts into one page), and channel routing.</p>
+    </div>
+    <div class="diagram-wrap">
+      <div class="diagram-head"><span class="diagram-label">Metrics &amp; Monitoring Architecture</span><span class="diagram-type">SVG</span></div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 860 500" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Metrics monitoring architecture">
+          <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="hsl(145,30%,40%)"/></marker></defs>
+          <style>
+/* ux-v2-bumped */
+            .lbl { font-family:'Geist',sans-serif; font-size: 12px; fill:#111; }
+            .sub { font-family:'JetBrains Mono',monospace; font-size: 10.5px; fill:#555; }
+            .box { fill:#fff; stroke:hsl(145,40%,72%); stroke-width:1.2; rx:6; }
+            .box-accent { fill:hsl(145,80%,95%); stroke:hsl(145,60%,45%); stroke-width:1.5; rx:6; }
+            .box-data { fill:hsl(38,70%,94%); stroke:hsl(38,60%,60%); stroke-width:1.2; rx:6; }
+            .edge { stroke:hsl(145,30%,40%); stroke-width:1.2; fill:none; }
+          </style>
+          <!-- Row 1: Ingest path -->
+          <rect x="20" y="30" width="110" height="50" class="box"/><text x="75" y="52" text-anchor="middle" class="lbl">Agents (1M)</text><text x="75" y="67" text-anchor="middle" class="sub">CPU, mem, custom</text>
+          <rect x="165" y="30" width="130" height="50" class="box-accent"/><text x="230" y="52" text-anchor="middle" class="lbl">Ingest Gateway</text><text x="230" y="67" text-anchor="middle" class="sub">LB + auth + validate</text>
+          <rect x="330" y="30" width="120" height="50" class="box-accent"/><text x="390" y="52" text-anchor="middle" class="lbl">Kafka</text><text x="390" y="67" text-anchor="middle" class="sub">partition by metric hash</text>
+          <rect x="485" y="30" width="130" height="50" class="box-accent"/><text x="550" y="52" text-anchor="middle" class="lbl">TSDB Writers</text><text x="550" y="67" text-anchor="middle" class="sub">encode + compress</text>
+          <rect x="650" y="20" width="180" height="70" class="box-data"/><text x="740" y="45" text-anchor="middle" class="lbl">TSDB Storage</text><text x="740" y="60" text-anchor="middle" class="sub">time-bucketed blocks</text><text x="740" y="75" text-anchor="middle" class="sub">columnar, Gorilla enc</text>
+          <!-- Row 2: Metadata + Query path -->
+          <rect x="650" y="120" width="180" height="50" class="box-data"/><text x="740" y="142" text-anchor="middle" class="lbl">Metadata Index</text><text x="740" y="157" text-anchor="middle" class="sub">series ID &rarr; tags lookup</text>
+          <rect x="20" y="160" width="110" height="50" class="box"/><text x="75" y="182" text-anchor="middle" class="lbl">Users</text><text x="75" y="197" text-anchor="middle" class="sub">dashboards + queries</text>
+          <rect x="165" y="160" width="130" height="50" class="box-accent"/><text x="230" y="182" text-anchor="middle" class="lbl">Query Gateway</text><text x="230" y="197" text-anchor="middle" class="sub">parse + plan + route</text>
+          <rect x="330" y="160" width="120" height="50" class="box-accent"/><text x="390" y="182" text-anchor="middle" class="lbl">TSDB Readers</text><text x="390" y="197" text-anchor="middle" class="sub">fan-out time shards</text>
+          <!-- Row 3: Alert path -->
+          <rect x="20" y="300" width="130" height="55" class="box-accent"/><text x="85" y="322" text-anchor="middle" class="lbl">Alert Evaluator</text><text x="85" y="337" text-anchor="middle" class="sub">cron 15-60s cycle</text>
+          <rect x="185" y="300" width="120" height="55" class="box-data"/><text x="245" y="322" text-anchor="middle" class="lbl">Alert Rules DB</text><text x="245" y="337" text-anchor="middle" class="sub">threshold + anomaly</text>
+          <rect x="340" y="300" width="130" height="55" class="box-accent"/><text x="405" y="322" text-anchor="middle" class="lbl">Notification svc</text><text x="405" y="337" text-anchor="middle" class="sub">PagerDuty/Slack/email</text>
+          <!-- Row 4: Compaction -->
+          <rect x="485" y="420" width="345" height="50" class="box"/><text x="658" y="447" text-anchor="middle" class="lbl">Compaction + Downsampling: merge blocks, reduce resolution for older data</text>
+          <!-- Edges: ingest path -->
+          <path class="edge" d="M130,55 L165,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M295,55 L330,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M450,55 L485,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M615,55 L650,55" marker-end="url(#arr)"/>
+          <!-- Metadata link -->
+          <path class="edge" d="M740,90 L740,120" marker-end="url(#arr)"/>
+          <!-- Query path -->
+          <path class="edge" d="M130,185 L165,185" marker-end="url(#arr)"/>
+          <path class="edge" d="M295,185 L330,185" marker-end="url(#arr)"/>
+          <path class="edge" d="M450,185 L650,55" marker-end="url(#arr)"/>
+          <!-- Alert path -->
+          <path class="edge" d="M85,300 L85,250 L330,185" marker-end="url(#arr)"/>
+          <path class="edge" d="M150,327 L185,327" marker-end="url(#arr)"/>
+          <path class="edge" d="M85,355 L405,355 L405,355" marker-end="url(#arr)"/>
+          <path class="edge" d="M305,327 L340,327" marker-end="url(#arr)"/>
+          <!-- Compaction link -->
+          <path class="edge" d="M740,90 L740,420" marker-end="url(#arr)" stroke-dasharray="4,3"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Deep Dive — TSDB Storage, Cardinality &amp; Alerting</h2></div>
+    <div class="prose">
+      <p><strong>(a) TSDB storage model.</strong> Data is partitioned by time into blocks — typically 2-hour windows. Within each block, series are stored in columnar format with aggressive compression:</p>
+      <pre><code>-- Gorilla encoding (Facebook, 2015):
+-- Timestamps: delta-of-delta encoding
+--   t0=1000, t1=1010, t2=1020, t3=1030
+--   deltas: 10, 10, 10 → delta-of-delta: 0, 0, 0 → 2 bits each
+-- Values: XOR encoding for IEEE 754 floats
+--   v0=72.5, v1=72.6 → XOR = small diff → encode leading/trailing zeros
+-- Result: ~1.37 bytes per data point (vs 16 bytes raw)</code></pre>
+      <p>Compaction merges small blocks into larger ones periodically — for example, six 2-hour blocks merge into one 12-hour block with a single sorted index. This reduces the number of blocks the query engine must open for wide time ranges. <strong>Downsampling</strong> reduces resolution for older data: 1-min resolution for 7 days, 5-min for 30 days, 1-hour for 1 year. Downsampling pre-computes min/max/sum/count per interval so that queries on old data can still compute accurate aggregates. This keeps storage bounded while preserving long-term trends for capacity planning and SLA reporting.</p>
+
+      <p><strong>(b) Cardinality explosion.</strong> Each unique combination of (metric_name, tag_key=tag_value) creates one time series. If someone adds <code>user_id</code> as a tag with 1M unique values — instant 1M series per metric. This kills ingestion rate, bloats the metadata index, and causes OOM on the TSDB.</p>
+      <pre><code>// Bad: http.requests{user_id=U123456} → 1M series
+// Good: http.requests{endpoint=/api/users, status=200} → ~500 series
+// Solution: cardinality limit per metric (e.g., max 10K series)
+//   + tag-value sampling for high-cardinality dimensions
+//   + reject metrics that exceed cardinality budget at ingest gateway</code></pre>
+
+      <p><strong>(c) Alert evaluation loop.</strong> Every 15-60 seconds, the alert evaluator reads all active rules from the rules DB, executes each as a TSDB query, and compares the result against the threshold. For anomaly detection: compute rolling mean + standard deviation over a training window (e.g., same hour last 7 days), alert if current value exceeds mean + 3 sigma. The evaluator maintains state for each rule: pending (condition met but not yet for the required duration), firing (condition sustained past the <code>for</code> duration), and resolved (condition no longer met). State transitions trigger notifications.</p>
+      <pre><code>// Alert evaluation pseudocode (runs every eval_interval):
+// for each rule in active_rules:
+//   result = tsdb.query(rule.expr, now - rule.window, now)
+//   if result > rule.threshold:
+//     if rule.state == "pending" && elapsed > rule.for_duration:
+//       rule.state = "firing"
+//       notify(rule.channels, "FIRING", result)
+//     elif rule.state == "ok":
+//       rule.state = "pending"; rule.pending_since = now
+//   else:
+//     if rule.state == "firing":
+//       notify(rule.channels, "RESOLVED", result)
+//     rule.state = "ok"</code></pre>
+
+      <div class="diagram-wrap">
+        <div class="diagram-head"><span class="diagram-label">Metric Lifecycle — Ingest to Alert</span><span class="diagram-type">Mermaid</span></div>
+        <div class="diagram-body">
+          <div class="mermaid">
+sequenceDiagram
+    participant A as Agent (host)
+    participant IG as Ingest Gateway
+    participant K as Kafka
+    participant W as TSDB Writer
+    participant T as TSDB Storage
+    participant QG as Query Gateway
+    participant AE as Alert Evaluator
+    participant N as Notification svc
+
+    A->>IG: POST /metrics/ingest (batch)
+    IG->>K: publish to partition(metric_hash)
+    K->>W: consume batch
+    W->>T: encode (Gorilla) + write to 2h block
+    Note over T: time-bucketed columnar storage
+    AE->>QG: query "avg(cpu.usage{env=prod})"
+    QG->>T: fan-out to 1h of time blocks
+    T-->>QG: compressed chunks
+    QG-->>AE: avg = 94.2%
+    AE->>AE: 94.2 > threshold 90 for 5m?
+    AE->>N: FIRE critical alert
+    N->>N: PagerDuty + Slack + email
+          </div>
+        </div>
+      </div>
+
+      <p><strong>(d) Query fan-out and merge.</strong> A query like <code>avg(cpu.usage{env=prod})[1h]</code> requires reading data from multiple time blocks (e.g., if block size is 2 hours, a 1-hour query touches 1 block). But across 10K hosts, each block has 10K series entries. The query gateway identifies relevant series via the metadata index (inverted index: tag=value maps to series IDs), then fans out read requests to TSDB readers that own the relevant blocks. Each reader decompresses its chunk, computes a partial aggregate, and returns it. The gateway merges partial results into the final answer.</p>
+
+      <p><strong>(e) Metadata index design.</strong> The metadata index is an inverted index: for each tag key-value pair, it stores the set of series IDs that contain that tag. Lookups are intersections of posting lists — identical to a search engine. For <code>cpu.usage{host=web-01, region=us-east}</code>, intersect the posting list for <code>host=web-01</code> with <code>region=us-east</code> to find matching series IDs. This index lives in memory for fast lookup and is persisted to disk for durability.</p>
+      <pre><code>// Inverted index structure:
+// metric_name="cpu.usage"  → [series_1, series_2, ..., series_N]
+// host="web-01"            → [series_1, series_47, series_902]
+// region="us-east"         → [series_1, series_2, series_47, ...]
+//
+// Query: cpu.usage{host=web-01, region=us-east}
+// → intersect([series_1,s_2,...], [s_1,s_47,s_902], [s_1,s_2,s_47,...])
+// → [series_1]  ← only series matching ALL labels</code></pre>
+
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"Agents on every host batch metrics and POST to an ingest gateway. The gateway publishes to Kafka partitioned by metric hash. TSDB writers consume batches, encode with Gorilla compression (delta-of-delta timestamps, XOR floats — ~1.37 bytes/point), and write to 2-hour time-bucketed blocks. Queries fan out across relevant time blocks, decompress, aggregate, and return in &lt;1 second. Alert evaluator runs on a 15-60 second cron, executes each rule as a TSDB query, and fires notifications via PagerDuty/Slack when thresholds are breached. Cardinality is bounded by per-metric limits at the ingest gateway."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="antipatterns">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Anti-patterns</h2></div>
+    <div class="prose">
+      <div class="antipattern"><div class="icon">-</div><div><div class="bad">Store every metric data point as a row in Postgres</div><p class="why">Write amplification: each INSERT updates indexes, WAL, MVCC. No columnar compression. At 100M pts/sec you would need 1000+ Postgres nodes. Querying 1 hour of data scans billions of rows with no time-locality optimization. B-tree indexes on timestamp don't help — you still read full rows.</p></div><div class="good"><strong>Better:</strong> Purpose-built TSDB with time-bucketed columnar storage and Gorilla encoding. 10x compression, 100x faster range scans. Time-partitioned blocks allow dropping old data by deleting a directory.</div></div>
+      <div class="antipattern"><div class="icon">-</div><div><div class="bad">Allow unbounded tag cardinality (user_id, request_id as metric tags)</div><p class="why">1M unique user_ids as a tag = 1M time series per metric. Metadata index OOMs. The inverted index (tag-value to series-ID mapping) grows unboundedly. Ingestion slows as every new data point creates a new series. Queries matching on that metric must scan millions of posting lists.</p></div><div class="good"><strong>Better:</strong> Cardinality limits per metric (e.g., max 10K series). Reject or sample high-cardinality tag values at the ingest gateway. High-cardinality dimensions belong in distributed tracing or logs, not metrics.</div></div>
+      <div class="antipattern"><div class="icon">-</div><div><div class="bad">Alert on raw noisy metrics without smoothing</div><p class="why">CPU spikes to 95% for 3 seconds, drops to 40%, spikes again. Raw threshold alert fires and resolves every 30 seconds — flapping. On-call engineer mutes the alert after the third page. When a real sustained incident happens, the muted alert never fires. Alert fatigue kills incident response.</p></div><div class="good"><strong>Better:</strong> Alert on sustained conditions — "avg(cpu.usage) &gt; 90% for 5 minutes." Use the <code>for</code> clause to require the condition to hold across multiple evaluation cycles. For anomaly detection, use rolling mean + 3 sigma over historical baselines (same hour, same day-of-week).</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">08</span><h2 class="section-title">Tradeoffs &amp; Design Choices</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Push (Datadog) vs Pull (Prometheus).</strong> Push: agents POST metrics to a central gateway. Scales better for ephemeral containers (short-lived pods don't need to be discovered). Pull: monitoring server scrapes registered targets. Simpler for static fleets — no agent config needed, server controls scrape interval. Hybrid: Prometheus push-gateway for short-lived jobs.</li>
+        <li><strong>Pre-aggregation vs raw storage.</strong> Pre-agg (compute avg/p99 at ingest) saves storage and speeds queries, but loses the ability to re-aggregate differently later. Raw storage preserves flexibility — you can compute any aggregation at query time — but costs 10-100x more storage. Most systems store raw for recent data, pre-agg for older data.</li>
+        <li><strong>Purpose-built TSDB (Prometheus, VictoriaMetrics) vs general OLAP (ClickHouse).</strong> TSDB: optimized for time-range scans, Gorilla compression, built-in downsampling. OLAP: more flexible query language, handles higher cardinality, but less compression for regular time-series patterns. Datadog uses a custom TSDB; Uber Observability uses ClickHouse.</li>
+        <li><strong>Single global TSDB vs per-region shards.</strong> Global: simpler queries across regions. Per-region: lower ingest latency, data locality, but cross-region queries require fan-out and merge. Most production systems use per-region with a global query aggregator.</li>
+        <li><strong>Gorilla compression vs general-purpose (LZ4/Snappy).</strong> Gorilla achieves ~1.37 bytes/point for regular time series. LZ4 on raw floats gets ~4-5 bytes/point. Gorilla wins for uniform-interval numeric data; LZ4 wins for irregular or string data.</li>
+        <li><strong>Alert on metrics vs alert on logs.</strong> Metric alerts are cheap (evaluate one number against a threshold). Log-based alerts require full-text search per evaluation — 100x more expensive. Use metrics for known failure modes (CPU, latency, error rate); logs for unknown/exploratory debugging.</li>
+        <li><strong>In-memory hot tier vs disk-only.</strong> Keep the most recent block (current 2-hour window) in memory for fast writes and low-latency queries. Older blocks on SSD. Oldest blocks on object storage (S3). Tiered storage balances cost with query performance.</li>
+        <li><strong>PromQL vs SQL for metrics.</strong> PromQL is purpose-built for time-series: <code>rate()</code>, <code>histogram_quantile()</code>, label-based selection are first-class. SQL requires verbose CTEs and window functions for the same operations. But SQL is universally known — ClickHouse and TimescaleDB bet on SQL familiarity lowering the learning curve. Trade-off: expressiveness vs accessibility.</li>
+        <li><strong>Separate alert evaluator vs co-located with query engine.</strong> Separate process: can scale independently, failure doesn't affect user queries. Co-located: lower latency (no network hop for rule queries), simpler deployment. Most production systems use a separate evaluator for isolation.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="interview-tips">
+    <div class="section-head"><span class="section-n">09</span><h2 class="section-title">Interview Tips</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>Start with the data model.</strong> "A time series is identified by (metric_name + set of tag key-value pairs). Each series has a stream of (timestamp, float_value) tuples." This grounds everything.</li>
+        <li><strong>Name Gorilla encoding explicitly.</strong> "Delta-of-delta for timestamps, XOR for float values — from Facebook's 2015 paper. Gets ~1.37 bytes/point vs 16 bytes raw." Shows depth beyond "we use a TSDB."</li>
+        <li><strong>Cardinality is the interview differentiator.</strong> Most candidates describe ingest and query. Few mention cardinality explosion. Say: "The most dangerous production issue is unbounded tag cardinality — one bad deploy tagging with request_id creates millions of series and OOMs the cluster."</li>
+        <li><strong>Separate ingest path from query path.</strong> Draw them as independent pipelines that share TSDB storage. This shows you understand read/write isolation — writers don't block readers.</li>
+        <li><strong>Address "who monitors the monitoring?"</strong> Dead-man's switch: alert evaluator emits a heartbeat; a separate watchdog in a different failure domain checks it. This is the kind of operational nuance that impresses.</li>
+        <li><strong>Mention push vs pull trade-off proactively.</strong> "Prometheus pulls, Datadog pushes. Push is better for ephemeral containers. Pull is simpler for static fleets. Modern systems support both via OpenTelemetry Collector."</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="failures">
+    <div class="section-head"><span class="section-n">10</span><h2 class="section-title">Failure Modes</h2></div>
+    <div class="failure"><div class="failure-icon">-</div><div><div class="failure-title">Ingest pipeline lag (Kafka consumer behind)</div><div class="failure-desc">TSDB writers can't keep up with ingest rate. Kafka lag grows. Dashboards show data from 10 minutes ago. Users think systems are healthy when they're not.</div><div class="mitigation">Mitigation: auto-scale writer pool based on Kafka consumer lag. Drop oldest unprocessed data if lag exceeds threshold (better to have recent data than complete history).</div></div></div>
+    <div class="failure"><div class="failure-icon">-</div><div><div class="failure-title">TSDB disk full — compaction stopped</div><div class="failure-desc">Old blocks not compacted or downsampled. Disk fills up. Writers halt. New metrics dropped.</div><div class="mitigation">Mitigation: retention policy auto-deletes blocks older than TTL. Monitoring on disk usage with alert at 80%. Separate disk for WAL vs blocks.</div></div></div>
+    <div class="failure"><div class="failure-icon">-</div><div><div class="failure-title">Cardinality bomb from a bad deploy</div><div class="failure-desc">A new deploy tags every metric with request_id (unique per request). 100K requests/sec = 100K new series/sec. Metadata index OOMs. Ingest fails for all tenants.</div><div class="mitigation">Mitigation: per-metric cardinality limit enforced at ingest gateway. Circuit breaker: if a metric exceeds 10K series in 1 minute, reject new tag combos. Alert the team that deployed it.</div></div></div>
+    <div class="failure"><div class="failure-icon">-</div><div><div class="failure-title">Alert evaluator crash — silent failure</div><div class="failure-desc">Alert evaluator process dies. No alerts fire. Production goes down but nobody gets paged. The monitoring system itself has no monitoring.</div><div class="mitigation">Mitigation: dead-man's switch — alert evaluator emits a heartbeat metric every cycle. A separate watchdog (different failure domain) alerts if heartbeat is missing. "Who watches the watchmen?"</div></div></div>
+    <div class="failure"><div class="failure-icon">-</div><div><div class="failure-title">Query timeout on wide time ranges</div><div class="failure-desc">User queries "avg CPU over 90 days" across 10K hosts. Query fans out to thousands of blocks. TSDB readers OOM or time out. Meanwhile, the query gateway holds the connection open, consuming resources.</div><div class="mitigation">Mitigation: query cost estimator rejects queries that would scan &gt; N blocks. For wide ranges, use downsampled data automatically (1-hour resolution for &gt;30 days). Query timeout + circuit breaker. Provide a "max query cost" per user/org.</div></div></div>
+    <div class="failure"><div class="failure-icon">-</div><div><div class="failure-title">Agent flood after network partition heals</div><div class="failure-desc">Network partition isolates 100K hosts for 10 minutes. When it heals, all 100K agents retry simultaneously with buffered data. Ingest gateway sees a 10x spike. Kafka partitions lag. Dashboards show a gap followed by a spike.</div><div class="mitigation">Mitigation: agents use jittered retry with exponential backoff. Ingest gateway applies per-agent rate limiting. Kafka partitions are sized for 2-3x normal peak. Agents can drop oldest buffered data if buffer exceeds memory limit — recent data is more valuable.</div></div></div>
+    <div class="failure"><div class="failure-icon">-</div><div><div class="failure-title">Multi-tenant noisy neighbor</div><div class="failure-desc">One org sends 10x their normal volume (new deploy with verbose metrics). Their traffic saturates shared Kafka partitions and TSDB writers. Other orgs experience ingest lag and stale dashboards.</div><div class="mitigation">Mitigation: per-org rate limits at the ingest gateway. Dedicated Kafka topics or partitions for large tenants. Usage-based quotas with burst allowance. Alert on per-org ingestion rate anomalies.</div></div></div>
+  </section>
+
+  <section class="section" id="similar">
+    <div class="section-head"><span class="section-n">11</span><h2 class="section-title">Similar Problems</h2></div>
+    <div class="similar-grid">
+      <a href="distributed-logging.html" class="similar-card"><h4>Distributed Logging</h4><p>Same ingest pipeline pattern — agents, Kafka, columnar storage — but for text logs</p></a>
+      <a href="ad-click-aggregator.html" class="similar-card"><h4>Ad Click Aggregator</h4><p>High-throughput event ingestion with real-time aggregation and time-windowed queries</p></a>
+      <a href="twitter-trending.html" class="similar-card"><h4>Twitter Trending</h4><p>Streaming aggregation over high-cardinality event streams with anomaly detection</p></a>
+      <a href="count-active-users.html" class="similar-card"><h4>Count Active Users</h4><p>Time-bucketed counters with approximate distinct counting (HyperLogLog)</p></a>
+      <a href="notification-system.html" class="similar-card"><h4>Notification System</h4><p>Alert routing to multiple channels — PagerDuty, Slack, email — with dedup and escalation</p></a>
+      <a href="distributed-search.html" class="similar-card"><h4>Distributed Search</h4><p>Inverted index for metadata lookup — same posting-list intersection for label matching</p></a>
+      <a href="rate-limiter.html" class="similar-card"><h4>Rate Limiter</h4><p>Ingest gateway rate-limits per org and per metric — sliding window counters at scale</p></a>
+    </div>
+  </section>
+
+  <section class="section" id="evolution">
+    <div class="section-head"><span class="section-n">12</span><h2 class="section-title">Evolution</h2></div>
+    <div class="evolution-step"><div class="evolution-marker">1</div><div class="evolution-content"><h4>Nagios + RRDtool (early 2000s)</h4><p>Static host list, manual config per check. RRDtool stores fixed-size round-robin databases — automatically downsamples old data by overwriting. Works for 50 servers with manual configuration. Falls apart at 500 hosts: every new host requires editing a config file and restarting the daemon.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">2</div><div class="evolution-content"><h4>Graphite + StatsD (2010s)</h4><p>Push model via UDP. StatsD aggregates counters/timers/gauges client-side, ships pre-aggregated values to Graphite. Whisper DB stores one file per metric (fixed-size, round-robin). Better than Nagios, but single-node storage bottleneck. No native clustering — Carbon Relay adds sharding but no replication.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">3</div><div class="evolution-content"><h4>Prometheus + PromQL (2015+)</h4><p>Pull-based scraping of /metrics HTTP endpoints. Local TSDB with Gorilla-inspired compression. PromQL provides powerful query language with rate(), histogram_quantile(), and label-based filtering. Single-node by design; Thanos and Cortex add horizontal scaling, long-term storage on S3, and global query view across clusters.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">4</div><div class="evolution-content"><h4>Managed SaaS — Datadog / New Relic (2018+)</h4><p>Push model with hosted agents and auto-instrumentation. Managed TSDB at massive scale, ML-based anomaly detection, correlation across metrics/traces/logs. Zero operational burden for the customer. Cost scales with data volume — can get expensive at 10M+ series.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">5</div><div class="evolution-content"><h4>OpenTelemetry convergence (2023+)</h4><p>Unified SDK for metrics + traces + logs — one instrumentation library instead of three vendor-specific ones. Vendor-neutral collection pipeline (OTel Collector) with processors and exporters. Any backend (Prometheus, Datadog, Grafana Cloud, Honeycomb) via config change. The industry standard going forward, ending vendor lock-in at the collection layer.</p></div></div>
+  </section>
+
+</main>
+
+<script>
+const FLOW_NODES = [
+  { label: 'Agent',           sub: 'collects metrics' },
+  { label: 'Ingest Gateway',  sub: 'LB + auth + validate' },
+  { label: 'Kafka',           sub: 'partition by metric hash' },
+  { label: 'TSDB Writer',     sub: 'Gorilla encode + write' },
+  { label: 'TSDB Storage',    sub: 'time-bucketed blocks' },
+  { label: 'Query Gateway',   sub: 'fan-out + merge' },
+  { label: 'Alert Evaluator', sub: 'cron checks rules' },
+];
+const FLOW_DESCS = [
+  'Agent on host samples CPU, memory, disk, and custom app metrics every 10-15 seconds',
+  'Ingest gateway authenticates API key, validates payload, rate-limits per org',
+  'Kafka partitions by hash(metric_name+tags) for locality; buffers against ingest spikes',
+  'TSDB writer consumes batch, encodes timestamps (delta-of-delta) and values (XOR float), writes to current 2-hour block',
+  'Time-bucketed columnar storage with Gorilla compression; compaction merges small blocks; downsampling reduces resolution for older data',
+  'Query gateway parses PromQL-like expression, fans out to TSDB readers across relevant time shards, merges partial results, returns aggregated series',
+  'Alert evaluator reads rules every 15-60 seconds, runs each as a TSDB query, compares result against threshold or anomaly bounds, fires notification via PagerDuty/Slack/email on breach',
+];
+</script>
+
+</body>
+</html>

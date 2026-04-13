@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Code Deployment Pipeline — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+    :root { --accent-h: 200; --accent-s: 70%; --accent-l: 48%;
+      --accent: hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light: hsl(var(--accent-h), 80%, 95%);
+      --accent-mid: hsl(var(--accent-h), 70%, 88%);
+      --accent-text: hsl(var(--accent-h), var(--accent-s), 38%);
+      --accent-border: hsl(var(--accent-h), 60%, 80%);
+      --hl-yellow:#fff0a0; --hl-yellow-dark:#a07a00;
+      --hl-accent: hsl(var(--accent-h), 90%, 90%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 35%);
+      --bg:#fff; --bg-subtle:#f7f7f5; --bg-raised:#f0eeeb; --bg-code:#f4f3f0;
+      --border:#e4e2de; --border-strong:#ccc9c4;
+      --text-primary:#111110; --text-secondary:#4a4845; --text-muted:#878480;
+      --font-serif:'Instrument Serif',Georgia,serif;
+      --font-sans:'Geist',system-ui,sans-serif;
+      --font-mono:'JetBrains Mono','Fira Code',monospace;
+      --radius-sm:4px; --radius-md:8px; --radius-lg:12px;
+    }
+    .req-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px; }
+    .req-box { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 20px; }
+    .req-box-head { display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size: 12px; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent-text); margin-bottom:10px; font-weight:500; }
+    .req-box-head.nonfunc { color:hsl(38,80%,30%); }
+    .req-list { padding-left:20px; font-size: 15px; color:var(--text-secondary); }
+    .req-list li { margin-bottom:6px; }
+    .endpoint { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px 18px; margin-bottom:10px; }
+    .endpoint-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+    .method { font-family:var(--font-mono); font-size: 11px; font-weight:600; padding:2px 8px; border-radius:3px; letter-spacing:0.05em; }
+    .method.get { background:hsl(190,70%,90%); color:hsl(190,70%,28%); }
+    .method.post { background:hsl(145,55%,90%); color:hsl(145,55%,28%); }
+    .method.delete { background:hsl(0,70%,92%); color:hsl(0,70%,38%); }
+    .ep-path { font-family:var(--font-mono); font-size: 15px; color:var(--text-primary); font-weight:500; }
+    .ep-desc { font-size: 15px; color:var(--text-secondary); margin:6px 0 0; }
+    .failure { display:flex; gap:14px; padding:14px 18px; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); margin-bottom:10px; }
+    .failure-icon { font-size:18px; flex-shrink:0; margin-top:2px; }
+    .failure-title { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .failure-desc { font-size: 15px; color:var(--text-secondary); margin-bottom:4px; }
+    .mitigation { font-family:var(--font-mono); font-size: 12px; color:hsl(145,55%,28%); }
+    .similar-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+    .similar-card { display:block; text-decoration:none; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 18px; transition:all 0.15s; }
+    .similar-card:hover { border-color:var(--accent-border); background:var(--accent-light); }
+    .similar-card h4 { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .similar-card p { font-size: 13.5px; color:var(--text-muted); margin:0; }
+    .evolution-step { display:flex; gap:14px; margin-bottom:18px; }
+    .evolution-marker { width:32px; height:32px; border-radius:50%; background:var(--accent-light); border:2px solid var(--accent-border); display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size: 12px; font-weight:600; color:var(--accent-text); flex-shrink:0; }
+    .evolution-content h4 { font-size: 16px; font-weight:600; margin-bottom:4px; }
+    .evolution-content p { font-size: 15px; color:var(--text-secondary); margin:0; }
+  </style>
+</head>
+<body>
+
+<main>
+
+  <div class="hero" id="problem">
+    <div class="hero-kicker">System Design — Continuous Deployment at Scale</div>
+    <h1 class="hero-title">Design a <em>Code Deployment Pipeline</em></h1>
+    <p class="hero-desc">
+      Developer pushes code. CI builds and tests inside <span class="hl">isolated ephemeral containers</span>. An immutable,
+      SHA-tagged artifact is stored in an S3-backed content-addressed store. CD does a
+      <span class="hl-accent">canary deploy to 1% of traffic</span>, runs automated statistical analysis comparing
+      canary vs baseline metrics over 15 minutes, then progressively promotes: 10% &rarr; 50% &rarr; 100%.
+      <span class="hl-accent">Rollback = re-deploy the previous artifact</span> — no new build needed.
+      Feature flags decouple deploy from release: ship code dark, enable for 1% &rarr; 100% independently.
+      Google, Netflix, Meta — same pattern, different scale.
+    </p>
+    <div class="hero-tags">
+      <span class="tag accent">Core: Hermetic Build + Immutable Artifact + Canary Analysis</span>
+      <span class="tag">~10K deploys/day</span>
+      <span class="tag">~1000 concurrent builds</span>
+      <span class="tag">Artifact store ~50 TB</span>
+      <span class="tag">Auto-rollback on regression</span>
+    </div>
+  </div>
+
+  <section class="section" id="requirements">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Requirements</h2></div>
+    <div class="req-grid">
+      <div class="req-box">
+        <div class="req-box-head">Functional</div>
+        <ul class="req-list">
+          <li>Developer pushes to main &rarr; CI automatically triggers <span class="hl-accent">build + test</span> in ephemeral containers</li>
+          <li>Build produces an <span class="hl-accent">immutable artifact</span> (Docker image, SHA-tagged, content-addressed)</li>
+          <li>CD performs progressive rollout: canary 1% &rarr; 10% &rarr; 50% &rarr; 100%</li>
+          <li>Automated <span class="hl-accent">canary analysis</span> compares p99 latency + error rate against baseline</li>
+          <li>Auto-promote on pass; <span class="hl-accent">auto-rollback</span> on fail (re-deploy previous SHA)</li>
+          <li>Feature flags allow toggling features independently of deploy pipeline</li>
+        </ul>
+      </div>
+      <div class="req-box">
+        <div class="req-box-head nonfunc">Non-Functional</div>
+        <ul class="req-list">
+          <li><span class="hl">Hermetic builds</span> — no network during build except cached deps; fully reproducible</li>
+          <li>Build time &lt; <span class="hl">5 min p90</span> — developers won't wait longer</li>
+          <li>Canary analysis window: <span class="hl">15 min</span> with statistical significance</li>
+          <li>Rollback latency &lt; <span class="hl">60 sec</span> from detection to full rollback</li>
+          <li>Artifact store: <span class="hl">never overwrite</span> — append-only, content-addressed</li>
+          <li>Support ~10K deploys/day, ~1000 concurrent build jobs</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="scale">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Scale Estimation</h2></div>
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-k">Deploys per day</div><div class="kv-v">~10K</div><div class="kv-sub">across all services in the org; peak during business hours</div></div>
+      <div class="kv-card"><div class="kv-k">Concurrent builds</div><div class="kv-v">~1000</div><div class="kv-sub">ephemeral containers spun up on a shared build cluster</div></div>
+      <div class="kv-card"><div class="kv-k">Artifact store</div><div class="kv-v">~50 TB</div><div class="kv-sub">S3-backed; content-addressed by SHA; GC after retention policy</div></div>
+      <div class="kv-card"><div class="kv-k">Build p90 latency</div><div class="kv-v">&lt; 5 min</div><div class="kv-sub">including container spin-up, dep fetch, compile, test</div></div>
+      <div class="kv-card"><div class="kv-k">Canary window</div><div class="kv-v">15 min</div><div class="kv-sub">enough samples for statistical significance at 1% traffic</div></div>
+      <div class="kv-card"><div class="kv-k">Rollback time</div><div class="kv-v">&lt; 60 sec</div><div class="kv-sub">re-point deploy config at previous SHA; no rebuild needed</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="api">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">API Design</h2></div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/builds</span></div>
+      <p class="ep-desc">Trigger a new build. Body: <code>{repo, commit_sha, branch}</code>. Returns <code>{build_id, status: queued}</code>. Webhook fires on completion.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/api/builds/{build_id}</span></div>
+      <p class="ep-desc">Poll build status. Returns <code>{status: queued|building|testing|passed|failed, artifact_sha, logs_url, duration_sec}</code>.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/deploys</span></div>
+      <p class="ep-desc">Start a deployment. Body: <code>{service, artifact_sha, strategy: canary|blue_green|rolling}</code>. Returns <code>{deploy_id, status: canary_1pct}</code>.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/deploys/{deploy_id}/rollback</span></div>
+      <p class="ep-desc">Immediate rollback. Re-deploys previous artifact SHA. Returns <code>{deploy_id, rolled_back_to: prev_sha}</code>.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/api/artifacts/{sha}</span></div>
+      <p class="ep-desc">Fetch artifact metadata. Returns <code>{sha, build_id, created_at, size_bytes, image_url}</code>. Artifact itself served via signed S3 URL.</p>
+    </div>
+  </section>
+
+  <section class="section" id="architecture">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Architecture</h2></div>
+    <div class="prose"><p>Four tiers: <strong>Build tier</strong> (ephemeral containers compile + test), <strong>Artifact tier</strong> (S3 content-addressed store), <strong>Deploy tier</strong> (canary + progressive rollout), <strong>Observability tier</strong> (metrics collection + canary analysis). Git push triggers the pipeline end-to-end.</p></div>
+    <div class="diagram-wrap">
+      <div class="diagram-head"><span class="diagram-label">Deployment Pipeline Architecture</span><span class="diagram-type">SVG</span></div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 840 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Code deployment pipeline architecture">
+          <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="hsl(200,30%,40%)"/></marker></defs>
+          <style>
+/* ux-v2-bumped */
+            .lbl { font-family:'Geist',sans-serif; font-size: 12px; fill:#111; }
+            .sub { font-family:'JetBrains Mono',monospace; font-size: 10.5px; fill:#555; }
+            .box { fill:#fff; stroke:hsl(200,40%,72%); stroke-width:1.2; rx:6; }
+            .box-accent { fill:hsl(200,80%,95%); stroke:hsl(200,70%,48%); stroke-width:1.5; rx:6; }
+            .box-data { fill:hsl(38,70%,94%); stroke:hsl(38,60%,60%); stroke-width:1.2; rx:6; }
+            .edge { stroke:hsl(200,30%,40%); stroke-width:1.2; fill:none; }
+          </style>
+          <rect x="20" y="30" width="110" height="50" class="box"/><text x="75" y="52" text-anchor="middle" class="lbl">Developer</text><text x="75" y="67" text-anchor="middle" class="sub">git push</text>
+          <rect x="160" y="30" width="120" height="50" class="box-accent"/><text x="220" y="52" text-anchor="middle" class="lbl">Git Server</text><text x="220" y="67" text-anchor="middle" class="sub">webhook trigger</text>
+          <rect x="310" y="20" width="140" height="70" class="box-accent"/><text x="380" y="42" text-anchor="middle" class="lbl">CI Build Cluster</text><text x="380" y="57" text-anchor="middle" class="sub">ephemeral containers</text><text x="380" y="72" text-anchor="middle" class="sub">hermetic builds</text>
+          <rect x="480" y="30" width="140" height="50" class="box-data"/><text x="550" y="52" text-anchor="middle" class="lbl">Artifact Store</text><text x="550" y="67" text-anchor="middle" class="sub">S3, SHA-addressed</text>
+          <rect x="650" y="30" width="170" height="50" class="box-accent"/><text x="735" y="52" text-anchor="middle" class="lbl">Deploy Controller</text><text x="735" y="67" text-anchor="middle" class="sub">canary orchestrator</text>
+          <rect x="310" y="140" width="140" height="55" class="box-accent"/><text x="380" y="162" text-anchor="middle" class="lbl">Canary (1%)</text><text x="380" y="177" text-anchor="middle" class="sub">new artifact SHA</text>
+          <rect x="480" y="140" width="140" height="55" class="box"/><text x="550" y="162" text-anchor="middle" class="lbl">Baseline (99%)</text><text x="550" y="177" text-anchor="middle" class="sub">previous artifact SHA</text>
+          <rect x="650" y="140" width="170" height="55" class="box-accent"/><text x="735" y="162" text-anchor="middle" class="lbl">Canary Analyzer</text><text x="735" y="177" text-anchor="middle" class="sub">Mann-Whitney test</text>
+          <rect x="310" y="240" width="310" height="50" class="box-data"/><text x="465" y="262" text-anchor="middle" class="lbl">Metrics: Prometheus + Grafana</text><text x="465" y="277" text-anchor="middle" class="sub">p99 latency, error rate, throughput</text>
+          <rect x="650" y="240" width="170" height="50" class="box-data"/><text x="735" y="262" text-anchor="middle" class="lbl">Feature Flags svc</text><text x="735" y="277" text-anchor="middle" class="sub">decouple deploy / release</text>
+          <rect x="310" y="330" width="510" height="50" class="box"/><text x="565" y="357" text-anchor="middle" class="lbl">Progressive rollout: 1% &rarr; 10% &rarr; 50% &rarr; 100% or auto-rollback to previous SHA</text>
+          <path class="edge" d="M130,55 L160,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M280,55 L310,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M450,55 L480,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M620,55 L650,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M735,80 L380,140" marker-end="url(#arr)"/>
+          <path class="edge" d="M735,80 L550,140" marker-end="url(#arr)"/>
+          <path class="edge" d="M380,195 L380,240" marker-end="url(#arr)"/>
+          <path class="edge" d="M550,195 L550,240" marker-end="url(#arr)"/>
+          <path class="edge" d="M620,265 L650,265" marker-end="url(#arr)"/>
+          <path class="edge" d="M735,195 L735,240" marker-end="url(#arr)"/>
+          <path class="edge" d="M735,290 L735,330" marker-end="url(#arr)"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Deep Dive — Build Isolation, Canary Analysis &amp; Feature Flags</h2></div>
+    <div class="prose">
+      <p><strong>(a) Build Isolation.</strong> Each build runs in an ephemeral container spun from a base image per language (e.g., <code>ci-golang:1.22</code>, <code>ci-java:21</code>). The container has no outbound network access during build — <em>hermetic builds</em>. Dependencies are pre-fetched into a shared cache layer (content-addressed). Result: builds are fully reproducible. Same commit SHA = same artifact SHA, always. Container is destroyed after build; no state leaks between builds.</p>
+
+      <p>Why hermetic? Three reasons: (1) <em>Reproducibility</em> — build the same commit six months later and get the exact same binary. No "it worked on my machine." (2) <em>Security</em> — no network means a compromised dependency mirror can't inject malware at build time. (3) <em>Cacheability</em> — since builds are deterministic, unchanged modules produce the same output and can be skipped entirely (build-graph caching).</p>
+
+      <pre><code># Hermetic build: container spec
+FROM ci-golang:1.22
+COPY --from=dep-cache /deps /go/pkg/mod   # pre-fetched, content-addressed
+COPY . /src
+RUN --network=none go build -o /out/app   # no network access
+RUN --network=none go test ./...           # tests also hermetic</code></pre>
+
+      <p><strong>(b) Artifact Store.</strong> S3-backed, content-addressed by the SHA-256 of the artifact. Key design: <em>never overwrite</em>. Once <code>sha256:abc123</code> is written, it is immutable. Rollback is trivial: point the deploy config at the previous SHA. No rebuild required. Retention policy garbage-collects artifacts older than 90 days with no active deploy reference. Total store size ~50 TB across org.</p>
+
+      <pre><code>// Artifact store put — idempotent, content-addressed
+PUT /artifacts/{sha256}
+  If-None-Match: *          // only write if doesn't exist
+  Content-Type: application/octet-stream
+  Body: &lt;docker image tar&gt;
+
+// Deploy config — just a pointer to a SHA
+{ "service": "payments",
+  "artifact_sha": "sha256:abc123",
+  "replicas": 50,
+  "canary_pct": 1 }</code></pre>
+
+      <p><strong>(c) Canary Analysis.</strong> When a new artifact is deployed, it receives 1% of production traffic. Over a 15-minute window, the canary analyzer collects p99 latency and error rate from both canary (new) and baseline (old) pods. It applies a <strong>Mann-Whitney U test</strong> (non-parametric, no normality assumption) to determine if the canary is statistically worse. If the test fails (p &lt; 0.05 for regression), auto-rollback fires within 60 seconds. If the test passes, promote to 10%, repeat analysis, then 50%, then 100%.</p>
+
+      <p>Why Mann-Whitney instead of a simple threshold? A threshold like "error rate &lt; 1%" is meaningless if your baseline already runs at 0.95%. Mann-Whitney compares the <em>distributions</em> of canary vs baseline samples. It detects relative regressions ("canary is statistically worse than baseline") regardless of absolute values. At 1% traffic over 15 minutes, you collect ~9K request samples — more than enough for statistical power. The test requires no normality assumption, which is important because latency distributions are heavily right-skewed.</p>
+
+      <pre><code># Canary analysis pseudocode
+canary_latencies  = collect_p99(canary_pods, window=15min)
+baseline_latencies = collect_p99(baseline_pods, window=15min)
+stat, p_value = mann_whitney_u(canary_latencies, baseline_latencies)
+if p_value < 0.05 and median(canary) > median(baseline):
+    trigger_rollback()    # canary is worse; roll back within 60s
+else:
+    promote_to_next_stage()  # 1% → 10% → 50% → 100%</code></pre>
+
+      <div class="diagram-wrap">
+        <div class="diagram-head"><span class="diagram-label">Canary Deploy Sequence</span><span class="diagram-type">Mermaid</span></div>
+        <div class="diagram-body">
+          <div class="mermaid">
+sequenceDiagram
+    participant D as Developer
+    participant CI as CI Build
+    participant AS as Artifact Store
+    participant DC as Deploy Controller
+    participant CA as Canary Analyzer
+    participant LB as Load Balancer
+
+    D->>CI: git push (commit SHA)
+    CI->>CI: build + test in container
+    CI->>AS: push artifact (SHA-tagged)
+    CI->>DC: trigger deploy (artifact SHA)
+    DC->>LB: route 1% to canary pods
+    CA->>CA: collect metrics 15 min
+    CA->>DC: pass (p99 OK, errors OK)
+    DC->>LB: promote to 10%
+    CA->>CA: collect metrics 15 min
+    CA->>DC: pass
+    DC->>LB: promote 50% then 100%
+          </div>
+        </div>
+      </div>
+
+      <p><strong>(d) Feature Flags.</strong> Decouple deploy from release. Code ships "dark" — the feature exists in the artifact but is gated behind a flag. The flag service evaluates rules (user ID % 100 &lt; rollout_pct). Rollout: 1% &rarr; 5% &rarr; 50% &rarr; 100%, independent of the deploy pipeline. If the feature causes issues, flip the flag off — no redeploy needed. Flags are evaluated at runtime with ~1 ms overhead (local cache + SSE push for updates).</p>
+
+      <p>Architecture: a central flag store (Postgres) holds flag definitions + targeting rules. Each application instance caches the full flag set in memory (~10 KB). The flag service pushes updates via SSE — when an engineer changes a flag, all instances receive the update within 2 seconds. Evaluation is local (no network call per request). Stale flags are a real problem: after a feature is fully rolled out, the flag should be cleaned up. A "flag hygiene" job alerts on flags older than 90 days with 100% rollout — time to remove the conditional and delete the flag.</p>
+
+      <pre><code>// Feature flag evaluation — local, no network
+func isEnabled(flagKey string, userID int64) bool {
+    flag := localCache.Get(flagKey)       // in-memory, ~0 ms
+    if flag == nil { return false }       // unknown flag = off
+    return userID % 100 < flag.RolloutPct // deterministic bucketing
+}</code></pre>
+
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"Developer pushes code. CI spins an ephemeral container from a language-specific base image — hermetic, no network. Build produces an immutable, SHA-tagged artifact stored in S3. CD deploys the artifact to 1% of traffic as a canary. Over 15 minutes, we compare canary p99 latency and error rate against baseline using a Mann-Whitney test. Auto-promote on pass through 10% / 50% / 100%. Auto-rollback on fail — just re-point to the previous SHA, no rebuild. Feature flags let us decouple deploy from release: ship dark, enable gradually."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="antipatterns">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Anti-patterns</h2></div>
+    <div class="prose">
+      <div class="antipattern"><div class="icon">&#x1F6AB;</div><div><div class="bad">Deploy on Friday at 5 PM — "it's just a small change"</div><p class="why">No one is watching dashboards over the weekend. A subtle regression in p99 latency compounds for 60 hours before Monday morning. Incident response time goes from minutes to days.</p></div><div class="good"><strong>Better:</strong> Deploy windows during business hours. Freeze deploys Friday afternoon. Canary analysis requires humans on-call to respond to alerts.</div></div>
+      <div class="antipattern"><div class="icon">&#x1F6AB;</div><div><div class="bad">Mutable artifacts — "just SSH in and patch the JAR on the production server"</div><p class="why">You can never reproduce what's running in prod. Rollback is impossible because the previous state is gone. Debugging requires guessing what was patched. Audit trail is destroyed.</p></div><div class="good"><strong>Better:</strong> Immutable, SHA-tagged artifacts. Every deploy is a known, reproducible state. Rollback = point to previous SHA. Always.</div></div>
+      <div class="antipattern"><div class="icon">&#x1F6AB;</div><div><div class="bad">All-at-once deploy with no canary — "we tested it in staging, ship it"</div><p class="why">Staging never perfectly mirrors production traffic patterns. A bug that only manifests under real load hits 100% of users simultaneously. Blast radius is the entire fleet.</p></div><div class="good"><strong>Better:</strong> Canary 1% with automated analysis. If it regresses, only 1% of users were affected for 15 minutes. Auto-rollback limits blast radius.</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">08</span><h2 class="section-title">Tradeoffs &amp; Design Choices</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Canary vs Blue-Green.</strong> Canary: gradual traffic shift (1% &rarr; 100%), fine-grained analysis, but slower rollout. Blue-Green: instant swap between two full environments, fast rollback, but double infrastructure cost and no gradual validation.</li>
+        <li><strong>Hermetic builds vs cached network fetches.</strong> Hermetic (no network) = reproducible, secure, no supply-chain attack at build time. Cost: must pre-populate dependency cache. Cached fetches = faster cold start, but builds break if a dependency is yanked (left-pad incident).</li>
+        <li><strong>Statistical canary vs threshold-based.</strong> Threshold (e.g., "error rate &lt; 1%") gives false positives when baseline is already at 0.95%. Mann-Whitney compares distributions directly — detects real regressions even when absolute values look fine.</li>
+        <li><strong>Feature flags vs deploy-gated releases.</strong> Feature flags add runtime complexity (flag evaluation on every request, stale flags accumulate). But they let you decouple risky feature rollouts from infrastructure deploys — a 10-line config change doesn't need canary analysis.</li>
+        <li><strong>Monorepo vs polyrepo CI.</strong> Monorepo: one pipeline triggers affected services (Google-style). Polyrepo: each repo owns its pipeline. Monorepo is simpler for cross-service changes but requires smart build-graph analysis to avoid rebuilding everything.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="failures">
+    <div class="section-head"><span class="section-n">09</span><h2 class="section-title">Failure Modes</h2></div>
+    <div class="failure"><div class="failure-icon">&#x1F4A5;</div><div><div class="failure-title">Build cluster overloaded — builds queued for 30+ minutes</div><div class="failure-desc">1000 developers push simultaneously after a merge window. Build queue backs up. Developer velocity drops to zero.</div><div class="mitigation">&rarr; Mitigation: auto-scale build cluster on queue depth. Priority lanes for hotfix branches. Build deduplication (same commit = reuse in-flight build).</div></div></div>
+    <div class="failure"><div class="failure-icon">&#x1F525;</div><div><div class="failure-title">Canary analysis gives false positive — promotes a bad build</div><div class="failure-desc">15-minute window isn't long enough to catch a slow memory leak. Canary passes, promotes to 100%, OOM crash 2 hours later.</div><div class="mitigation">&rarr; Mitigation: post-promotion monitoring with auto-rollback triggers. Extended soak tests for memory/disk metrics. Separate slow-burn canary for latency-insensitive regressions.</div></div></div>
+    <div class="failure"><div class="failure-icon">&#x1F504;</div><div><div class="failure-title">Artifact store corruption — SHA mismatch</div><div class="failure-desc">S3 returns a corrupted artifact. Deploy rolls out a broken binary to canary pods.</div><div class="mitigation">&rarr; Mitigation: verify SHA-256 checksum on pull before deploying. Content-addressed means any corruption is detectable. Fail deploy if checksum doesn't match.</div></div></div>
+    <div class="failure"><div class="failure-icon">&#x23F0;</div><div><div class="failure-title">Rollback cascade — new version is already depended on</div><div class="failure-desc">Service A v2 deployed. Service B deployed against A v2's new API. Rolling back A to v1 breaks B.</div><div class="mitigation">&rarr; Mitigation: backward-compatible API changes only. Feature flags to gate new endpoints. Expand-contract migration pattern for breaking changes.</div></div></div>
+    <div class="failure"><div class="failure-icon">&#x1F6E1;</div><div><div class="failure-title">Supply chain attack — compromised dependency</div><div class="failure-desc">Malicious package published to npm/PyPI. Build fetches it and bakes it into the artifact.</div><div class="mitigation">&rarr; Mitigation: hermetic builds with pinned, pre-verified dependency cache. SBOM (software bill of materials) generated per artifact. Dependency scanning in CI.</div></div></div>
+  </section>
+
+  <section class="section" id="interview-tips">
+    <div class="section-head"><span class="section-n">10</span><h2 class="section-title">Interview Tips</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>Lead with immutability.</strong> "Artifacts are SHA-tagged and never overwritten. Rollback is just re-pointing to the previous SHA." This single idea simplifies everything.</li>
+        <li><strong>Name the statistical test.</strong> "Mann-Whitney U for canary analysis" — shows you've thought beyond "just check if errors go up."</li>
+        <li><strong>Distinguish deploy from release.</strong> "Deploy puts code on servers. Release exposes it to users. Feature flags let you do these independently." This nuance impresses.</li>
+        <li><strong>Talk about blast radius.</strong> "Canary at 1% means worst case, 1% of users see a regression for 15 minutes before auto-rollback." Quantify the risk.</li>
+        <li><strong>Mention hermetic builds.</strong> "No network during build. Dependencies from a pre-populated cache. Same commit = same artifact, always." Production-grade insight.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="similar">
+    <div class="section-head"><span class="section-n">11</span><h2 class="section-title">Similar Problems</h2></div>
+    <div class="similar-grid">
+      <a href="distributed-job-scheduler.html" class="similar-card"><h4>Distributed Job Scheduler</h4><p>Orchestrating build jobs across a cluster of workers</p></a>
+      <a href="leetcode-judge.html" class="similar-card"><h4>LeetCode Judge</h4><p>Running untrusted code in isolated containers — same sandbox pattern</p></a>
+      <a href="design-cdn.html" class="similar-card"><h4>CDN</h4><p>Content-addressed storage and global distribution of artifacts</p></a>
+      <a href="feature-flags-rollouts.html" class="similar-card"><h4>Feature Flags &amp; Rollouts</h4><p>Decoupling deploy from release with gradual rollout</p></a>
+      <a href="deployment-strategies.html" class="similar-card"><h4>Deployment Strategies</h4><p>Canary, blue-green, rolling — tradeoffs in rollout patterns</p></a>
+    </div>
+  </section>
+
+  <section class="section" id="evolution">
+    <div class="section-head"><span class="section-n">12</span><h2 class="section-title">Evolution</h2></div>
+    <div class="evolution-step"><div class="evolution-marker">1</div><div class="evolution-content"><h4>MVP — Manual deploy via SSH</h4><p>Developer builds locally, SCPs binary to server, restarts. Works for 1 server. Doesn't scale. No rollback.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">2</div><div class="evolution-content"><h4>CI server + scripted deploy</h4><p>Jenkins builds on push. Deploy script copies artifact to fleet. All-at-once. Rollback = re-run old build.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">3</div><div class="evolution-content"><h4>Immutable artifacts + container orchestration</h4><p>Docker images tagged by SHA. Kubernetes rolling update. Rollback = set image to previous SHA. No rebuild.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">4</div><div class="evolution-content"><h4>Canary deploys + automated analysis</h4><p>1% canary with statistical comparison. Auto-promote or auto-rollback. Blast radius minimized.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">5</div><div class="evolution-content"><h4>Feature flags + hermetic builds + SBOM</h4><p>Full supply-chain security. Deploy/release decoupled. Progressive delivery with fine-grained audience targeting.</p></div></div>
+  </section>
+
+</main>
+
+<script>
+const FLOW_NODES = [
+  { label: 'Developer',       sub: 'git push' },
+  { label: 'CI Build',        sub: 'ephemeral container' },
+  { label: 'Artifact Store',  sub: 'S3, SHA-tagged' },
+  { label: 'Deploy Controller', sub: 'canary orchestrator' },
+  { label: 'Canary (1%)',     sub: 'new artifact' },
+  { label: 'Canary Analyzer', sub: 'Mann-Whitney test' },
+  { label: 'Promote/Rollback', sub: '10% → 50% → 100%' },
+];
+const FLOW_DESCS = [
+  'Developer pushes code to main branch; webhook triggers CI pipeline',
+  'CI spins ephemeral container from language base image; hermetic build + test; no network',
+  'Build artifact (Docker image) stored in S3, content-addressed by SHA-256; immutable, never overwritten',
+  'Deploy controller receives artifact SHA; begins canary rollout at 1% of production traffic',
+  'Canary pods run new artifact; receive 1% of traffic via load balancer weight',
+  'Canary analyzer compares p99 latency + error rate vs baseline over 15 min; Mann-Whitney U test for significance',
+  'On pass: promote to 10%, 50%, 100%. On fail: auto-rollback to previous SHA within 60 seconds',
+];
+</script>
+
+</body>
+</html>

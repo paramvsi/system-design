@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Google Ads System — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+    :root { --accent-h: 145; --accent-s: 75%; --accent-l: 42%;
+      --accent: hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light: hsl(var(--accent-h), 80%, 95%);
+      --accent-mid: hsl(var(--accent-h), 70%, 88%);
+      --accent-text: hsl(var(--accent-h), var(--accent-s), 38%);
+      --accent-border: hsl(var(--accent-h), 60%, 80%);
+      --hl-yellow:#fff0a0; --hl-yellow-dark:#a07a00;
+      --hl-accent: hsl(var(--accent-h), 90%, 90%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 35%);
+      --bg:#fff; --bg-subtle:#f7f7f5; --bg-raised:#f0eeeb; --bg-code:#f4f3f0;
+      --border:#e4e2de; --border-strong:#ccc9c4;
+      --text-primary:#111110; --text-secondary:#4a4845; --text-muted:#878480;
+      --font-serif:'Instrument Serif',Georgia,serif;
+      --font-sans:'Geist',system-ui,sans-serif;
+      --font-mono:'JetBrains Mono','Fira Code',monospace;
+      --radius-sm:4px; --radius-md:8px; --radius-lg:12px;
+    }
+    .req-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px; }
+    .req-box { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 20px; }
+    .req-box-head { display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size: 12px; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent-text); margin-bottom:10px; font-weight:500; }
+    .req-box-head.nonfunc { color:hsl(38,80%,30%); }
+    .req-list { padding-left:20px; font-size: 15px; color:var(--text-secondary); }
+    .req-list li { margin-bottom:6px; }
+    .endpoint { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px 18px; margin-bottom:10px; }
+    .endpoint-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+    .method { font-family:var(--font-mono); font-size: 11px; font-weight:600; padding:2px 8px; border-radius:3px; letter-spacing:0.05em; }
+    .method.get { background:hsl(190,70%,90%); color:hsl(190,70%,28%); }
+    .method.post { background:hsl(145,55%,90%); color:hsl(145,55%,28%); }
+    .method.delete { background:hsl(0,70%,92%); color:hsl(0,70%,38%); }
+    .ep-path { font-family:var(--font-mono); font-size: 15px; color:var(--text-primary); font-weight:500; }
+    .ep-desc { font-size: 15px; color:var(--text-secondary); margin:6px 0 0; }
+    .failure { display:flex; gap:14px; padding:14px 18px; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); margin-bottom:10px; }
+    .failure-icon { font-size:18px; flex-shrink:0; margin-top:2px; }
+    .failure-title { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .failure-desc { font-size: 15px; color:var(--text-secondary); margin-bottom:4px; }
+    .mitigation { font-family:var(--font-mono); font-size: 12px; color:hsl(145,55%,28%); }
+    .similar-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+    .similar-card { display:block; text-decoration:none; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 18px; transition:all 0.15s; }
+    .similar-card:hover { border-color:var(--accent-border); background:var(--accent-light); }
+    .similar-card h4 { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .similar-card p { font-size: 13.5px; color:var(--text-muted); margin:0; }
+    .evolution-step { display:flex; gap:14px; margin-bottom:18px; }
+    .evolution-marker { width:32px; height:32px; border-radius:50%; background:var(--accent-light); border:2px solid var(--accent-border); display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size: 12px; font-weight:600; color:var(--accent-text); flex-shrink:0; }
+    .evolution-content h4 { font-size: 16px; font-weight:600; margin-bottom:4px; }
+    .evolution-content p { font-size: 15px; color:var(--text-secondary); margin:0; }
+  </style>
+</head>
+<body>
+
+<main>
+
+  <div class="hero" id="problem">
+    <div class="hero-kicker">System Design — Ad Serving &amp; Real-Time Auction</div>
+    <h1 class="hero-title">Design a <em>Google Ads</em> System</h1>
+    <p class="hero-desc">
+      Advertiser creates a campaign. Every search query or page-view triggers an <span class="hl">ad auction</span> in under 100 ms.
+      The winner's ad is shown, the <span class="hl-accent">click is tracked</span>, and the advertiser is billed on a CPC basis.
+      Scale: <strong>10M+ auctions per second</strong>. The hard parts:
+      a <span class="hl">second-price auction</span> with quality scoring so the best ad wins (not just the richest bidder),
+      <span class="hl-accent">budget pacing</span> that spends the daily budget evenly instead of blowing it in one hour,
+      and <span class="hl-accent">click-fraud detection</span> that filters bots and click farms before billing advertisers.
+      Google, Meta, Amazon — same pattern, different inventory.
+    </p>
+    <div class="hero-tags">
+      <span class="tag accent">Core: Auction + Quality Score + Budget Pacing + Click Tracking</span>
+      <span class="tag">10M+ auctions/sec</span>
+      <span class="tag">Sub-100ms latency</span>
+      <span class="tag">CPC billing</span>
+      <span class="tag">Fraud detection</span>
+    </div>
+  </div>
+
+  <section class="section" id="requirements">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Requirements</h2></div>
+    <div class="req-grid">
+      <div class="req-box">
+        <div class="req-box-head">Functional</div>
+        <ul class="req-list">
+          <li>Advertiser creates a <span class="hl-accent">campaign</span>: keywords, bid amount, daily budget, ad creative, targeting</li>
+          <li>On each search query / page-view, run a <span class="hl-accent">real-time auction</span> among eligible campaigns</li>
+          <li>Rank ads by <span class="hl-accent">Ad Rank = bid x quality score</span>; winner shown in top slot</li>
+          <li>Track clicks; charge advertiser <span class="hl-accent">second-highest bid + $0.01</span> per click (Vickrey pricing)</li>
+          <li>Pace daily budget evenly across the day; stop serving when budget exhausted</li>
+          <li>Dashboard: impressions, clicks, CTR, spend, conversions per campaign</li>
+        </ul>
+      </div>
+      <div class="req-box">
+        <div class="req-box-head nonfunc">Non-Functional</div>
+        <ul class="req-list">
+          <li>Auction latency &lt; <span class="hl">100 ms</span> end-to-end (ad selection + rendering)</li>
+          <li>Throughput: <span class="hl">10M+ auctions/sec</span> globally</li>
+          <li>Click tracking <span class="hl">99.99% reliable</span> — every click counted, none double-counted</li>
+          <li>Budget accuracy: never overspend by more than 5% of daily budget</li>
+          <li>Fraud filtering before billing — invalid clicks &lt; 1% of billed clicks</li>
+          <li>Auction fairness: no single advertiser can monopolize all slots</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="scale">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Scale Estimation</h2></div>
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-k">Auctions per second</div><div class="kv-v">~10M</div><div class="kv-sub">each search query or display page-view triggers one auction</div></div>
+      <div class="kv-card"><div class="kv-k">Active campaigns</div><div class="kv-v">~10M</div><div class="kv-sub">each with keywords, bids, budgets, targeting rules</div></div>
+      <div class="kv-card"><div class="kv-k">Auction latency budget</div><div class="kv-v">&lt; 100 ms</div><div class="kv-sub">candidate selection + scoring + rendering combined</div></div>
+      <div class="kv-card"><div class="kv-k">Clicks per day</div><div class="kv-v">~5B</div><div class="kv-sub">each must be tracked, validated, and billed</div></div>
+      <div class="kv-card"><div class="kv-k">Click-fraud rate</div><div class="kv-v">~15-20%</div><div class="kv-sub">of raw clicks are invalid; must be filtered before billing</div></div>
+      <div class="kv-card"><div class="kv-k">Revenue per auction</div><div class="kv-v">~$0.01-$50</div><div class="kv-sub">varies by keyword; "insurance" CPC can exceed $50</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="api">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">API Design</h2></div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/campaigns</span></div>
+      <p class="ep-desc">Create campaign. Body: <code>{keywords, bid_cpc, daily_budget, creative, targeting}</code>. Returns <code>{campaign_id, status: review_pending}</code>. Creative goes through policy review before serving.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/auction</span></div>
+      <p class="ep-desc">Internal: triggered per query/page-view. Body: <code>{query, user_context, page_context}</code>. Returns <code>{ads: [{creative, click_url, position}]}</code>. Must complete in &lt; 50 ms server-side.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/api/click/{click_id}</span></div>
+      <p class="ep-desc">Click redirect endpoint. Logs click event, validates non-duplicate, redirects to advertiser landing page. Returns 302 redirect.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/api/campaigns/{campaign_id}/stats</span></div>
+      <p class="ep-desc">Campaign dashboard. Returns <code>{impressions, clicks, ctr, spend, conversions, avg_cpc}</code>. Near-real-time (1-5 min lag).</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/conversions</span></div>
+      <p class="ep-desc">Advertiser reports a conversion (purchase, signup). Body: <code>{click_id, value}</code>. Used for ROI tracking and quality score improvement.</p>
+    </div>
+  </section>
+
+  <section class="section" id="architecture">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Architecture</h2></div>
+    <div class="prose"><p>Four tiers: <strong>candidate selection</strong> (find eligible ads for query), <strong>auction + ranking</strong> (score and pick winners), <strong>serving</strong> (render ad + track impression), <strong>billing pipeline</strong> (click validation + charge). Budget and fraud systems run as side-car services.</p></div>
+    <div class="diagram-wrap">
+      <div class="diagram-head"><span class="diagram-label">Ad Serving Architecture</span><span class="diagram-type">SVG</span></div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 840 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Google Ads architecture">
+          <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="hsl(145,30%,40%)"/></marker></defs>
+          <style>
+/* ux-v2-bumped */
+            .lbl { font-family:'Geist',sans-serif; font-size: 12px; fill:#111; }
+            .sub { font-family:'JetBrains Mono',monospace; font-size: 10.5px; fill:#555; }
+            .box { fill:#fff; stroke:hsl(145,40%,72%); stroke-width:1.2; rx:6; }
+            .box-accent { fill:hsl(145,80%,95%); stroke:hsl(145,75%,42%); stroke-width:1.5; rx:6; }
+            .box-data { fill:hsl(38,70%,94%); stroke:hsl(38,60%,60%); stroke-width:1.2; rx:6; }
+            .edge { stroke:hsl(145,30%,40%); stroke-width:1.2; fill:none; }
+          </style>
+          <rect x="20" y="30" width="110" height="50" class="box"/><text x="75" y="52" text-anchor="middle" class="lbl">User Query</text><text x="75" y="67" text-anchor="middle" class="sub">search / page-view</text>
+          <rect x="160" y="30" width="130" height="50" class="box-accent"/><text x="225" y="52" text-anchor="middle" class="lbl">Ad Server</text><text x="225" y="67" text-anchor="middle" class="sub">orchestrates auction</text>
+          <rect x="320" y="20" width="150" height="70" class="box-accent"/><text x="395" y="42" text-anchor="middle" class="lbl">Candidate Selection</text><text x="395" y="57" text-anchor="middle" class="sub">keyword index + targeting</text><text x="395" y="72" text-anchor="middle" class="sub">~1000 candidates</text>
+          <rect x="500" y="20" width="150" height="70" class="box-accent"/><text x="575" y="42" text-anchor="middle" class="lbl">Auction Engine</text><text x="575" y="57" text-anchor="middle" class="sub">rank = bid x quality</text><text x="575" y="72" text-anchor="middle" class="sub">second-price CPC</text>
+          <rect x="680" y="30" width="140" height="50" class="box"/><text x="750" y="52" text-anchor="middle" class="lbl">Ad Renderer</text><text x="750" y="67" text-anchor="middle" class="sub">creative + click URL</text>
+          <rect x="160" y="140" width="130" height="55" class="box-accent"/><text x="225" y="162" text-anchor="middle" class="lbl">Click Tracker</text><text x="225" y="177" text-anchor="middle" class="sub">log + redirect</text>
+          <rect x="320" y="140" width="150" height="55" class="box-accent"/><text x="395" y="162" text-anchor="middle" class="lbl">Fraud Detector</text><text x="395" y="177" text-anchor="middle" class="sub">bot/farm filter</text>
+          <rect x="500" y="140" width="150" height="55" class="box-accent"/><text x="575" y="162" text-anchor="middle" class="lbl">Budget Pacer</text><text x="575" y="177" text-anchor="middle" class="sub">throttle per campaign</text>
+          <rect x="680" y="140" width="140" height="55" class="box-data"/><text x="750" y="162" text-anchor="middle" class="lbl">Quality Model</text><text x="750" y="177" text-anchor="middle" class="sub">pCTR + relevance</text>
+          <rect x="320" y="240" width="150" height="50" class="box-data"/><text x="395" y="262" text-anchor="middle" class="lbl">Kafka: click events</text><text x="395" y="277" text-anchor="middle" class="sub">raw click stream</text>
+          <rect x="500" y="240" width="150" height="50" class="box-data"/><text x="575" y="262" text-anchor="middle" class="lbl">Billing Service</text><text x="575" y="277" text-anchor="middle" class="sub">aggregate + charge</text>
+          <rect x="680" y="240" width="140" height="50" class="box-data"/><text x="750" y="262" text-anchor="middle" class="lbl">Postgres: ledger</text><text x="750" y="277" text-anchor="middle" class="sub">campaign spend + orders</text>
+          <rect x="320" y="330" width="500" height="50" class="box"/><text x="570" y="357" text-anchor="middle" class="lbl">Advertiser Dashboard: impressions, clicks, CTR, spend, conversions (near-real-time)</text>
+          <path class="edge" d="M130,55 L160,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M290,55 L320,45" marker-end="url(#arr)"/>
+          <path class="edge" d="M470,55 L500,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M650,55 L680,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M225,80 L225,140" marker-end="url(#arr)"/>
+          <path class="edge" d="M290,165 L320,165" marker-end="url(#arr)"/>
+          <path class="edge" d="M470,165 L500,165" marker-end="url(#arr)"/>
+          <path class="edge" d="M395,195 L395,240" marker-end="url(#arr)"/>
+          <path class="edge" d="M470,265 L500,265" marker-end="url(#arr)"/>
+          <path class="edge" d="M650,265 L680,265" marker-end="url(#arr)"/>
+          <path class="edge" d="M575,290 L570,330" marker-end="url(#arr)"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Deep Dive — Auction, Quality Score &amp; Budget Pacing</h2></div>
+    <div class="prose">
+      <p><strong>(a) Second-price auction (Vickrey).</strong> The winner pays the second-highest bid + $0.01, not their own bid. This is <em>truthful</em>: the optimal strategy is to bid your true value. No incentive to game down.</p>
+      <pre><code>-- Auction logic (simplified)
+quality_score = predicted_CTR * relevance * landing_page_quality
+ad_rank = bid * quality_score
+
+-- Sort candidates by ad_rank descending
+-- Winner = highest ad_rank
+-- Winner pays: (second_ad_rank / winner_quality_score) + 0.01
+-- This ensures winner never pays more than their bid</code></pre>
+      <p><strong>Quality score</strong> = predicted CTR (ML model on historical click data) x relevance (query-to-keyword semantic match) x landing page quality (load speed, mobile-friendly, content relevance). This means a $2 bid with 10x quality beats a $10 bid with 1x quality. Google's entire ad incentive structure flows from this formula.</p>
+
+      <p><strong>(b) Real-time bidding (RTB) for display ads.</strong> For display/programmatic ads, the ad server sends bid requests to multiple demand-side platforms (DSPs) simultaneously. Each DSP has &lt; 100 ms to evaluate the impression, check campaign targeting, and return a bid. The ad exchange runs a second-price auction across all DSP responses. This is parallelized: fan-out to 10+ DSPs, take first responses within the deadline, discard slow ones.</p>
+      <pre><code>-- RTB timeline (100 ms budget)
+T+0ms   : page-view triggers bid request
+T+5ms   : ad exchange fans out to 12 DSPs in parallel
+T+10-80ms: DSPs evaluate targeting, check budgets, return bids
+T+85ms  : exchange collects responses (timeout at 80ms, late = no bid)
+T+90ms  : second-price auction across all received bids
+T+95ms  : winning creative URL returned to page
+T+100ms : ad rendered in user's browser</code></pre>
+      <p>Key engineering challenge: the fan-out must be non-blocking. Each DSP connection uses a persistent HTTP/2 stream. Slow DSPs are dropped after 80 ms — they lose the auction by default. This creates a strong incentive for DSPs to optimize latency.</p>
+
+      <p><strong>(c) Budget pacing.</strong> Advertiser sets $1000/day budget. Without pacing, high-traffic morning hours consume the entire budget by 10 AM — missing afternoon conversions entirely.</p>
+      <pre><code>-- Probabilistic throttling
+expected_remaining_queries = estimate_queries(now, end_of_day)
+remaining_budget = daily_budget - spent_so_far
+target_cpc = remaining_budget / expected_remaining_queries
+
+-- For each auction:
+participation_probability = target_cpc / actual_cpc
+if random() < participation_probability:
+    enter_auction()
+else:
+    skip()  -- save budget for later</code></pre>
+      <p>The pacer recalculates every few minutes. If spend is ahead of schedule, participation probability drops. If behind, it rises. Goal: spend exactly $1000 by midnight, spread evenly across the day.</p>
+      <p><strong>Budget accounting at scale.</strong> With 10M auctions/sec, you cannot check a central budget counter atomically per auction. Instead, each ad server maintains a local budget shard. Central budget service allocates "spend allowances" to each server (e.g., $10 per 5-minute window). Server spends from its local allowance without coordination. When allowance exhausted, request more from central. Slight overspend possible (~2-5%) but no distributed lock needed.</p>
+
+      <p><strong>(d) Click fraud detection.</strong> ~15-20% of raw clicks are invalid: bots, click farms, competitor sabotage, accidental double-clicks. Detection pipeline:</p>
+      <ol>
+        <li><strong>Real-time filters:</strong> IP frequency cap (same IP, same ad, 10+ clicks/hour = fraud). User-agent anomalies. Click-to-conversion time &lt; 1 second = bot.</li>
+        <li><strong>Batch ML model:</strong> runs hourly on click logs. Features: click timing distribution, mouse movement patterns, geo-IP mismatch, session depth (bot clicks but never browses).</li>
+        <li><strong>Conversion validation:</strong> clicks that never convert at a rate &gt; 3 standard deviations from baseline flagged for review. Refund issued to advertiser.</li>
+        <li><strong>IP frequency capping:</strong> same IP clicking the same ad more than N times per hour is capped. Clicks beyond the cap are logged but not billed. Threshold varies by vertical (e-commerce: 3/hr, B2B: 5/hr).</li>
+      </ol>
+      <p><strong>Fraud refund pipeline.</strong> Clicks initially billed optimistically. Batch ML runs hourly and flags invalid clicks. At end-of-day, flagged clicks are reversed from advertiser's bill. Advertiser sees "invalid click adjustment" line item in their invoice. Google reports ~10% of clicks as invalid and auto-refunded.</p>
+
+      <div class="diagram-wrap">
+        <div class="diagram-head"><span class="diagram-label">Auction Sequence — Query to Ad Shown</span><span class="diagram-type">Mermaid</span></div>
+        <div class="diagram-body">
+          <div class="mermaid">
+sequenceDiagram
+    participant U as User
+    participant AS as Ad Server
+    participant CS as Candidate Selector
+    participant AE as Auction Engine
+    participant BP as Budget Pacer
+    participant CT as Click Tracker
+    participant B as Billing
+
+    U->>AS: search query "cheap flights"
+    AS->>CS: find eligible campaigns
+    CS-->>AS: 800 candidates
+    AS->>BP: filter budget-exhausted
+    BP-->>AS: 600 candidates (200 paused)
+    AS->>AE: run auction (600 ads)
+    AE-->>AS: winner + CPC = $1.23
+    AS-->>U: render ad + click URL
+    U->>CT: clicks ad (302 redirect)
+    CT-->>U: redirect to landing page
+    CT->>B: click event (validated)
+    B->>B: charge $1.23 to campaign
+          </div>
+        </div>
+      </div>
+
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"Each query triggers a sub-100ms auction. Candidate selection narrows 10M campaigns to ~1000 via keyword index + targeting. Auction ranks by Ad Rank = bid x quality score (pCTR x relevance x landing quality). Winner pays second-highest price (Vickrey). Budget pacer uses probabilistic throttling to spread daily spend evenly. Clicks tracked via redirect URL, validated in real-time (IP cap, bot filter) and batch ML. Invalid clicks refunded. Display ads use RTB: fan-out to DSPs in parallel, same second-price auction."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="antipatterns">
+    <div class="section-head"><span class="section-n">!</span><h2 class="section-title">Anti-patterns</h2></div>
+    <div class="prose">
+      <div class="antipattern"><div class="icon">!</div><div><div class="bad">First-price auction — winner pays exactly their bid</div><p class="why">Advertisers learn to game down: bid $10 but lower to $5 if they keep winning. Revenue becomes unpredictable. Advertisers play a guessing game instead of bidding true value.</p></div><div class="good"><strong>Better:</strong> Second-price (Vickrey) auction. Winner pays second-highest + $0.01. Truthful bidding is the dominant strategy — no gaming needed.</div></div>
+      <div class="antipattern"><div class="icon">!</div><div><div class="bad">No quality score — highest bidder always wins</div><p class="why">Low-quality, irrelevant ads win by outbidding everyone. Users stop clicking ads entirely. CTR drops. Platform revenue craters long-term despite high bids.</p></div><div class="good"><strong>Better:</strong> Ad Rank = bid x quality. A relevant $2 ad beats an irrelevant $10 ad. Incentivizes good creatives and landing pages. Higher CTR = more revenue for platform.</div></div>
+      <div class="antipattern"><div class="icon">!</div><div><div class="bad">No budget pacing — serve ads until daily budget is gone</div><p class="why">$1000 daily budget consumed by 10 AM during morning traffic peak. Advertiser misses entire afternoon when their target audience is actually shopping. Poor ROI, advertiser churns.</p></div><div class="good"><strong>Better:</strong> Probabilistic throttling. Skip some auctions early in the day to save budget. Recalculate participation rate every few minutes. Spend $1000 evenly across 24 hours.</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Tradeoffs &amp; Design Choices</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Second-price vs first-price auction.</strong> Second-price is truthful (bid your value) but revenue may be lower per auction. First-price generates more revenue short-term but creates a bidding arms race. Google Search uses generalized second-price (GSP). Many display exchanges moved to first-price with bid shading.</li>
+        <li><strong>Pre-computed candidate sets vs real-time index lookup.</strong> Pre-computing "which campaigns match which keywords" is faster but stale. Real-time inverted index lookup is fresher but adds latency. Hybrid: pre-built index refreshed every few minutes; real-time filter for budget/targeting changes.</li>
+        <li><strong>Exact budget enforcement vs probabilistic pacing.</strong> Exact = check budget atomically per auction (expensive distributed lock). Probabilistic = slight overspend possible (up to 5%) but no locks, massively parallel. Probabilistic wins at 10M auctions/sec.</li>
+        <li><strong>Real-time fraud detection vs batch.</strong> Real-time catches obvious bots instantly but has limited feature access. Batch ML (hourly) catches sophisticated patterns but bills first, refunds later. Best: both layers — real-time for obvious, batch for subtle.</li>
+        <li><strong>Quality score freshness.</strong> Recomputing pCTR in real-time per auction is expensive. Caching quality scores with hourly refresh is practical. New ads get an exploration bonus (higher initial score) to collect click data.</li>
+        <li><strong>Search ads vs display ads infrastructure.</strong> Search ads: auction triggered by user query, keyword matching, text creatives. Display ads: auction triggered by page-view, audience targeting, rich media creatives, RTB with external DSPs. Same auction engine, different candidate selection and creative rendering pipelines.</li>
+        <li><strong>Generalized second-price (GSP) vs VCG.</strong> Google uses GSP for multiple ad slots: each position pays the bid of the advertiser one position below. VCG (Vickrey-Clarke-Groves) is theoretically optimal but computationally expensive and harder to explain to advertisers. GSP is "close enough" and much simpler.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="failures">
+    <div class="section-head"><span class="section-n">08</span><h2 class="section-title">Failure Modes</h2></div>
+    <div class="failure"><div class="failure-icon">$</div><div><div class="failure-title">Budget service goes down</div><div class="failure-desc">Campaigns keep serving with no budget check. Advertisers overspend massively. Refund nightmare.</div><div class="mitigation">Mitigation: each ad server caches a local budget snapshot. On budget service failure, use cached values (slightly stale but bounded). Stop serving campaign if cache is &gt; 5 min old.</div></div></div>
+    <div class="failure"><div class="failure-icon">!</div><div><div class="failure-title">Click tracker overloaded</div><div class="failure-desc">5B clicks/day = 58K/sec. Tracker falls behind. Clicks lost = revenue lost + inaccurate reporting.</div><div class="mitigation">Mitigation: click events written to Kafka (durable). Tracker is a consumer. If it falls behind, clicks are buffered, not lost. Horizontal scaling of consumer group.</div></div></div>
+    <div class="failure"><div class="failure-icon">?</div><div><div class="failure-title">Quality model returns stale scores</div><div class="failure-desc">ML model serving goes down. All ads get default quality score. Irrelevant ads win auctions. CTR drops, users unhappy.</div><div class="mitigation">Mitigation: cache last-known quality scores per campaign (valid for hours). Fall back to cached scores. Alert on-call if model serving is down &gt; 10 min.</div></div></div>
+    <div class="failure"><div class="failure-icon">!</div><div><div class="failure-title">Coordinated click-fraud attack</div><div class="failure-desc">Competitor hires click farm to drain rival's budget. Thousands of fake clicks from distributed IPs.</div><div class="mitigation">Mitigation: real-time IP frequency cap + device fingerprinting. Batch anomaly detection on click patterns. Auto-refund if campaign's invalid click rate spikes &gt; 3x baseline.</div></div></div>
+    <div class="failure"><div class="failure-icon">!</div><div><div class="failure-title">Auction latency exceeds 100 ms</div><div class="failure-desc">Candidate selection slow due to index corruption. Ads not returned in time; revenue lost for that query.</div><div class="mitigation">Mitigation: timeout at 80 ms; return best candidates found so far. Degrade gracefully — fewer candidates, still valid auction. Separate fast path (top 100 campaigns) for fallback.</div></div></div>
+  </section>
+
+  <section class="section" id="interview-tips">
+    <div class="section-head"><span class="section-n">09</span><h2 class="section-title">Interview Tips</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>Lead with the auction model.</strong> "Second-price, Ad Rank = bid x quality score." This shows you understand the economic incentive structure, not just the tech.</li>
+        <li><strong>Quality score is the key insight.</strong> Without it, ads devolve into a pure spending war. Quality score aligns platform revenue with user experience — interviewers love this.</li>
+        <li><strong>Budget pacing is non-obvious.</strong> Most candidates forget it. "Probabilistic throttling to spread daily budget evenly" — this is a production detail that separates senior from junior.</li>
+        <li><strong>Click fraud is a billing integrity problem.</strong> Frame it as: "we cannot charge advertisers for bot clicks." Two layers: real-time filtering + batch ML + refunds.</li>
+        <li><strong>Distinguish search ads from display RTB.</strong> Search = server-side auction among own campaigns. Display = fan-out to external DSPs in real-time. Same auction principles, different latency profiles.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="similar">
+    <div class="section-head"><span class="section-n">10</span><h2 class="section-title">Similar Problems</h2></div>
+    <div class="similar-grid">
+      <a href="fraud-detection.html" class="similar-card"><h4>Fraud Detection</h4><p>Click fraud is a specialized case of real-time anomaly detection</p></a>
+      <a href="ad-click-aggregator.html" class="similar-card"><h4>Ad Click Aggregator</h4><p>Counting and billing billions of click events per day</p></a>
+      <a href="recommendation-algorithm.html" class="similar-card"><h4>Recommendation Algorithm</h4><p>Quality score is a ranking/recommendation problem at its core</p></a>
+      <a href="search-engine.html" class="similar-card"><h4>Search Engine</h4><p>Candidate selection uses the same inverted index as search</p></a>
+      <a href="payment-gateway.html" class="similar-card"><h4>Payment Gateway</h4><p>Billing pipeline: metered usage aggregation + charging</p></a>
+    </div>
+  </section>
+
+  <section class="section" id="evolution">
+    <div class="section-head"><span class="section-n">11</span><h2 class="section-title">Evolution</h2></div>
+    <div class="evolution-step"><div class="evolution-marker">1</div><div class="evolution-content"><h4>MVP — Fixed-price ads, manual placement</h4><p>Advertiser buys a keyword for $X/day. No auction. First-come-first-served. Works for 100 advertisers.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">2</div><div class="evolution-content"><h4>First-price auction</h4><p>Multiple advertisers bid on same keyword. Highest bid wins and pays their bid. Simple but gameable — advertisers lower bids until they barely win.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">3</div><div class="evolution-content"><h4>Second-price auction + quality score</h4><p>Vickrey pricing removes gaming incentive. Quality score rewards relevant ads. Revenue and user experience both improve.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">4</div><div class="evolution-content"><h4>Budget pacing + fraud detection</h4><p>Probabilistic throttling spreads budget evenly. ML pipeline filters invalid clicks. Advertiser trust increases.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">5</div><div class="evolution-content"><h4>RTB + programmatic display + ML bidding</h4><p>Extend to display ads via real-time bidding. Smart Bidding: ML sets bids automatically to maximize conversions within budget. Cross-channel attribution.</p></div></div>
+  </section>
+
+</main>
+
+<script>
+const FLOW_NODES = [
+  { label: 'User Query',       sub: 'search / page-view' },
+  { label: 'Ad Server',        sub: 'orchestrates auction' },
+  { label: 'Candidate Selector',sub: 'keyword index' },
+  { label: 'Budget Pacer',     sub: 'throttle check' },
+  { label: 'Auction Engine',   sub: 'rank + price' },
+  { label: 'Click Tracker',    sub: 'log + redirect' },
+  { label: 'Billing',          sub: 'charge CPC' },
+];
+const FLOW_DESCS = [
+  'User submits search query or loads a page with ad slots',
+  'Ad server receives request and orchestrates the full auction pipeline in < 100 ms',
+  'Candidate selector queries inverted keyword index + targeting rules to find ~1000 eligible campaigns',
+  'Budget pacer filters out campaigns that have exhausted daily budget or are being throttled for pacing',
+  'Auction engine computes Ad Rank = bid x quality score; picks winner; sets CPC = second-price + $0.01',
+  'Winner ad rendered with tracked click URL; on click, tracker logs event and 302-redirects to landing page',
+  'Billing service validates click (fraud filter), aggregates spend, charges advertiser account',
+];
+</script>
+
+</body>
+</html>

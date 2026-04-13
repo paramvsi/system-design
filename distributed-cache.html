@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Distributed Cache (Redis) — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+    :root { --accent-h: 0; --accent-s: 70%; --accent-l: 52%;
+      --accent: hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light: hsl(var(--accent-h), 80%, 95%);
+      --accent-mid: hsl(var(--accent-h), 70%, 88%);
+      --accent-text: hsl(var(--accent-h), var(--accent-s), 38%);
+      --accent-border: hsl(var(--accent-h), 60%, 80%);
+      --hl-yellow:#fff0a0; --hl-yellow-dark:#a07a00;
+      --hl-accent: hsl(var(--accent-h), 90%, 90%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 35%);
+      --bg:#fff; --bg-subtle:#f7f7f5; --bg-raised:#f0eeeb; --bg-code:#f4f3f0;
+      --border:#e4e2de; --border-strong:#ccc9c4;
+      --text-primary:#111110; --text-secondary:#4a4845; --text-muted:#878480;
+      --font-serif:'Instrument Serif',Georgia,serif;
+      --font-sans:'Geist',system-ui,sans-serif;
+      --font-mono:'JetBrains Mono','Fira Code',monospace;
+      --radius-sm:4px; --radius-md:8px; --radius-lg:12px;
+    }
+    .req-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px; }
+    .req-box { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 20px; }
+    .req-box-head { display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size: 12px; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent-text); margin-bottom:10px; font-weight:500; }
+    .req-box-head.nonfunc { color:hsl(38,80%,30%); }
+    .req-list { padding-left:20px; font-size: 15px; color:var(--text-secondary); }
+    .req-list li { margin-bottom:6px; }
+    .endpoint { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px 18px; margin-bottom:10px; }
+    .endpoint-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+    .method { font-family:var(--font-mono); font-size: 11px; font-weight:600; padding:2px 8px; border-radius:3px; letter-spacing:0.05em; }
+    .method.get { background:hsl(190,70%,90%); color:hsl(190,70%,28%); }
+    .method.post { background:hsl(145,55%,90%); color:hsl(145,55%,28%); }
+    .method.delete { background:hsl(0,70%,92%); color:hsl(0,70%,38%); }
+    .method.cmd { background:hsl(270,55%,92%); color:hsl(270,55%,32%); }
+    .ep-path { font-family:var(--font-mono); font-size: 15px; color:var(--text-primary); font-weight:500; }
+    .ep-desc { font-size: 15px; color:var(--text-secondary); margin:6px 0 0; }
+    .failure { display:flex; gap:14px; padding:14px 18px; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); margin-bottom:10px; }
+    .failure-icon { font-size:18px; flex-shrink:0; margin-top:2px; }
+    .failure-title { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .failure-desc { font-size: 15px; color:var(--text-secondary); margin-bottom:4px; }
+    .mitigation { font-family:var(--font-mono); font-size: 12px; color:hsl(145,55%,28%); }
+    .similar-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+    .similar-card { display:block; text-decoration:none; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 18px; transition:all 0.15s; }
+    .similar-card:hover { border-color:var(--accent-border); background:var(--accent-light); }
+    .similar-card h4 { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .similar-card p { font-size: 13.5px; color:var(--text-muted); margin:0; }
+    .evolution-step { display:flex; gap:14px; margin-bottom:18px; }
+    .evolution-marker { width:32px; height:32px; border-radius:50%; background:var(--accent-light); border:2px solid var(--accent-border); display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size: 12px; font-weight:600; color:var(--accent-text); flex-shrink:0; }
+    .evolution-content h4 { font-size: 16px; font-weight:600; margin-bottom:4px; }
+    .evolution-content p { font-size: 15px; color:var(--text-secondary); margin:0; }
+  </style>
+</head>
+<body>
+
+<main>
+
+  <div class="hero" id="problem">
+    <div class="hero-kicker">System Design — In-Memory Data Store</div>
+    <h1 class="hero-title">Design a <em>Distributed Cache</em> (Redis)</h1>
+    <p class="hero-desc">
+      An in-memory key-value store serving ~1M ops/sec per node with sub-millisecond latency. The hard parts:
+      <span class="hl">hash-slot sharding</span> across a cluster of ~100 nodes so any key routes deterministically,
+      <span class="hl-accent">eviction policies</span> (LRU/LFU) that keep hot data in RAM while memory stays bounded,
+      and a <span class="hl-accent">replication + persistence</span> layer (leader-follower async replication, RDB snapshots + AOF logs) that survives node crashes without losing writes.
+      Redis, Memcached, Dragonfly -- same core pattern, different tradeoffs.
+    </p>
+    <div class="hero-tags">
+      <span class="tag accent">Core: Hash-Slot Sharding + Eviction + Replication</span>
+      <span class="tag">~1M ops/sec per node</span>
+      <span class="tag">Sub-ms p99 reads</span>
+      <span class="tag">~100 GB RAM per node</span>
+      <span class="tag">16384 hash slots</span>
+    </div>
+  </div>
+
+  <section class="section" id="requirements">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Requirements</h2></div>
+    <div class="req-grid">
+      <div class="req-box">
+        <div class="req-box-head">Functional</div>
+        <ul class="req-list">
+          <li><span class="hl-accent">SET / GET / DEL</span> for arbitrary key-value pairs with optional TTL</li>
+          <li>Atomic counters: <span class="hl-accent">INCR / DECR</span> for rate limiting, counters, leaderboards</li>
+          <li>Key expiration via <span class="hl-accent">EXPIRE / TTL</span> with lazy + periodic eviction</li>
+          <li>Hash-slot routing: client maps key to shard via CRC16(key) mod 16384</li>
+          <li>Pub/Sub: <span class="hl-accent">PUBLISH / SUBSCRIBE</span> for real-time event fan-out</li>
+          <li>Lua scripting for multi-step atomic operations (e.g., DECR-if-positive)</li>
+          <li>Pipeline / batch mode: send N commands in one round-trip</li>
+        </ul>
+      </div>
+      <div class="req-box">
+        <div class="req-box-head nonfunc">Non-Functional</div>
+        <ul class="req-list">
+          <li><span class="hl">Sub-millisecond p99</span> read latency on cache hits</li>
+          <li>~<span class="hl">1M ops/sec</span> per node throughput</li>
+          <li>Cluster scales to <span class="hl">~100 nodes</span> with automatic rebalancing</li>
+          <li>~100 GB usable RAM per node (leave headroom for fragmentation + fork)</li>
+          <li>Survive single-node failure with &lt; 5 s failover via Sentinel or cluster voting</li>
+          <li>Persistence: zero data loss on graceful shutdown; &lt; 1 s of loss on crash (AOF fsync)</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="scale">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Scale Estimation</h2></div>
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-k">Throughput per node</div><div class="kv-v">~1M ops/sec</div><div class="kv-sub">single-threaded event loop; I/O threads for parsing in Redis 6+</div></div>
+      <div class="kv-card"><div class="kv-k">Cluster size</div><div class="kv-v">~100 nodes</div><div class="kv-sub">16384 hash slots distributed across shards</div></div>
+      <div class="kv-card"><div class="kv-k">p99 read latency</div><div class="kv-v">&lt; 1 ms</div><div class="kv-sub">in-memory hash table lookup; network is the bottleneck</div></div>
+      <div class="kv-card"><div class="kv-k">RAM per node</div><div class="kv-v">~100 GB</div><div class="kv-sub">leave 30% headroom for copy-on-write fork during RDB save</div></div>
+      <div class="kv-card"><div class="kv-k">Replication lag</div><div class="kv-v">&lt; 1 ms typical</div><div class="kv-sub">async streaming; can spike during full resync</div></div>
+      <div class="kv-card"><div class="kv-k">Failover time</div><div class="kv-v">~5 s</div><div class="kv-sub">Sentinel/cluster detects failure + promotes follower</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="api">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">API Design</h2></div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">CMD</span><span class="ep-path">SET key value [EX seconds] [NX|XX]</span></div>
+      <p class="ep-desc">Store a key-value pair. <code>EX</code> sets TTL in seconds. <code>NX</code> = set only if not exists (distributed lock). <code>XX</code> = set only if exists (update). Returns <code>OK</code> or <code>nil</code>.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">CMD</span><span class="ep-path">GET key</span></div>
+      <p class="ep-desc">Retrieve value by key. Returns the stored string or <code>nil</code>. O(1) hash table lookup. Client routes to correct shard via CRC16(key) mod 16384.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method delete">CMD</span><span class="ep-path">DEL key [key ...]</span></div>
+      <p class="ep-desc">Remove one or more keys. Returns count of keys deleted. For large keys, use <code>UNLINK</code> for async background deletion.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">CMD</span><span class="ep-path">INCR key / EXPIRE key seconds</span></div>
+      <p class="ep-desc"><code>INCR</code>: atomic increment, returns new value. <code>EXPIRE</code>: set TTL on existing key. Both O(1). Used for rate limiters, counters, session TTLs.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">CMD</span><span class="ep-path">PUBLISH channel message / SUBSCRIBE channel</span></div>
+      <p class="ep-desc">Pub/Sub fan-out. <code>PUBLISH</code> sends message to all subscribers of a channel. Fire-and-forget -- no persistence, no replay. Use Streams for durable messaging.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">CMD</span><span class="ep-path">PIPELINE: [GET k1, SET k2 v2, INCR k3, ...]</span></div>
+      <p class="ep-desc">Batch N commands in one round-trip. Client buffers commands, sends all at once, reads all replies. Cuts network overhead from N round-trips to 1.</p>
+    </div>
+  </section>
+
+  <section class="section" id="architecture">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Architecture</h2></div>
+    <div class="prose">
+      <p>Three layers: <strong>smart client</strong> (caches hash-slot-to-node map, routes directly to the correct shard),
+      <strong>shard cluster</strong> (each shard = leader + 1-2 replicas, owns a range of 16384 hash slots), and
+      <strong>persistence layer</strong> (RDB snapshots + AOF log written to disk from each leader).
+      Sentinel or the cluster's gossip protocol handles automatic failover. No single point of failure when configured with replicas.</p>
+    </div>
+    <div class="diagram-wrap">
+      <div class="diagram-head"><span class="diagram-label">Redis Cluster Architecture</span><span class="diagram-type">SVG</span></div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 840 460" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Redis cluster architecture">
+          <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="hsl(0,30%,40%)"/></marker></defs>
+          <style>
+/* ux-v2-bumped */
+            .lbl { font-family:'Geist',sans-serif; font-size: 12px; fill:#111; }
+            .sub { font-family:'JetBrains Mono',monospace; font-size: 10.5px; fill:#555; }
+            .box { fill:#fff; stroke:hsl(0,40%,72%); stroke-width:1.2; rx:6; }
+            .box-accent { fill:hsl(0,80%,95%); stroke:hsl(0,70%,50%); stroke-width:1.5; rx:6; }
+            .box-data { fill:hsl(38,70%,94%); stroke:hsl(38,60%,60%); stroke-width:1.2; rx:6; }
+            .edge { stroke:hsl(0,30%,40%); stroke-width:1.2; fill:none; }
+          </style>
+          <rect x="20" y="40" width="130" height="50" class="box"/><text x="85" y="62" text-anchor="middle" class="lbl">Application</text><text x="85" y="77" text-anchor="middle" class="sub">cache-aside pattern</text>
+          <rect x="180" y="30" width="150" height="65" class="box-accent"/><text x="255" y="52" text-anchor="middle" class="lbl">Smart Client</text><text x="255" y="67" text-anchor="middle" class="sub">slot map cached</text><text x="255" y="82" text-anchor="middle" class="sub">CRC16(key) % 16384</text>
+          <rect x="400" y="20" width="140" height="55" class="box-accent"/><text x="470" y="42" text-anchor="middle" class="lbl">Shard A (Leader)</text><text x="470" y="57" text-anchor="middle" class="sub">slots 0-5460</text>
+          <rect x="560" y="20" width="120" height="55" class="box"/><text x="620" y="42" text-anchor="middle" class="lbl">Replica A</text><text x="620" y="57" text-anchor="middle" class="sub">async replication</text>
+          <rect x="400" y="100" width="140" height="55" class="box-accent"/><text x="470" y="122" text-anchor="middle" class="lbl">Shard B (Leader)</text><text x="470" y="137" text-anchor="middle" class="sub">slots 5461-10922</text>
+          <rect x="560" y="100" width="120" height="55" class="box"/><text x="620" y="122" text-anchor="middle" class="lbl">Replica B</text><text x="620" y="137" text-anchor="middle" class="sub">async replication</text>
+          <rect x="400" y="180" width="140" height="55" class="box-accent"/><text x="470" y="202" text-anchor="middle" class="lbl">Shard C (Leader)</text><text x="470" y="217" text-anchor="middle" class="sub">slots 10923-16383</text>
+          <rect x="560" y="180" width="120" height="55" class="box"/><text x="620" y="202" text-anchor="middle" class="lbl">Replica C</text><text x="620" y="217" text-anchor="middle" class="sub">async replication</text>
+          <rect x="700" y="20" width="120" height="55" class="box-data"/><text x="760" y="42" text-anchor="middle" class="lbl">Sentinel / Gossip</text><text x="760" y="57" text-anchor="middle" class="sub">failover + voting</text>
+          <rect x="400" y="290" width="140" height="50" class="box-data"/><text x="470" y="312" text-anchor="middle" class="lbl">RDB Snapshot</text><text x="470" y="327" text-anchor="middle" class="sub">fork + dump to disk</text>
+          <rect x="560" y="290" width="140" height="50" class="box-data"/><text x="630" y="312" text-anchor="middle" class="lbl">AOF Log</text><text x="630" y="327" text-anchor="middle" class="sub">append every write</text>
+          <rect x="20" y="370" width="700" height="50" class="box"/><text x="370" y="398" text-anchor="middle" class="lbl">Database (Postgres / MySQL) — source of truth; cache-aside: read cache first, miss = load from DB + SET</text>
+          <path class="edge" d="M150,65 L180,60" marker-end="url(#arr)"/>
+          <path class="edge" d="M330,50 L400,45" marker-end="url(#arr)"/>
+          <path class="edge" d="M330,65 L400,125" marker-end="url(#arr)"/>
+          <path class="edge" d="M330,80 L400,205" marker-end="url(#arr)"/>
+          <path class="edge" d="M540,47 L560,47" marker-end="url(#arr)"/>
+          <path class="edge" d="M540,127 L560,127" marker-end="url(#arr)"/>
+          <path class="edge" d="M540,207 L560,207" marker-end="url(#arr)"/>
+          <path class="edge" d="M680,47 L700,47" marker-end="url(#arr)"/>
+          <path class="edge" d="M470,235 L470,290" marker-end="url(#arr)"/>
+          <path class="edge" d="M540,220 L580,290" marker-end="url(#arr)"/>
+          <path class="edge" d="M85,90 L85,370" marker-end="url(#arr)"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Deep Dive — Sharding, Eviction, Persistence, Replication</h2></div>
+    <div class="prose">
+      <p><strong>(a) Hash-slot sharding.</strong> Redis Cluster divides the keyspace into 16384 slots. Each key maps to a slot via <code>CRC16(key) mod 16384</code>. Each shard (leader node) owns a contiguous range of slots. The client caches the slot-to-node map and routes commands directly -- no proxy needed.</p>
+      <p>On cluster rebalance (adding/removing nodes), slots migrate between shards. During migration, a client may receive a <code>MOVED</code> redirect (slot permanently moved -- update map) or <code>ASK</code> redirect (slot mid-migration -- retry once at new node). Smart clients handle both transparently.</p>
+      <pre><code># Hash slot calculation example
+key = "user:42"
+slot = CRC16("user:42") % 16384  # = 7218
+# Slot 7218 falls in Shard B's range (5461-10922)
+# Client routes SET/GET directly to Shard B leader
+
+# Hash tags force related keys to same slot
+"order:{user42}:history"  → CRC16("user42") % 16384
+"cart:{user42}:items"     → CRC16("user42") % 16384
+# Both land on the same shard — enables multi-key Lua scripts</code></pre>
+
+      <p><strong>(b) Eviction policies.</strong> When <code>maxmemory</code> is hit, Redis must evict keys to make room. Policies:</p>
+      <ul>
+        <li><code>volatile-lru</code> -- evict least-recently-used among keys <em>with a TTL set</em></li>
+        <li><code>allkeys-lru</code> -- evict LRU across all keys (most common for cache use)</li>
+        <li><code>allkeys-lfu</code> -- evict least-frequently-used (better for skewed access patterns)</li>
+      </ul>
+      <p>Redis uses <strong>approximated LRU</strong>: sample N random keys (default 5), evict the one with the oldest last-access timestamp. Not true LRU (no linked list), but very close in practice and O(1) per eviction. Increasing the sample size to 10 gets within 1% of true LRU accuracy.</p>
+      <pre><code># redis.conf eviction settings
+maxmemory 80gb
+maxmemory-policy allkeys-lru
+maxmemory-samples 10</code></pre>
+
+      <p><strong>(c) Persistence.</strong></p>
+      <ul>
+        <li><strong>RDB</strong> = point-in-time snapshot. Redis forks, child writes entire dataset to disk. Fast restore, but you lose all writes since the last snapshot on crash.</li>
+        <li><strong>AOF</strong> = append-only file. Every write command appended to log. Three fsync modes: <code>always</code> (safe, slow), <code>everysec</code> (lose ~1 s on crash -- recommended), <code>no</code> (OS decides).</li>
+        <li><strong>RDB+AOF hybrid</strong> (Redis 4+) = AOF rewrite starts with an RDB prefix (compact binary) followed by AOF tail of recent writes. Fast restore + minimal data loss. This is the default in Redis 7.</li>
+      </ul>
+
+      <p><strong>AOF rewrite.</strong> Over time, AOF grows large. Redis triggers background rewrite: forks a child process that writes a minimal set of commands to recreate the current dataset. Parent buffers new writes during rewrite, appends them after. Result: compact AOF, no downtime.</p>
+
+      <p><strong>(d) Replication.</strong> Async leader-to-follower streaming. Leader sends write commands to all replicas after executing locally. On leader failure:</p>
+      <ul>
+        <li><strong>Sentinel mode:</strong> external Sentinel processes monitor the leader. Quorum agrees leader is down, promotes a follower, updates clients.</li>
+        <li><strong>Cluster mode:</strong> replicas initiate a Raft-like voting process. Other leaders vote to elect one replica as new leader. No external process needed.</li>
+      </ul>
+      <p><strong>Full resync vs partial resync.</strong> When a replica reconnects after a brief disconnect, Redis attempts <em>partial resync</em> using the replication backlog buffer (a ring buffer of recent writes on the leader). If the disconnect was short and the backlog hasn't wrapped, only the missed writes are sent. If the backlog overflowed, a full resync is triggered: leader forks, creates RDB, streams entire dataset. This is expensive -- configure <code>repl-backlog-size</code> to at least 256 MB in production to minimize full resyncs.</p>
+
+      <div class="diagram-wrap">
+        <div class="diagram-head"><span class="diagram-label">Write Path — SET key value</span><span class="diagram-type">Mermaid</span></div>
+        <div class="diagram-body">
+          <div class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant SC as Smart Client
+    participant L as Shard Leader
+    participant AOF as AOF Log
+    participant R as Replica
+
+    C->>SC: SET user:42 "data"
+    SC->>SC: CRC16("user:42") mod 16384 = slot 7218
+    SC->>L: route to Shard B (owns 5461-10922)
+    L->>L: write to in-memory hash table
+    L->>AOF: append SET command
+    L-->>C: OK
+    L->>R: async replicate SET command
+    R->>R: apply to memory
+          </div>
+        </div>
+      </div>
+
+      <p><strong>Cache-aside pattern (the most common Redis usage):</strong></p>
+      <pre><code># Read path (cache-aside)
+value = redis.GET(key)
+if value is None:           # cache miss
+    value = db.query(key)   # load from DB
+    redis.SET(key, value, EX=3600)  # populate cache, 1hr TTL
+return value
+
+# Write path (invalidate on write)
+db.update(key, new_value)   # write to DB first
+redis.DEL(key)              # invalidate cache
+# Next read will miss → refill from DB with fresh data</code></pre>
+
+      <p><strong>Why DEL on write instead of SET?</strong> If you SET the cache on write, a race between two concurrent writers can leave stale data in cache permanently. Consider: Writer A reads DB, Writer B reads DB, Writer B updates DB, Writer B writes cache, Writer A (with stale data) overwrites cache. Now cache is stale forever. DEL is safer: worst case, you get one extra cache miss.</p>
+
+      <p><strong>Lua scripting for atomic multi-step operations:</strong></p>
+      <pre><code>-- Rate limiter: sliding window counter
+-- KEYS[1] = rate limit key, ARGV[1] = window (sec), ARGV[2] = max requests
+local current = redis.call('INCR', KEYS[1])
+if current == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+if current > tonumber(ARGV[2]) then
+    return 0  -- rate limited
+end
+return 1  -- allowed</code></pre>
+      <p>Lua scripts execute atomically on a single shard. No other command runs between lines. This is how Redis replaces what would otherwise require distributed locks or database transactions.</p>
+
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"Redis Cluster shards the keyspace into 16384 hash slots using CRC16. Each shard is a leader-replica pair. The smart client caches the slot map and routes directly -- no proxy overhead. Writes go to the leader, get appended to AOF, and async-replicated to followers. On leader failure, cluster voting promotes a replica in ~5 seconds. Eviction uses approximated LRU: sample 5 keys, evict the stalest. Persistence is RDB+AOF hybrid: RDB prefix for fast restore, AOF tail for minimal data loss."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="antipatterns">
+    <div class="section-head"><span class="section-n">&#9888;</span><h2 class="section-title">Anti-patterns</h2></div>
+    <div class="prose">
+      <div class="antipattern"><div class="icon">1</div><div><div class="bad">Use Redis as the primary database -- "it's fast, who needs Postgres?"</div><p class="why">Without AOF fsync=always, a crash loses recent writes. Even with AOF, no ACID transactions, no relational queries. Redis is a cache and data structure server, not a durable primary store.</p></div><div class="good"><strong>Better:</strong> Cache-aside pattern: DB is source of truth, Redis accelerates reads. Write to DB first, invalidate/update cache.</div></div>
+      <div class="antipattern"><div class="icon">2</div><div><div class="bad">Store 500 GB in a single Redis instance -- "just add more RAM"</div><p class="why">RDB fork doubles memory (copy-on-write pages). 500 GB dataset = needs ~1 TB physical RAM. Fork takes minutes. Replication full-sync takes hours. One crash = massive recovery time.</p></div><div class="good"><strong>Better:</strong> Shard across multiple nodes. Each node holds ~50-100 GB. Fork is fast, replication resync is quick.</div></div>
+      <div class="antipattern"><div class="icon">3</div><div><div class="bad">Run KEYS * in production to find matching keys</div><p class="why">KEYS blocks the single-threaded event loop. On a dataset with 10M keys, this blocks all clients for seconds. Latency spike, cascading timeouts, potential outage.</p></div><div class="good"><strong>Better:</strong> Use SCAN with cursor-based iteration. Non-blocking, returns results incrementally. Also avoid DEBUG SLEEP, FLUSHALL without ASYNC, and large sorted-set operations on hot paths.</div></div>
+      <div class="antipattern"><div class="icon">4</div><div><div class="bad">Cache with no TTL -- "we'll invalidate manually when data changes"</div><p class="why">You forget one invalidation path. Stale data lives forever. User sees their old profile photo for weeks. Support tickets pile up.</p></div><div class="good"><strong>Better:</strong> Always set a TTL as a safety net, even with active invalidation. TTL = upper bound on staleness. Active invalidation = best-effort freshness.</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Tradeoffs &amp; Design Choices</h2></div>
+    <div class="prose">
+      <p>Every cache design decision is a tradeoff between latency, consistency, durability, and operational complexity. Here are the key ones:</p>
+      <ul>
+        <li><strong>RDB vs AOF vs Hybrid.</strong> RDB: fast restores, periodic data loss. AOF: minimal loss, slower restores (replay entire log). Hybrid: best of both -- RDB prefix for speed, AOF tail for safety. Use hybrid in production.</li>
+        <li><strong>Cluster mode vs Sentinel.</strong> Sentinel: simpler, single logical instance, no sharding. Good to ~100 GB. Cluster: built-in sharding + failover, scales to TB. Choose cluster when data exceeds single-node RAM.</li>
+        <li><strong>Cache-aside vs Write-through.</strong> Cache-aside: app manages cache (read: check cache, miss = load DB + SET; write: update DB + invalidate cache). Write-through: cache layer intercepts all writes to DB. Cache-aside is simpler and more common; write-through has fewer stale reads but adds write latency.</li>
+        <li><strong>Redis vs Memcached.</strong> Memcached: multi-threaded, simple KV, no persistence, no pub/sub. Redis: single-threaded (I/O threads in 6+), rich data structures, persistence, pub/sub, Lua. Memcached wins on raw multi-core GET throughput; Redis wins on everything else.</li>
+        <li><strong>Approximated LRU vs true LRU.</strong> True LRU requires a doubly-linked list (memory overhead per key). Redis samples N keys and evicts the worst. With N=10, accuracy is within 1% of true LRU. Tradeoff: tiny accuracy loss for massive memory savings.</li>
+        <li><strong>Single-threaded vs multi-threaded.</strong> Redis is single-threaded for command execution (no locks, no races). Redis 6+ adds I/O threads for network read/write parsing, keeping the core single-threaded. Dragonfly goes fully multi-threaded with shared-nothing per-core architecture -- higher throughput, more complexity.</li>
+        <li><strong>Proxy vs smart client.</strong> Proxy (Twemproxy, Envoy): app connects to one endpoint, proxy routes. Simpler client, extra network hop (~0.2 ms). Smart client (Jedis, Lettuce): app caches slot map, routes directly. No extra hop, but client must handle MOVED/ASK. Production Redis Cluster uses smart clients for lowest latency.</li>
+        <li><strong>TTL-based expiration vs explicit invalidation.</strong> TTL: simple, eventually consistent, bounded staleness. Explicit invalidation: immediate freshness, but requires tracking all write paths. Best practice: use both -- active invalidation for correctness, TTL as safety net.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="failures">
+    <div class="section-head"><span class="section-n">08</span><h2 class="section-title">Failure Modes</h2></div>
+    <div class="prose"><p>Caches fail in subtle ways. Unlike databases, a cache failure doesn't always throw an error -- it degrades silently (stale data, increased latency, DB overload). Understanding these modes is essential.</p></div>
+    <div class="failure"><div class="failure-icon">1</div><div><div class="failure-title">Leader crash -- failover lag causes stale reads</div><div class="failure-desc">Leader dies. During ~5 s failover, reads from replica may return stale data. Writes are rejected until new leader is elected.</div><div class="mitigation">Mitigation: configure WAIT command for critical writes (sync replication to N replicas). Accept eventual consistency for non-critical reads. Client retries on READONLY error.</div></div></div>
+    <div class="failure"><div class="failure-icon">2</div><div><div class="failure-title">Split-brain during network partition</div><div class="failure-desc">Network splits cluster. Both sides elect a leader for the same slots. Clients write to both. On partition heal, one side's writes are lost.</div><div class="mitigation">Mitigation: configure min-replicas-to-write=1. Leader refuses writes if it can't reach any replica. Prevents divergent writes at cost of availability.</div></div></div>
+    <div class="failure"><div class="failure-icon">3</div><div><div class="failure-title">Hot key -- single shard overwhelmed</div><div class="failure-desc">A viral cache key (e.g., celebrity profile) routes to one shard. That shard saturates at 1M ops/sec while others idle.</div><div class="mitigation">Mitigation: client-side local cache (Redis 6 tracking mode). Read replicas for hot keys. Key hashing with "{tag}" to spread related keys, but hot single keys need app-level handling.</div></div></div>
+    <div class="failure"><div class="failure-icon">4</div><div><div class="failure-title">Thundering herd on cache miss</div><div class="failure-desc">Popular key expires. 10K requests simultaneously miss cache, all hit the DB, DB overloads.</div><div class="mitigation">Mitigation: lock-based cache fill (one request fills, others wait). Probabilistic early expiration (refresh before TTL). Background refresh for hot keys.</div></div></div>
+    <div class="failure"><div class="failure-icon">5</div><div><div class="failure-title">Memory fragmentation after long uptime</div><div class="failure-desc">Repeated alloc/free of variable-size values fragments jemalloc. RSS grows while used memory stays flat. OOM killer strikes.</div><div class="mitigation">Mitigation: Redis 4+ active defragmentation (ACTIVE-DEFRAG). Monitor fragmentation ratio (INFO memory). Schedule restarts if ratio exceeds 1.5.</div></div></div>
+    <div class="failure"><div class="failure-icon">6</div><div><div class="failure-title">Full resync storm after network blip</div><div class="failure-desc">Brief network partition between leader and all replicas. Replication buffer overflows. All replicas need full resync simultaneously -- leader forks N times, OOM.</div><div class="mitigation">Mitigation: increase repl-backlog-size (default 1 MB is too small for production). Stagger replica reconnection. Monitor repl_backlog_active.</div></div></div>
+  </section>
+
+  <section class="section" id="interview-tips">
+    <div class="section-head"><span class="section-n">09</span><h2 class="section-title">Interview Tips</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>Start with the access pattern.</strong> "Read-heavy workload, cache-aside pattern, Redis as L2 between app and DB." This frames the problem correctly.</li>
+        <li><strong>Name the sharding scheme.</strong> "CRC16 mod 16384 hash slots, client-side routing, MOVED/ASK redirects." Shows you know Redis internals, not just the API.</li>
+        <li><strong>Explain eviction before they ask.</strong> "allkeys-lru with sample size 10. Approximated LRU, not true LRU -- the O(1) tradeoff." This is the detail that separates senior from mid-level.</li>
+        <li><strong>Persistence is not optional.</strong> "RDB+AOF hybrid. RDB prefix for fast restart, AOF tail for sub-second data loss." Don't hand-wave "we'll use persistence" -- name the mode.</li>
+        <li><strong>Address the thundering herd.</strong> Without prompting, mention cache stampede mitigation: lock-based fill, probabilistic early expiration, or background refresh. Shows production experience.</li>
+        <li><strong>Know when Redis is wrong.</strong> "Above 100 GB per node, consider sharding more aggressively or using a disk-backed store. Redis is not a database replacement." Showing boundaries earns trust.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="similar">
+    <div class="section-head"><span class="section-n">10</span><h2 class="section-title">Similar Problems</h2></div>
+    <div class="prose"><p>Redis patterns appear across many system design problems. Each of these uses Redis as a core building block in a different way.</p></div>
+    <div class="similar-grid">
+      <a href="cache-stampede.html" class="similar-card"><h4>Cache Stampede</h4><p>Thundering herd on cache miss -- lock-based fill + probabilistic refresh</p></a>
+      <a href="distributed-locking.html" class="similar-card"><h4>Distributed Locking</h4><p>Redlock algorithm using SET NX EX across multiple Redis instances</p></a>
+      <a href="s3-object-storage.html" class="similar-card"><h4>S3 Object Storage</h4><p>Large-blob storage complement to Redis's small-value cache layer</p></a>
+      <a href="flash-sale.html" class="similar-card"><h4>Flash Sale System</h4><p>Redis Lua atomic DECR for inventory -- Redis as the hot path</p></a>
+      <a href="youtube-likes-counter.html" class="similar-card"><h4>YouTube Likes Counter</h4><p>Redis INCR for real-time counters with async DB persistence</p></a>
+      <a href="rate-limiter.html" class="similar-card"><h4>Rate Limiter</h4><p>Sliding window counter using Redis INCR + EXPIRE per client IP</p></a>
+    </div>
+  </section>
+
+  <section class="section" id="evolution">
+    <div class="section-head"><span class="section-n">11</span><h2 class="section-title">Evolution</h2></div>
+    <div class="prose"><p>How cache architecture evolves as scale grows from a single app server to millions of requests per second across a global fleet.</p></div>
+    <div class="evolution-step"><div class="evolution-marker">1</div><div class="evolution-content"><h4>Single Memcached instance</h4><p>Simple KV cache. No persistence, no replication. Works until the node dies and your cache goes cold. Restart = cache stampede on DB. Fine for prototypes and small apps with &lt; 10K RPM.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">2</div><div class="evolution-content"><h4>Redis standalone + Sentinel</h4><p>Persistence (RDB/AOF) survives restarts. Sentinel auto-promotes replica on leader failure -- no manual intervention. Rich data structures (sorted sets, hashes, streams) enable complex patterns beyond simple KV. Still limited to one node's RAM (~100 GB practical max).</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">3</div><div class="evolution-content"><h4>Redis Cluster with hash slots</h4><p>16384 slots sharded across N leaders with replicas. Smart clients route directly using cached slot map. Cluster gossip protocol for health + Raft-like voting for failover. Scales linearly to TB of data and millions of ops/sec. This is the standard for mid-to-large companies.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">4</div><div class="evolution-content"><h4>Client-side caching (Redis 6 tracking)</h4><p>Client caches hot keys locally in process memory. Redis server tracks which clients cached which keys. On key modification, server sends invalidation message to all tracking clients. Eliminates network round-trip for hot reads entirely. L1 = local process memory (~1 ms savings), L2 = Redis.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">5</div><div class="evolution-content"><h4>Tiered cache: L1 local + L2 Redis + L3 DB</h4><p>Process-local cache (Caffeine/Guava) for ultra-hot keys. Redis cluster for warm keys. Database for cold reads. Each tier absorbs misses from the tier above. Total hit rate approaches 99.9%. Invalidation via Redis pub/sub or Redis 6 client tracking notifications.</p></div></div>
+  </section>
+
+</main>
+
+<script>
+const FLOW_NODES = [
+  { label: 'Client App',      sub: 'cache-aside read/write' },
+  { label: 'Smart Client',    sub: 'CRC16 slot routing' },
+  { label: 'Shard Leader',    sub: 'in-memory hash table' },
+  { label: 'AOF Log',         sub: 'append every write' },
+  { label: 'Replica',         sub: 'async replication' },
+  { label: 'RDB Snapshot',    sub: 'periodic fork+dump' },
+  { label: 'Sentinel/Gossip', sub: 'failover + health' },
+];
+const FLOW_DESCS = [
+  'Application issues GET/SET commands using cache-aside pattern; on miss, loads from DB and populates cache',
+  'Smart client computes CRC16(key) mod 16384 to find target slot; looks up cached slot-to-node map; routes directly',
+  'Shard leader receives command; executes on in-memory hash table; O(1) for GET/SET/INCR',
+  'Write commands appended to AOF log on disk; fsync policy controls durability vs performance tradeoff',
+  'Leader streams write commands to replicas asynchronously; replicas apply to their own memory; serves read-only traffic',
+  'Periodic background fork creates RDB snapshot; child process writes entire dataset to disk without blocking main thread',
+  'Sentinel or cluster gossip monitors node health; on leader failure, promotes replica via quorum vote; updates slot map',
+];
+</script>
+
+</body>
+</html>
