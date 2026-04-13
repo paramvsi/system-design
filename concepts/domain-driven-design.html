@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Domain-Driven Design — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 220; --accent-s: 60%; --accent-l: 48%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>"What does Order mean?" In your warehouse system, Order = a list of SKUs to pick. In your billing system, Order = an invoice with payment terms. In your shipping system, Order = a box with an address. Same word, three completely different concepts. Build all three under one Order class and you create the worst kind of coupling — every change ripples through systems that share nothing in common.</p>
+      <p><strong>Domain-Driven Design (DDD)</strong> — Eric Evans, 2003 — is the discipline of letting <em>language and concepts mirror the business</em>. The big idea: identify <strong>bounded contexts</strong> where each domain word has one specific meaning, and let those contexts be the natural boundaries of your services.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Bounded contexts — the only DDD idea you need</h2></div>
+    <div class="prose">
+      <p>A <strong>bounded context</strong> is a place where a particular model + ubiquitous language applies. Outside that boundary, the same word can mean something else.</p>
+      <p>E-commerce example. The word "Customer":</p>
+      <ul>
+        <li>In <strong>Sales</strong> context: name, email, billing address, payment methods, lifetime value.</li>
+        <li>In <strong>Support</strong> context: name, contact channels, recent tickets, satisfaction score.</li>
+        <li>In <strong>Recommendations</strong> context: user_id, browsing history, embedding vector, segment.</li>
+      </ul>
+      <p>Trying to build one "Customer" object that holds all this is the path to a 200-field nightmare. <strong>Three bounded contexts, three different Customer models.</strong> They share an ID; they don't share a class.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">The DDD vocabulary</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Term</th><th>What it means</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Bounded Context</td><td>Boundary inside which one model is consistent</td><td>"Sales", "Support", "Inventory"</td></tr>
+        <tr><td class="algo-name">Ubiquitous Language</td><td>Vocabulary shared between developers + business inside one context</td><td>"Order" in Sales = list of cart items pre-checkout</td></tr>
+        <tr><td class="algo-name">Aggregate</td><td>Cluster of objects that change together; treat as a unit</td><td>Order + LineItems together — never modify a LineItem without going through Order</td></tr>
+        <tr><td class="algo-name">Aggregate Root</td><td>The single entry point to an aggregate</td><td>Order is the root; access LineItems via Order, not directly</td></tr>
+        <tr><td class="algo-name">Entity</td><td>Object with stable identity beyond its attributes</td><td>Customer (you can change their name; they're still the same customer)</td></tr>
+        <tr><td class="algo-name">Value Object</td><td>Defined entirely by attributes; immutable</td><td>Money(100, USD), Address — equal if attributes equal</td></tr>
+        <tr><td class="algo-name">Domain Event</td><td>Something the business cares about that happened</td><td>OrderPlaced, PaymentReceived, ShipmentDispatched</td></tr>
+        <tr><td class="algo-name">Anti-Corruption Layer</td><td>Translation layer between two contexts so neither leaks into the other</td><td>Adapter that maps "Sales Customer" to "Support Customer"</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Aggregates in practice</h2></div>
+    <div class="prose">
+      <p>The most practically useful DDD idea after bounded contexts. An <strong>aggregate</strong> is a transactional consistency boundary. Rules:</p>
+      <ol>
+        <li>One aggregate per database transaction. Don't touch two aggregates atomically — if you need to, they should be one aggregate.</li>
+        <li>External code only references aggregates by ID, never by direct object reference.</li>
+        <li>Inside an aggregate, you can have rich object graphs. Outside, you can't reach in.</li>
+        <li>Cross-aggregate consistency is eventual — via <a href="/concepts/event-driven-architecture">domain events</a>.</li>
+      </ol>
+      <p>Example: <code>Order</code> aggregate contains <code>LineItem</code>s. Adding a line item: <code>order.addItem(product, qty)</code>. The order itself enforces invariants ("max 100 items", "no duplicate SKUs"). You never call <code>lineItem.setQuantity()</code> directly.</p>
+      <p>Why this matters at scale: aggregates become natural <a href="/concepts/sharding">sharding boundaries</a>, natural <a href="/concepts/transactions-distributed">transaction boundaries</a>, natural cache keys. The boundary you draw in your code is the boundary you exploit in infrastructure.</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — context mapping</h2></div>
+    <div class="prose">
+      <p>Once you have bounded contexts, you have to decide how they relate. Eric Evans defined seven patterns; the practically important ones:</p>
+      <p><strong>Shared Kernel</strong> — two contexts share a small subset of model. Tight coupling. Use sparingly.</p>
+      <p><strong>Customer/Supplier</strong> — context A's needs drive context B's interface. B has to support A's use cases. Negotiated.</p>
+      <p><strong>Conformist</strong> — A uses B's interface as-is, no protection. Cheap; A is at B's mercy when B changes.</p>
+      <p><strong>Anti-Corruption Layer (ACL)</strong> — A wraps B's interface in an adapter that translates to A's preferred terms. Insulates A from B's changes. The professional choice for any cross-team integration.</p>
+      <p><strong>Open Host Service</strong> — B publishes a stable, well-documented API for many consumers. Higher cost for B; many As benefit.</p>
+      <p><strong>Published Language</strong> — common interchange format like JSON Schema, OpenAPI, Avro. Decouples parties via the schema.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"We organize services around bounded contexts derived from business subdomains. Each context owns its data and exposes a context-specific interface. Cross-context integration goes through anti-corruption layers + domain events to prevent model leakage. Aggregates are the unit of transaction inside each context."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Stripe APIs</div><h4>Bounded contexts visible in API</h4><p>Charges, Customers, Subscriptions, Connect — each a context with its own model. Same "Customer" appears differently across them.</p></div>
+      <div class="rw-card"><div class="rw-name">Amazon's two-pizza teams</div><h4>Service per bounded context</h4><p>Inventory team owns the Inventory context. Recommendations team owns recs context. Each ~5-10 engineers.</p></div>
+      <div class="rw-card"><div class="rw-name">Microsoft eShopOnContainers</div><h4>DDD reference impl</h4><p>Open-source .NET reference architecture explicitly built around DDD. Catalog, Basket, Ordering, Payment as separate bounded contexts.</p></div>
+      <div class="rw-card"><div class="rw-name">Banking core systems</div><h4>Aggregate-heavy</h4><p>Account aggregate, Transaction aggregate, Loan aggregate. Each transaction touches one. Fits banking's invariants perfectly.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>E-commerce explicitly applies bounded contexts (Catalog vs Cart vs Order vs Inventory vs Shipping). Payment gateway uses aggregates (Payment, Refund) for atomic state transitions. Uber's domain split (Rides, Eats, Freight) is bounded contexts at the org level.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

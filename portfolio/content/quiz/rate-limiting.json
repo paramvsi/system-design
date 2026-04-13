@@ -1,0 +1,44 @@
+{
+  "slug": "rate-limiting",
+  "cluster": "Rate Limiting",
+  "blurb": "Algorithms, distributed coordination, backpressure.",
+  "accent": { "h": 30, "s": 80, "l": 50 },
+  "questions": [
+    {
+      "q": "Fixed-window rate limit of 100 req/min. A client sends 100 at 12:00:59 and 100 at 12:01:01. What went wrong?",
+      "choices": ["Nothing — within limit", "200 requests in 2 seconds (2× the intended rate)", "Server crashed", "Limit is per-user, not per-window"],
+      "correct": 1,
+      "explanation": "Fixed-window's 'boundary burst': window resets at minute boundary. Client fits a full 100 at the end of one window and 100 at the start of the next, landing 200 in seconds. Sliding-window smooths this."
+    },
+    {
+      "q": "Token bucket allows burst + sustained rate. Which knob controls BURST tolerance?",
+      "choices": ["Refill rate", "Bucket capacity", "Token cost per request", "Timeout"],
+      "correct": 1,
+      "explanation": "Capacity = max tokens the bucket can hold = max burst size. Refill rate = sustained allowed rate. A 100-token bucket at 10 refills/sec: sustained 10/sec, burst up to 100."
+    },
+    {
+      "q": "Leaky bucket vs token bucket: which outputs a STRICTLY smooth stream regardless of input burstiness?",
+      "choices": ["Token bucket", "Leaky bucket", "Both", "Neither"],
+      "correct": 1,
+      "explanation": "Leaky bucket drains at constant rate — output is smooth even if input is bursty (excess is dropped/queued). Token bucket lets bursts through if tokens are available."
+    },
+    {
+      "q": "Distributed rate limiter across 100 app servers. What's the simplest correct design?",
+      "choices": ["Each server independent in-memory counter", "Centralized Redis INCR + TTL per key", "Round-robin among servers", "No limiter — trust clients"],
+      "correct": 1,
+      "explanation": "Per-server counters are trivially bypassed (rotate through IPs). Redis INCR with TTL gives atomic centralized counting. Some trade exactness for perf via local batches + periodic sync."
+    },
+    {
+      "q": "429 Too Many Requests. What HTTP header tells the client when to retry?",
+      "choices": ["X-Retry", "Retry-After", "X-RateLimit-Reset", "Cache-Control"],
+      "correct": 1,
+      "explanation": "Retry-After (standard HTTP) gives seconds or date. X-RateLimit-* (optional) expose the whole budget. Always include Retry-After — well-behaved clients will obey."
+    },
+    {
+      "q": "On Redis outage, a rate limiter should typically fail…",
+      "choices": ["Closed (deny all) — safest", "Open (allow all) — availability over precision", "Random 50/50", "Return 503"],
+      "correct": 1,
+      "explanation": "Fail-open: better to temporarily over-allow than block every request. Exception: auth-critical paths (e.g., anti-brute-force on login) should fail-closed. Choose per endpoint."
+    }
+  ]
+}

@@ -1,0 +1,287 @@
+[
+  {
+    "slug": "exercise-notification-system",
+    "title": "Notification System",
+    "difficulty": null,
+    "accent": {
+      "h": 30,
+      "s": 80,
+      "l": 50
+    },
+    "tags": [
+      "Out of 10 points",
+      "30 min whiteboard",
+      "Reference solution →"
+    ],
+    "category": "Communication",
+    "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+    "problemNumber": "30",
+    "readMinutes": 1
+  },
+  {
+    "slug": "exercise-slack-discord",
+    "title": "Slack / Discord — Real-Time Messaging",
+    "difficulty": null,
+    "accent": {
+      "h": 250,
+      "s": 65,
+      "l": 55
+    },
+    "tags": [
+      "Out of 10 points",
+      "45 min whiteboard",
+      "Reference solution →"
+    ],
+    "category": "Communication",
+    "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+    "problemNumber": "45",
+    "readMinutes": 1
+  },
+  {
+    "slug": "exercise-whatsapp",
+    "title": "WhatsApp — Chat at Planet Scale",
+    "difficulty": null,
+    "accent": {
+      "h": 145,
+      "s": 55,
+      "l": 45
+    },
+    "tags": [
+      "Out of 10 points",
+      "45 min whiteboard",
+      "Reference solution →"
+    ],
+    "category": "Communication",
+    "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+    "problemNumber": "45",
+    "readMinutes": 1
+  },
+  {
+    "slug": "exercise-payment-gateway",
+    "title": "Payment Gateway",
+    "difficulty": null,
+    "accent": {
+      "h": 145,
+      "s": 65,
+      "l": 42
+    },
+    "tags": [
+      "Out of 10 points",
+      "45 min whiteboard",
+      "Reference solution →"
+    ],
+    "category": "Financial & Trading",
+    "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+    "problemNumber": "45",
+    "readMinutes": 1
+  },
+  {
+    "slug": "exercise-stock-exchange",
+    "title": "Stock Exchange — Matching Engine",
+    "difficulty": null,
+    "accent": {
+      "h": 30,
+      "s": 70,
+      "l": 50
+    },
+    "tags": [
+      "Out of 10 points",
+      "45 min whiteboard",
+      "Reference solution →"
+    ],
+    "category": "Financial & Trading",
+    "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+    "problemNumber": "45",
+    "readMinutes": 1
+  },
+  {
+    "slug": "exercise-rate-limiter",
+    "title": "Rate Limiter",
+    "difficulty": null,
+    "accent": {
+      "h": 200,
+      "s": 65,
+      "l": 50
+    },
+    "tags": [
+      "Out of 10 points",
+      "30 min whiteboard",
+      "Reference solution →"
+    ],
+    "category": "Infrastructure",
+    "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+    "problemNumber": "30",
+    "readMinutes": 1
+  },
+  {
+    "slug": "exercise-url-shortener",
+    "title": "URL Shortener — bit.ly / TinyURL",
+    "difficulty": null,
+    "accent": {
+      "h": 180,
+      "s": 70,
+      "l": 45
+    },
+    "tags": [
+      "Out of 10 points",
+      "30 min whiteboard",
+      "Reference solution →"
+    ],
+    "category": "Infrastructure",
+    "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+    "problemNumber": "30",
+    "readMinutes": 1
+  },
+  {
+    "slug": "exercise-doordash",
+    "title": "DoorDash / Uber Eats",
+    "difficulty": null,
+    "accent": {
+      "h": 15,
+      "s": 80,
+      "l": 50
+    },
+    "tags": [
+      "Out of 10 points",
+      "45 min whiteboard",
+      "Reference solution →"
+    ],
+    "category": "Marketplace & Booking",
+    "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+    "problemNumber": "45",
+    "readMinutes": 1
+  },
+  {
+    "slug": "exercise-ticketmaster",
+    "title": "Ticketmaster — Event Ticketing",
+    "difficulty": null,
+    "accent": {
+      "h": 280,
+      "s": 60,
+      "l": 50
+    },
+    "tags": [
+      "Out of 10 points",
+      "45 min whiteboard",
+      "Reference solution →"
+    ],
+    "category": "Marketplace & Booking",
+    "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+    "problemNumber": "45",
+    "readMinutes": 1
+  },
+  {
+    "slug": "exercise-uber",
+    "title": "Uber / Lyft — Ride Dispatch",
+    "difficulty": null,
+    "accent": {
+      "h": 200,
+      "s": 70,
+      "l": 45
+    },
+    "tags": [
+      "Out of 10 points",
+      "45 min whiteboard",
+      "Reference solution →"
+    ],
+    "category": "Marketplace & Booking",
+    "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+    "problemNumber": "45",
+    "readMinutes": 1
+  },
+  {
+    "slug": "exercise-youtube-netflix",
+    "title": "YouTube / Netflix — Video Streaming",
+    "difficulty": null,
+    "accent": {
+      "h": 0,
+      "s": 75,
+      "l": 50
+    },
+    "tags": [
+      "Out of 10 points",
+      "45 min whiteboard",
+      "Reference solution →"
+    ],
+    "category": "Media & Streaming",
+    "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+    "problemNumber": "45",
+    "readMinutes": 1
+  },
+  {
+    "slug": "exercise-search-engine",
+    "title": "Google Search — Web Search Engine",
+    "difficulty": null,
+    "accent": {
+      "h": 205,
+      "s": 75,
+      "l": 48
+    },
+    "tags": [
+      "Out of 10 points",
+      "45 min whiteboard",
+      "Reference solution →"
+    ],
+    "category": "Search & Discovery",
+    "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+    "problemNumber": "45",
+    "readMinutes": 1
+  },
+  {
+    "slug": "exercise-instagram",
+    "title": "Instagram / Photo + Reels Sharing",
+    "difficulty": null,
+    "accent": {
+      "h": 330,
+      "s": 72,
+      "l": 52
+    },
+    "tags": [
+      "Out of 10 points",
+      "45 min whiteboard",
+      "Reference solution →"
+    ],
+    "category": "Social & Feed",
+    "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+    "problemNumber": "45",
+    "readMinutes": 1
+  },
+  {
+    "slug": "exercise-news-feed",
+    "title": "Twitter / News Feed",
+    "difficulty": null,
+    "accent": {
+      "h": 210,
+      "s": 85,
+      "l": 50
+    },
+    "tags": [
+      "Out of 10 points",
+      "45 min whiteboard",
+      "Reference solution →"
+    ],
+    "category": "Social & Feed",
+    "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+    "problemNumber": "45",
+    "readMinutes": 1
+  },
+  {
+    "slug": "exercise-google-drive",
+    "title": "Google Drive / Dropbox",
+    "difficulty": null,
+    "accent": {
+      "h": 215,
+      "s": 75,
+      "l": 48
+    },
+    "tags": [
+      "Out of 10 points",
+      "45 min whiteboard",
+      "Reference solution →"
+    ],
+    "category": "Storage & Data",
+    "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+    "problemNumber": "45",
+    "readMinutes": 1
+  }
+]

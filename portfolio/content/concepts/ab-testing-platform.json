@@ -1,0 +1,65 @@
+{
+  "slug": "ab-testing-platform",
+  "title": "A/B Testing Platform",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 217,
+    "s": 91,
+    "l": 50
+  },
+  "category": "Machine Learning Systems",
+  "blurb": "You ship a new homepage. Did it improve conversion or hurt it? Eyeballing the dashboard for a week proves nothing — traffic patterns shift hour to hour, day to day. A/B testing is the discipline of statistically comparin",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>You ship a new homepage. Did it improve conversion or hurt it? Eyeballing the dashboard for a week proves nothing — traffic patterns shift hour to hour, day to day. <strong>A/B testing</strong> is the discipline of statistically comparing variant A vs variant B with enough rigor to actually know.</p>\n      <p>Different from <a href=\"/concepts/feature-flags-rollouts\">feature flags</a> (which are about safe rollout). Different from canary deploys (which are about not breaking things). A/B testing is about <strong>measuring causal impact</strong> on user behavior. Every product team at Netflix, Booking, Airbnb, Meta runs hundreds simultaneously.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "The architecture",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The architecture</h2></div>\n    <div class=\"prose\">\n      <ol>\n        <li><strong>Experiment definition.</strong> Variant A (control), variant B (treatment), traffic split (50/50 typical), success metric, expected effect size, max duration.</li>\n        <li><strong>Bucketing.</strong> Each user deterministically hashed to A or B by user_id mod 100 (or a hash of user_id + experiment_id for hash-stable assignment across experiments).</li>\n        <li><strong>Exposure logging.</strong> Every time a user enters the experiment, log <code>(user_id, experiment_id, variant)</code>. This is the source of truth for \"who saw what.\"</li>\n        <li><strong>Outcome logging.</strong> Every event the experiment cares about — click, purchase, sign-up — flows into a metrics store.</li>\n        <li><strong>Analysis.</strong> Statistical test (t-test, chi-square, CUPED for variance reduction) on outcome differences. Did B beat A with p &lt; 0.05?</li>\n        <li><strong>Decision.</strong> Promote B, kill B, run longer, or iterate.</li>\n      </ol>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Three statistical regimes",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Three statistical regimes</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Approach</th><th>How it decides</th><th>When to use</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Fixed-horizon t-test</td><td>Run for N days, then compare means with p-value &lt; 0.05</td><td>Standard. Most experiments. Plan duration ahead.</td></tr>\n        <tr><td class=\"algo-name\">Sequential testing</td><td>Continuously analyze; stop early when significant; control α across peeks</td><td>When time is precious; lets you stop bad experiments early</td></tr>\n        <tr><td class=\"algo-name\">Multi-armed bandit</td><td>Allocate more traffic to better-performing variant continuously</td><td>When opportunity cost is high (ad bidding) — but loses statistical rigor</td></tr>\n      </tbody>\n    </table>\n    <div class=\"prose\">\n      <p>Most product teams should default to <strong>sequential testing</strong>. It's nearly as rigorous as fixed-horizon and stops bad experiments faster. Bandits are great for revenue-direct decisions; not great when you need to learn <em>why</em> something worked.</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — sample size math",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Deep dive — sample size math</h2></div>\n    <div class=\"prose\">\n      <p>The interview question every infra-aware PM asks: \"How long do we need to run this?\" Answer requires the formula:</p>\n      <pre style=\"background:#f4f3f0;padding:12px;border-radius:6px;font-size:12px;font-family:var(--font-mono);overflow-x:auto\">N per arm ≈ 16 × σ² / Δ²\n\nwhere:\n  σ = standard deviation of the metric\n  Δ = minimum detectable effect (the smallest change you care about)</pre>\n      <p>Practical example. Conversion baseline 5% (σ ≈ 0.218). You want to detect a 5% relative lift = 0.25 percentage points absolute. <code>Δ = 0.0025</code>. <code>N = 16 × 0.0475 / 0.00000625 ≈ 121,600 users per arm</code>.</p>\n      <p>At 10k daily active users in your test, that's 12 days for 50/50 split. Most teams under-power experiments massively, get false negatives, conclude \"no effect\" when there genuinely was one but the experiment was too small to detect.</p>\n      <p><strong>CUPED (controlled-experiment using pre-experiment data)</strong> reduces variance by 30-70% by adjusting outcomes for each user's pre-experiment behavior. Saves weeks per test. Standard at FAANG.</p>\n      <div class=\"callout callout-warn\">\n        <div class=\"callout-label\">The peeking problem</div>\n        <p>Looking at your test repeatedly and stopping when \"significant\" inflates the false-positive rate from 5% to ~25% with 5 peeks. This is the #1 mistake. Either commit to fixed-horizon and don't look, or use sequential tests with proper alpha-spending. NEVER eyeball-peek.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Architecture patterns",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Architecture patterns</h2></div>\n    <div class=\"prose\">\n      <p>Production A/B platform components:</p>\n      <ul>\n        <li><strong>Assignment service</strong> — sub-millisecond bucket lookup. Often runs at <a href=\"/concepts/edge-computing\">the edge</a>.</li>\n        <li><strong>Exposure logger</strong> — high-throughput event sink (Kafka), often deduped per (user, experiment).</li>\n        <li><strong>Outcome pipeline</strong> — event stream joined to exposures via point-in-time logic.</li>\n        <li><strong>Analysis engine</strong> — Spark / Snowflake jobs computing daily metrics, p-values, confidence intervals per experiment.</li>\n        <li><strong>Experiment registry</strong> — config service holding all running experiments + their definitions.</li>\n        <li><strong>UI dashboard</strong> — for PMs to see results, segment by user dimension, decide.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world platforms",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world platforms</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Statsig</div><h4>Modern SaaS A/B + flags</h4><p>Combined feature flag + A/B platform. Used by OpenAI, Notion, Brex. Supports CUPED, sequential testing.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Optimizely</div><h4>Original commercial</h4><p>Pioneered the space. Now enterprise-focused. Handles personalization + experimentation in one product.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Eppo / Split</div><h4>Modern alternatives</h4><p>Both focus on stats rigor (CUPED, sequential). Pricier than feature-flag-only tools but rigor justifies the cost.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Internal at FAANG</div><h4>All build their own</h4><p>Netflix XP, Meta Deltoid, LinkedIn T-Rex, Airbnb ERF. Each team customizes for their scale + culture.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>News feed runs hundreds of A/B tests on ranker variants. E-commerce tests checkout flows, pricing displays, recs widgets. Recommendation algorithm uses A/B to evaluate model changes. Notification system tests message variants for engagement.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

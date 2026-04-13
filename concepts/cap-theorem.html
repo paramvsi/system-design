@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>CAP Theorem — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 285; --accent-s: 60%; --accent-l: 45%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Every distributed database picks one of two behaviors when the network between nodes breaks: <strong>return stale data</strong> or <strong>refuse to serve the request</strong>. CAP is the formal statement that you cannot avoid this choice. Pretending otherwise (marketing saying "CP AND AP!") is nonsense.</p>
+      <p>Getting this right in interviews means naming what your system does under partition and why. "Cassandra is AP" is worth saying. "Postgres with synchronous replication is CP" is worth saying. "We're eventually consistent" is a red flag without the CAP trade explicit.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The three letters</h2></div>
+    <div class="prose">
+      <p><strong>C — Consistency.</strong> Every read sees the most recent write, or an error. "Linearizable" is the formal term. NOT the C in ACID.</p>
+      <p><strong>A — Availability.</strong> Every request gets a non-error response. You may get stale data, but you don't get a 500.</p>
+      <p><strong>P — Partition tolerance.</strong> The system keeps working when the network between nodes drops messages.</p>
+      <p><span class="hl">In a real distributed system, P is not optional.</span> Networks will partition — transient congestion, a cable cut, a misconfigured firewall, whole-region outages. So the real choice is <strong>C or A when P happens</strong>.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">The choice made visible</h2></div>
+    <div class="prose">
+      <p>Imagine your database runs in two regions, US-East and EU-West. A submarine cable fails — they can't talk. A user writes to US-East. An EU user now tries to read the same key.</p>
+      <p><strong>CP system (Spanner, Zookeeper, etcd):</strong> EU read blocks or errors. You can't confirm the value is latest, so you refuse. Consistency preserved; EU user sees downtime.</p>
+      <p><strong>AP system (Cassandra, DynamoDB, Riak):</strong> EU read returns the old value (or whatever local replica has). Request succeeds. Consistency sacrificed; the two regions now diverge until the network heals, then they reconcile (last-write-wins, vector clocks, etc.).</p>
+      <p>Neither is universally better. A banking ledger must be CP. A social media feed must be AP. An interviewer asking about CAP wants to see you identify which side your system is on, and why the <em>other</em> side would be wrong.</p>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head"><span class="diagram-label">CP vs AP Under Partition</span><span class="diagram-type">Mermaid</span></div>
+      <div class="diagram-body">
+        <div class="mermaid">
+sequenceDiagram
+    participant U as US User
+    participant USE as US Region
+    participant EUW as EU Region
+    participant E as EU User
+
+    Note over USE,EUW: Network partition between regions
+    U->>USE: write(key=X, val=42)
+    USE-->>U: OK
+
+    rect rgb(255, 240, 240)
+    Note over EUW: CP system
+    E->>EUW: read(key=X)
+    EUW-->>E: ERROR · partition
+    end
+
+    rect rgb(240, 255, 240)
+    Note over EUW: AP system
+    E->>EUW: read(key=X)
+    EUW-->>E: old value · 41
+    Note over EUW: will reconcile when partition heals
+    end
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Where common databases land</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Database</th><th>CAP stance</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Postgres (primary + sync replicas)</td><td>CP</td><td>Sync replication blocks writes if replica unreachable. Primary fails? No writes until failover.</td></tr>
+        <tr><td class="algo-name">MySQL (async replicas)</td><td>AP-ish</td><td>Primary stays writable during partition. Replicas drift, reconcile after.</td></tr>
+        <tr><td class="algo-name">Cassandra</td><td>AP (tunable)</td><td>Configurable consistency per query. <code>QUORUM</code> reads/writes lean CP. <code>ONE</code> leans AP.</td></tr>
+        <tr><td class="algo-name">DynamoDB</td><td>AP</td><td>Optional strongly-consistent reads (slower, more expensive). Defaults eventual.</td></tr>
+        <tr><td class="algo-name">MongoDB (replica set)</td><td>CP by default</td><td>Writes go to primary. During partition, minority side refuses writes.</td></tr>
+        <tr><td class="algo-name">Redis (single-node)</td><td>CA (not P-tolerant)</td><td>One node = no partition to worry about. Redis Cluster becomes AP.</td></tr>
+        <tr><td class="algo-name">Spanner</td><td>CP</td><td>Uses TrueTime + Paxos. External consistency at global scale. Pays latency cost.</td></tr>
+        <tr><td class="algo-name">etcd / Zookeeper / Consul</td><td>CP</td><td>Raft-based. Refuses writes below quorum. Used exactly because you need CP.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">When to pick each</h2></div>
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">CP</div>
+        <h4>Correctness over availability</h4>
+        <p>Anything involving money, inventory, uniqueness (usernames), locks, or coordination. Better to reject a write than to have two airline seats sold to different people.</p>
+      </div>
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">AP</div>
+        <h4>Availability over freshness</h4>
+        <p>Social feeds, counters, notifications, analytics, caches. A tweet showing on one phone 2 seconds before another is fine. Downtime is not fine.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Deep dive — CAP is the wrong framing for the no-partition case</h2></div>
+    <div class="prose">
+      <p>CAP only talks about what happens <em>during</em> a partition. But partitions are rare; normal operation is far more common. The real tradeoff you make in the steady state is between <strong>latency and consistency</strong> — see <a href="/concepts/pacelc-theorem">PACELC</a>.</p>
+      <p>A system can be "AP during partition, EL during normal" (Cassandra). Or "CP during partition, EC during normal" (Spanner). These are very different beasts, even though both "pick C." Interviewers who've worked with distributed systems will push you on this — don't stop at CAP.</p>
+      <div class="callout">
+        <div class="callout-label">Common misunderstanding</div>
+        <p>"CAP says pick 2 of 3." No — CAP says <strong>during a network partition</strong>, you pick C or A. In the absence of a partition, you can have both. The confusion comes from the original phrasing and gets repeated forever.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Google Docs chooses CP for concurrent edits (OT/CRDT need ordering). News feed chooses AP for engagement counts. Payment gateway chooses CP for the ledger. WhatsApp messaging chooses AP for delivery (better to double-deliver than lose).</p></div>
+  </section>
+
+</main>
+</body>
+</html>

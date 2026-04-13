@@ -1,0 +1,65 @@
+{
+  "slug": "model-serving-online-vs-batch",
+  "title": "Model Serving — Online vs Batch",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 195,
+    "s": 70,
+    "l": 45
+  },
+  "category": "Machine Learning Systems",
+  "blurb": "You trained a recommendation model. Now what — does it predict in real time when the user opens the app, or do you precompute every user's recs nightly and read from a cache? Same model, completely different infrastructu",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>You trained a recommendation model. Now what — does it predict in real time when the user opens the app, or do you precompute every user's recs nightly and read from a cache? Same model, completely different infrastructure. Get the wrong answer and you either burn 10× the compute or fail to personalize at all.</p>\n      <p><strong>Online serving</strong> is sub-100ms inference per request. <strong>Batch scoring</strong> is hourly/daily prediction over millions of users at once. <strong>Streaming scoring</strong> is the middle ground. Each fits a different product surface.</p>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "The three serving modes",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The three serving modes</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Mode</th><th>Latency</th><th>When predicted</th><th>Best for</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Batch scoring</td><td>Hours-day to refresh; instant lookup</td><td>Nightly job, results stored</td><td>Email digests, daily-recs widgets, \"trending\" lists</td></tr>\n        <tr><td class=\"algo-name\">Streaming scoring</td><td>Seconds</td><td>Triggered by events (purchase, click)</td><td>Fraud detection, post-action triggers</td></tr>\n        <tr><td class=\"algo-name\">Online (synchronous)</td><td>10-100ms p99</td><td>Inline with user request</td><td>Search ranking, autocomplete, real-time recs</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "Online serving — the architecture",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Online serving — the architecture</h2></div>\n    <div class=\"prose\">\n      <p>A request arrives. To serve a prediction, the system must:</p>\n      <ol>\n        <li><strong>Fetch features</strong> from the <a href=\"/concepts/feature-store\">feature store</a> — sub-5ms for ~100 features.</li>\n        <li><strong>Encode + transform</strong> — categorical lookups, normalization, embedding fetches.</li>\n        <li><strong>Run inference</strong> — model forward pass, ~5-50ms depending on model size.</li>\n        <li><strong>Post-process</strong> — top-K filtering, business-rule overrides, deduping.</li>\n        <li><strong>Return</strong> — total budget often 100-200ms.</li>\n      </ol>\n      <p>The whole thing scales with traffic. 10k QPS = 10k inferences/sec. At that rate, every millisecond per inference matters. Hence why high-performance model servers (TensorFlow Serving, NVIDIA Triton, TorchServe) exist.</p>\n    </div>\n    <div class=\"kv-grid\">\n      <div class=\"kv-card\"><div class=\"kv-val\">&lt; 50 ms</div><div class=\"kv-lbl\">p99 inference budget</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">~10 ms</div><div class=\"kv-lbl\">small model on CPU</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">~30 ms</div><div class=\"kv-lbl\">deep model on GPU</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">~5 ms</div><div class=\"kv-lbl\">feature fetch (typical)</div></div>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "When batch beats online",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">When batch beats online</h2></div>\n    <div class=\"prose\">\n      <p>Online sounds better — fresher predictions. It's also 10-100× more expensive per prediction. Use batch when:</p>\n      <ul>\n        <li><strong>Predictions are stable over hours.</strong> \"Top 100 movies for this user\" probably doesn't change in an hour. Compute nightly, serve from a KV store, save 99% of inference cost.</li>\n        <li><strong>The product surface tolerates staleness.</strong> Email digest, \"for you\" widget on the homepage. Fine if it was computed 8 hours ago.</li>\n        <li><strong>The candidate set is small + known ahead of time.</strong> Score every user × every item once; serve top-K from cache.</li>\n      </ul>\n      <p>Use online when:</p>\n      <ul>\n        <li>Context matters per request (current session, query, location).</li>\n        <li>The candidate set is huge and changes (search ranking over millions of products).</li>\n        <li>Latency-to-prediction matters (autocomplete suggesting words as you type).</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — the candidate generation + ranking pattern",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — the candidate generation + ranking pattern</h2></div>\n    <div class=\"prose\">\n      <p>Modern recommendation + search systems split serving into two stages — and use different modes for each:</p>\n      <p><strong>Stage 1 — Candidate generation.</strong> From millions of items, narrow to ~hundreds. Often <em>batch precomputed</em> — a daily job runs ANN search over <a href=\"/concepts/vector-databases\">embeddings</a> to build \"top 200 similar items per user.\" Cached.</p>\n      <p><strong>Stage 2 — Ranking.</strong> The 200 candidates are scored by a richer model online, with full real-time context. Output: ordered top 10 to show.</p>\n      <p>This split is everywhere — YouTube recommendation, Twitter feed ranking, Amazon search. Stage 1 takes care of \"find relevant stuff\" cheaply (batch). Stage 2 takes care of \"rank what's relevant given right now\" expensively (online).</p>\n      <p>Net cost: full ML model runs on hundreds of items per request, not millions. Latency stays in the 100ms budget. Personalization stays high because stage 2 is fully online with current context.</p>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">Interview answer</div>\n        <p>\"Two-stage serving: batch candidate generation (precomputed daily, ANN over embeddings) narrows to top-200, then online ranking model scores those with real-time features. Reduces inference cost by 1000× vs ranking the full catalog online, while keeping freshness.\"</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world serving infra",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world serving infra</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">TensorFlow Serving / TorchServe</div><h4>Open-source model servers</h4><p>HTTP / gRPC interface, batching, model versioning. The default for self-hosted online serving.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">NVIDIA Triton</div><h4>GPU-optimized</h4><p>Multi-framework (TF, PyTorch, ONNX), supports GPU + CPU. Best-in-class throughput per GPU.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">SageMaker / Vertex AI / Azure ML</div><h4>Managed</h4><p>Cloud-managed serving. Auto-scales, blue-green deploys, A/B testing built in. Pricier but zero ops.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Spark batch + Redis cache</div><h4>The 80% solution</h4><p>Most production \"ML\" systems aren't online inference — they're nightly Spark jobs writing to Redis.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Typeahead does pure online inference (every keystroke). Recommendation algorithm uses two-stage (batch candidates + online ranking). News feed scores top-200 candidates online for each load.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

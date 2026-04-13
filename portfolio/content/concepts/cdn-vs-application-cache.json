@@ -1,0 +1,65 @@
+{
+  "slug": "cdn-vs-application-cache",
+  "title": "CDN vs Application Cache",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 180,
+    "s": 60,
+    "l": 40
+  },
+  "category": "Caching",
+  "blurb": "Both are caches. Both reduce load on your origin. They live at different layers of the stack, cache different things, and solve different problems. A candidate who says \"we'll use a cache\" and can't distinguish them is p",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>Both are caches. Both reduce load on your origin. They live at different layers of the stack, cache different things, and solve different problems. A candidate who says \"we'll use a cache\" and can't distinguish them is punting on an important design choice.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The layers of the cache sandwich",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The layers of the cache sandwich</h2></div>\n    <div class=\"prose\">\n      <p>Going from user to database, cache opportunities exist at every layer:</p>\n      <ol>\n        <li><strong>Browser cache</strong> — the user's own device. Free, zero latency, tiny.</li>\n        <li><strong>CDN (edge)</strong> — <a href=\"/concepts/cdn\">CDN</a> PoPs close to the user. Shared across all users in that geography.</li>\n        <li><strong>Reverse proxy</strong> — Nginx / Varnish in your datacenter, caches responses from your app.</li>\n        <li><strong>Application cache</strong> — Redis / Memcached inside your services.</li>\n        <li><strong>Database buffer pool</strong> — Postgres / MySQL's own in-memory cache of hot pages.</li>\n      </ol>\n      <p>Each layer catches what the layer above missed. A request that hits the browser cache costs nothing. A request that misses everything and hits disk is thousands of times more expensive.</p>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "CDN vs application cache — the honest comparison",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">CDN vs application cache — the honest comparison</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Aspect</th><th>CDN</th><th>Application cache (Redis)</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Location</td><td>~300 PoPs globally</td><td>Your datacenters</td></tr>\n        <tr><td class=\"algo-name\">Stores</td><td>HTTP responses — static assets, public API responses</td><td>Arbitrary structured data — sessions, counters, computed results</td></tr>\n        <tr><td class=\"algo-name\">Latency to user</td><td>~10–50ms (near edge)</td><td>App server → Redis: 1–3ms, then network to user</td></tr>\n        <tr><td class=\"algo-name\">Cache key</td><td>URL + varied headers</td><td>Arbitrary keys</td></tr>\n        <tr><td class=\"algo-name\">Invalidation</td><td>API purge or versioned URLs</td><td><code>DEL</code> key</td></tr>\n        <tr><td class=\"algo-name\">Who runs it</td><td>Cloudflare / AWS / Akamai</td><td>You</td></tr>\n        <tr><td class=\"algo-name\">Cost model</td><td>Per-request + bandwidth</td><td>Per-GB memory per hour</td></tr>\n        <tr><td class=\"algo-name\">Best for</td><td>Public, cacheable, geographically distributed reads</td><td>Private, compute-expensive, per-user data</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "Use each for what it's good at",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Use each for what it's good at</h2></div>\n    <div class=\"prose\">\n      <p><strong>CDN wins for:</strong> images, JavaScript bundles, CSS, fonts, public API responses (leaderboards, product catalogs), video segments. Anything where the same bytes get sent to thousands of users. The CDN absorbs the fan-out so your origin doesn't.</p>\n      <p><strong>App cache wins for:</strong> per-user sessions, personalized feeds, rate-limit counters, hot DB rows, precomputed aggregations, leaderboard state (writes fast, reads fast). Anything that's per-user or frequently mutated.</p>\n      <p>The mistake: trying to put per-user data behind a CDN. Cache hit rate ≈ 0 (each user is unique). You pay CDN cost for no benefit. Put per-user data in app-level cache close to your backend.</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — stacking them",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — stacking them</h2></div>\n    <div class=\"prose\">\n      <p>They're not alternatives — they stack. A well-designed page uses <em>both</em>:</p>\n      <ul>\n        <li>Static assets (CSS, JS, images) → CDN with long TTL + versioned URLs. Near-100% hit rate.</li>\n        <li>Public HTML for logged-out users → CDN with short TTL (5 min). 90%+ hit rate.</li>\n        <li>Logged-in HTML → bypass CDN, render at origin. Fetch user data from Redis (app cache). 95%+ Redis hit rate.</li>\n        <li>Per-user feed data → Redis sorted sets, keyed by user ID.</li>\n        <li>Hot DB rows (user profile) → Redis cache-aside, TTL 5 min. Feed renderer reads from Redis, DB on miss.</li>\n      </ul>\n      <p>Your origin sees &lt; 5% of total traffic. Of that, 90%+ is served from Redis. Your database sees &lt; 1%. This is what scaling looks like.</p>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">The hit rate ladder</div>\n        <p>Browser cache catches 20%. CDN catches 60% of what's left. App cache catches 90% of what's left. DB sees ~3%. Disk reads are rare events.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Netflix</div><h4>CDN for video, EVCache for session</h4><p>Video segments on Open Connect (their own CDN). EVCache (Netflix's Memcached variant) for session, profile, recommendations.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Shopify</div><h4>Cloudflare + Redis</h4><p>Storefront HTML + assets through Cloudflare. Cart, session, inventory counts in Redis. Two-layer defense against the DB.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">New York Times</div><h4>Fastly for articles</h4><p>Article HTML cached at Fastly with 2-min TTL. Breaking news flushes the cache via API. Origin sees &lt; 1% of reads.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Stripe</div><h4>No CDN; heavy app cache</h4><p>Every response is per-merchant, per-account — no CDN benefit. Aggressive Redis caching of hot rows. Origin sees every request but serves fast.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>URL shortener: CDN caches redirects for top URLs (shared across users). News feed: Redis for per-user feed; CDN for static assets. YouTube/Netflix: CDN absolutely critical for video; Redis for session/personalization.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

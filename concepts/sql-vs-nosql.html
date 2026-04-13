@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>SQL vs NoSQL — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 210; --accent-s: 70%; --accent-l: 45%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Picking the wrong database is the most expensive architectural mistake you can make early. You can change a cache vendor in a weekend; you can't change your database in a quarter. Interviewers want to see <span class="hl">a justified choice</span>, not "Postgres because I know it" or "Cassandra because it's web-scale."</p>
+      <p>The real answer is almost never "pure SQL" or "pure NoSQL" — it's <strong>pick the right tool per workload</strong>. A checkout flow needs ACID (SQL). A viral post counter needs horizontal writes (NoSQL). Most real systems run both.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The real dividing line</h2></div>
+    <div class="prose">
+      <p>"SQL vs NoSQL" is a misleading name. The actual tradeoffs are:</p>
+      <ul>
+        <li><strong>Schema flexibility</strong> — SQL: strict, enforced at write time. NoSQL: flexible, interpreted at read time.</li>
+        <li><strong>Transactions</strong> — SQL: multi-row, multi-table ACID transactions. NoSQL: typically single-row atomicity only.</li>
+        <li><strong>Joins</strong> — SQL: the engine joins for you. NoSQL: you pre-join at write time (denormalize) or join in application code.</li>
+        <li><strong>Scale model</strong> — SQL: scale reads with replicas, writes via sharding (hard). NoSQL: horizontal scaling built-in from day one.</li>
+        <li><strong>Query language</strong> — SQL: one language, 50 years of tooling. NoSQL: per-vendor APIs.</li>
+      </ul>
+      <p>None of this is "better." They're different tradeoff choices. If you need multi-entity transactions, you need SQL. If you need 500k writes/sec on one table, you need a distributed NoSQL.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">The comparison matrix</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Dimension</th><th>SQL (Postgres, MySQL)</th><th>NoSQL (Cassandra, Dynamo, Mongo)</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Schema</td><td>Fixed, migrations required</td><td>Flexible, per-document</td></tr>
+        <tr><td class="algo-name">Consistency default</td><td>Strong (ACID)</td><td>Eventual (BASE) — tunable in some</td></tr>
+        <tr><td class="algo-name">Multi-row txn</td><td>Yes, free</td><td>No, or expensive (multi-partition)</td></tr>
+        <tr><td class="algo-name">Joins</td><td>Yes, engine does it</td><td>No — you denormalize</td></tr>
+        <tr><td class="algo-name">Write throughput (single node)</td><td>~10k /sec</td><td>Same per node</td></tr>
+        <tr><td class="algo-name">Horizontal write scale</td><td>Hard (<a href="/concepts/sharding">sharding</a> is an ordeal)</td><td>Easy, built-in</td></tr>
+        <tr><td class="algo-name">Query flexibility</td><td>Any query, any index, ad-hoc</td><td>Query must match your key design; ad-hoc is slow or impossible</td></tr>
+        <tr><td class="algo-name">Operational maturity</td><td>50 years; every tool exists</td><td>10–15 years; tooling catching up</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">When to pick each</h2></div>
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">Pick SQL when</div>
+        <h4>Relationships + transactions matter</h4>
+        <p>Orders ↔ items ↔ users ↔ inventory — you need multi-table atomic writes. Payments, inventory, bookings, subscriptions, anything finance-adjacent. Your data model has clear entities. Your queries change unpredictably over time. You're under ~10k writes/sec on the hot table.</p>
+      </div>
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">Pick NoSQL when</div>
+        <h4>Huge volume + simple access patterns</h4>
+        <p>Time-series data, event logs, feed entries, session state, IoT telemetry, user activity. Known access patterns (always look up by user ID, always fetch newest 100). Write throughput exceeds a single SQL node. Reads don't need joins. You're okay with eventual consistency for this data.</p>
+      </div>
+    </div>
+    <div class="callout callout-good">
+      <div class="callout-label">The polyglot answer</div>
+      <p>"Postgres for the order ledger (ACID, relational). Cassandra for the event stream (volume, write throughput). Redis for session state (speed). Elasticsearch for search (inverted index). One datastore never fits all." Interviewers like this.</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — the two fallacies</h2></div>
+    <div class="prose">
+      <p><strong>Fallacy 1: "NoSQL scales better."</strong> Per-node write throughput is roughly the same (~10k/sec) on both. What differs is how they <em>shard</em>. SQL sharding is manual, often painful, and loses some features (cross-shard joins, cross-shard transactions). NoSQL sharding is automatic. So NoSQL scales <em>more easily</em>, not inherently faster.</p>
+      <p><strong>Fallacy 2: "SQL is slow."</strong> Postgres with good indexes handles 50k+ reads/sec. MySQL with proper caching goes higher. The "slow" reputation comes from naive usage — missing indexes, N+1 queries, long-running transactions — not the database itself.</p>
+      <p><strong>Real advantage of NoSQL:</strong> <em>known, narrow access patterns.</em> Cassandra's data model forces you to design your tables around your queries ("query-driven modeling"). If your queries never change and performance must be predictable, this is a superpower. If your queries change weekly as product evolves, it's a straitjacket.</p>
+    
+      <div class="code-caption" data-code-snippet="1">Bulk insert via Postgres COPY</div>
+      <pre><code class="lang-sql">-- Single-row INSERTs: ~5,000/sec
+-- Batched INSERT multi-VALUES: ~50,000/sec
+-- COPY FROM STDIN: ~500,000/sec (100x faster)
+
+-- Client side (psycopg):
+with conn.cursor() as cur:
+    with cur.copy("COPY events (user_id, ts, type) FROM STDIN") as copy:
+        for row in rows:
+            copy.write_row((row.user_id, row.ts, row.type))
+
+-- Caveats:
+-- * No triggers or constraints fire per-row as they do with INSERT
+-- * Entire COPY is single transaction; huge copy = huge undo log
+-- * Common technique: COPY to staging table, then INSERT INTO main FROM staging</code></pre>
+  </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world choices</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Stripe</div><h4>Postgres everywhere</h4><p>Payments, ledger, customer data. They shard manually for scale. Transactions matter more than write throughput — Postgres wins.</p></div>
+      <div class="rw-card"><div class="rw-name">Netflix</div><h4>Cassandra for viewing history</h4><p>Billions of events/day. Simple access pattern (fetch by user). Never joins. Eventual consistency acceptable.</p></div>
+      <div class="rw-card"><div class="rw-name">Uber</div><h4>Hybrid — Postgres + MySQL + Cassandra + Redis</h4><p>Postgres for trip records (ACID required). Cassandra for driver location history (volume). Redis for active driver index (speed).</p></div>
+      <div class="rw-card"><div class="rw-name">Instagram</div><h4>Sharded Postgres</h4><p>~1B users on sharded Postgres. Proves SQL can scale — but required significant investment in custom sharding infra.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>URL shortener (Postgres + Redis), News feed (Cassandra + Postgres + Redis), E-commerce (Postgres for orders, Redis for session), Reddit (sharded Postgres for posts/comments), Uber (all of them).</p></div>
+  </section>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,50 @@
+{
+  "slug": "security",
+  "cluster": "Security",
+  "blurb": "Auth, TLS, secrets, DDoS, OWASP.",
+  "accent": { "h": 0, "s": 70, "l": 48 },
+  "questions": [
+    {
+      "q": "JWT access token. Why should TTL be short (15 min)?",
+      "choices": ["Performance", "JWTs are stateless — hard to revoke until expiry; short TTL limits blast radius of theft", "Size limits", "Spec requires"],
+      "correct": 1,
+      "explanation": "Stateless JWTs can't be invalidated mid-TTL without a server-side revocation list. Short TTL = less exposure if token leaks. Pair with long-lived refresh tokens stored securely."
+    },
+    {
+      "q": "OAuth 2.0: which grant type is RECOMMENDED for mobile apps / single-page apps today?",
+      "choices": ["Implicit grant", "Authorization code + PKCE", "Client credentials", "Password grant"],
+      "correct": 1,
+      "explanation": "Authorization code + PKCE (Proof Key for Code Exchange): secure for public clients without client_secret. Implicit grant is deprecated. Password grant is an anti-pattern."
+    },
+    {
+      "q": "Storing passwords: what's the correct approach?",
+      "choices": ["MD5 hash", "Salt + bcrypt/scrypt/argon2 with cost tuned for ~100ms", "Plain text (encrypted DB)", "SHA-256"],
+      "correct": 1,
+      "explanation": "Bcrypt/Argon2 with per-user salt + tunable cost. Slow by design — defeats brute force. MD5/SHA-256 are fast and GPU-crackable. Never store plaintext even in 'encrypted DB'."
+    },
+    {
+      "q": "Defense against DDoS at L7 (application) — what's the first line of defense?",
+      "choices": ["Larger servers", "CDN with WAF + rate limiting + bot mitigation", "Rewrite in Rust", "Manual IP blocks"],
+      "correct": 1,
+      "explanation": "CDN (Cloudflare/Akamai) absorbs volumetric attacks at edge. WAF filters L7 application-layer. Rate limits per IP / ASN / bot-fingerprint. Your origin never sees the flood."
+    },
+    {
+      "q": "Zero-trust networking vs perimeter security. Key principle?",
+      "choices": ["Trust everyone inside corporate network", "Never trust — authenticate + authorize every request regardless of network origin", "No firewalls", "Block everything"],
+      "correct": 1,
+      "explanation": "Zero-trust: 'never trust, always verify.' Requests from internal networks are authenticated same as external. Assumes breach — limits blast radius. Google BeyondCorp pioneered this."
+    },
+    {
+      "q": "Secret rotation — why does frequent (e.g., daily) rotation help?",
+      "choices": ["Compliance checkbox", "If a secret leaks, it's invalid soon; shrinks window of useful-to-attacker time", "Better performance", "Required by law"],
+      "correct": 1,
+      "explanation": "Leaked credentials are a fact of life. Rotation shortens exploitability. Automated rotation with grace windows (old + new both valid for N hours) prevents downtime."
+    },
+    {
+      "q": "Rate-limit on login endpoint. Fail which way?",
+      "choices": ["Fail-open (allow all on outage)", "Fail-closed (deny on outage)", "50/50", "Whichever"],
+      "correct": 1,
+      "explanation": "Login is a brute-force target. Fail-open = free path for attackers during outage. Fail-closed = temporary legit-user pain vs credential stuffing. Security > availability on auth paths."
+    }
+  ]
+}

@@ -1,0 +1,408 @@
+{
+  "interview-framework": [
+    "001-url-shortener", "002-news-feed", "004-whatsapp-system-design",
+    "005-youtube-netflix", "uber-system-design"
+  ],
+  "back-of-envelope-estimation": [
+    "001-url-shortener", "002-news-feed", "003-google-drive",
+    "005-youtube-netflix", "uber-system-design", "ticketmaster-system-design",
+    "008-web-crawler"
+  ],
+  "latency-numbers": [
+    "001-url-shortener", "002-news-feed", "006-typeahead-suggestions",
+    "007-rate-limiter", "stock-exchange"
+  ],
+  "availability-nines": [
+    "payment-gateway", "stock-exchange", "004-whatsapp-system-design",
+    "notification-system"
+  ],
+  "slos-slis-slas": [
+    "distributed-logging", "007-rate-limiter", "payment-gateway"
+  ],
+
+  "dns": [
+    "001-url-shortener", "005-youtube-netflix", "google-maps"
+  ],
+  "cdn": [
+    "001-url-shortener", "002-news-feed", "003-google-drive",
+    "005-youtube-netflix", "live-streaming"
+  ],
+  "tcp-vs-udp": [
+    "004-whatsapp-system-design", "video-conferencing", "pubg-system-design",
+    "live-streaming"
+  ],
+  "http-1-vs-2-vs-3": [
+    "005-youtube-netflix", "video-conferencing", "live-streaming"
+  ],
+  "tls-https": [
+    "payment-gateway", "004-whatsapp-system-design"
+  ],
+  "proxy-vs-reverse-proxy": [
+    "001-url-shortener", "002-news-feed", "ecommerce-system-design"
+  ],
+
+  "horizontal-vs-vertical-scaling": [
+    "001-url-shortener", "002-news-feed", "007-rate-limiter",
+    "ecommerce-system-design", "uber-system-design"
+  ],
+  "load-balancer": [
+    "001-url-shortener", "002-news-feed", "003-google-drive",
+    "004-whatsapp-system-design", "ecommerce-system-design",
+    "007-rate-limiter", "uber-system-design"
+  ],
+  "stateless-services": [
+    "001-url-shortener", "002-news-feed", "007-rate-limiter"
+  ],
+  "autoscaling": [
+    "002-news-feed", "005-youtube-netflix", "ecommerce-system-design"
+  ],
+  "api-gateway": [
+    "002-news-feed", "004-whatsapp-system-design", "ecommerce-system-design",
+    "notification-system", "007-rate-limiter"
+  ],
+
+  "sql-vs-nosql": [
+    "001-url-shortener", "002-news-feed", "ecommerce-system-design",
+    "reddit-comments", "mutual-connections"
+  ],
+  "acid-vs-base": [
+    "ecommerce-system-design", "payment-gateway", "stock-exchange",
+    "ticketmaster-system-design"
+  ],
+  "cap-theorem": [
+    "002-news-feed", "google-docs", "payment-gateway", "004-whatsapp-system-design"
+  ],
+  "pacelc-theorem": [
+    "002-news-feed", "006-typeahead-suggestions", "google-docs"
+  ],
+  "replication": [
+    "001-url-shortener", "002-news-feed", "003-google-drive",
+    "payment-gateway", "004-whatsapp-system-design"
+  ],
+  "sharding": [
+    "001-url-shortener", "002-news-feed", "004-whatsapp-system-design",
+    "uber-system-design", "003-google-drive"
+  ],
+  "indexing": [
+    "006-typeahead-suggestions", "ecommerce-system-design", "reddit-comments",
+    "009-yelp-google-places"
+  ],
+  "normalization-vs-denormalization": [
+    "002-news-feed", "ecommerce-system-design", "reddit-comments"
+  ],
+  "database-types": [
+    "001-url-shortener", "002-news-feed", "004-whatsapp-system-design",
+    "ecommerce-system-design", "009-yelp-google-places", "mutual-connections"
+  ],
+  "transactions-distributed": [
+    "ecommerce-system-design", "payment-gateway", "ticketmaster-system-design",
+    "bidding-platform"
+  ],
+
+  "cache-strategies": [
+    "001-url-shortener", "002-news-feed", "006-typeahead-suggestions",
+    "ecommerce-system-design"
+  ],
+  "cache-eviction": [
+    "001-url-shortener", "002-news-feed", "006-typeahead-suggestions"
+  ],
+  "cdn-vs-application-cache": [
+    "001-url-shortener", "005-youtube-netflix", "live-streaming"
+  ],
+  "cache-stampede": [
+    "002-news-feed", "ecommerce-system-design", "ticketmaster-system-design"
+  ],
+
+  "message-queue-vs-pubsub": [
+    "002-news-feed", "004-whatsapp-system-design", "notification-system",
+    "distributed-queue", "distributed-job-scheduler"
+  ],
+  "delivery-guarantees": [
+    "004-whatsapp-system-design", "notification-system", "payment-gateway",
+    "distributed-queue"
+  ],
+  "event-sourcing-cqrs": [
+    "ecommerce-system-design", "payment-gateway", "stock-exchange"
+  ],
+  "kafka-internals": [
+    "002-news-feed", "distributed-logging", "distributed-queue",
+    "notification-system"
+  ],
+
+  "consensus-paxos-raft": [
+    "google-docs", "distributed-locking", "distributed-job-scheduler"
+  ],
+  "distributed-locking": [
+    "distributed-locking", "ticketmaster-system-design", "payment-gateway",
+    "distributed-job-scheduler", "bidding-platform"
+  ],
+  "leader-election": [
+    "distributed-locking", "distributed-job-scheduler", "stock-exchange"
+  ],
+  "consistent-hashing": [
+    "001-url-shortener", "002-news-feed", "007-rate-limiter",
+    "004-whatsapp-system-design", "distributed-logging"
+  ],
+  "vector-clocks-lww": [
+    "google-docs", "003-google-drive"
+  ],
+  "gossip-protocols": [
+    "count-active-users", "distributed-logging"
+  ],
+
+  "circuit-breaker": [
+    "002-news-feed", "ecommerce-system-design", "payment-gateway",
+    "notification-system"
+  ],
+  "retry-backoff-jitter": [
+    "notification-system", "payment-gateway", "008-web-crawler"
+  ],
+  "bulkhead-isolation": [
+    "ecommerce-system-design", "payment-gateway"
+  ],
+  "rate-limiting-algorithms": [
+    "007-rate-limiter", "008-web-crawler", "payment-gateway"
+  ],
+  "idempotency": [
+    "payment-gateway", "ticketmaster-system-design", "notification-system"
+  ],
+
+  "observability-triad": [
+    "distributed-logging", "007-rate-limiter", "payment-gateway"
+  ],
+  "auth-oauth-jwt": [
+    "ecommerce-system-design", "004-whatsapp-system-design", "payment-gateway"
+  ],
+  "ddos-protection": [
+    "007-rate-limiter", "001-url-shortener"
+  ],
+
+  "bloom-filter": [
+    "008-web-crawler", "001-url-shortener", "mutual-connections"
+  ],
+  "geospatial-indexes": [
+    "uber-system-design", "009-yelp-google-places", "google-maps"
+  ],
+
+  "websockets-sse-polling": [
+    "004-whatsapp-system-design", "notification-system", "video-conferencing",
+    "live-streaming", "pubg-system-design", "stock-trading-platform"
+  ],
+  "quorum": [
+    "002-news-feed", "distributed-logging", "004-whatsapp-system-design"
+  ],
+  "heartbeat-failure-detection": [
+    "distributed-locking", "distributed-job-scheduler", "stock-exchange",
+    "count-active-users"
+  ],
+  "merkle-trees": [
+    "003-google-drive", "google-docs", "distributed-logging"
+  ],
+  "service-discovery": [
+    "002-news-feed", "ecommerce-system-design", "notification-system",
+    "distributed-job-scheduler"
+  ],
+  "hyperloglog-sketches": [
+    "count-active-users", "leaderboard", "recommendation-algorithm"
+  ],
+  "graceful-degradation": [
+    "002-news-feed", "005-youtube-netflix", "ecommerce-system-design",
+    "notification-system"
+  ],
+  "backpressure-flow-control": [
+    "distributed-queue", "distributed-logging", "live-streaming",
+    "005-youtube-netflix"
+  ],
+  "api-protocols-rest-graphql-grpc": [
+    "002-news-feed", "ecommerce-system-design", "uber-system-design",
+    "google-maps"
+  ],
+  "time-sync-clocks": [
+    "google-docs", "stock-exchange", "distributed-logging",
+    "payment-gateway"
+  ],
+
+  "concurrency-models": [
+    "004-whatsapp-system-design", "video-conferencing", "stock-exchange",
+    "pubg-system-design"
+  ],
+  "write-ahead-log-wal": [
+    "payment-gateway", "ecommerce-system-design", "003-google-drive",
+    "distributed-logging"
+  ],
+  "memory-mapped-files": [
+    "distributed-logging", "005-youtube-netflix", "003-google-drive"
+  ],
+  "erasure-coding": [
+    "003-google-drive", "005-youtube-netflix", "distributed-logging"
+  ],
+  "url-encoding-base62": [
+    "001-url-shortener"
+  ],
+  "feature-flags-rollouts": [
+    "002-news-feed", "ecommerce-system-design", "notification-system",
+    "recommendation-algorithm"
+  ],
+  "chaos-engineering": [
+    "002-news-feed", "005-youtube-netflix", "payment-gateway",
+    "ecommerce-system-design"
+  ],
+  "request-hedging": [
+    "006-typeahead-suggestions", "009-yelp-google-places", "002-news-feed",
+    "stock-trading-platform"
+  ],
+
+  "service-mesh": [
+    "002-news-feed", "ecommerce-system-design", "uber-system-design",
+    "notification-system"
+  ],
+  "connection-pooling": [
+    "001-url-shortener", "ecommerce-system-design", "payment-gateway",
+    "002-news-feed"
+  ],
+  "database-federation": [
+    "ecommerce-system-design", "uber-system-design", "002-news-feed",
+    "stock-trading-platform"
+  ],
+  "cdc-change-data-capture": [
+    "ecommerce-system-design", "002-news-feed", "payment-gateway",
+    "distributed-logging"
+  ],
+  "secret-management": [
+    "payment-gateway", "ecommerce-system-design", "004-whatsapp-system-design"
+  ],
+  "batch-vs-stream-processing": [
+    "recommendation-algorithm", "leaderboard", "count-active-users",
+    "distributed-logging"
+  ],
+  "shared-nothing-architecture": [
+    "001-url-shortener", "002-news-feed", "uber-system-design",
+    "ecommerce-system-design"
+  ],
+  "deployment-strategies-blue-green-canary": [
+    "ecommerce-system-design", "002-news-feed", "payment-gateway",
+    "notification-system"
+  ],
+
+  "data-lake-vs-warehouse": [
+    "recommendation-algorithm", "leaderboard", "count-active-users",
+    "distributed-logging"
+  ],
+  "multi-tenancy": [
+    "ecommerce-system-design", "notification-system", "google-docs"
+  ],
+  "webhooks": [
+    "payment-gateway", "ecommerce-system-design", "notification-system"
+  ],
+  "api-versioning": [
+    "001-url-shortener", "ecommerce-system-design", "002-news-feed",
+    "payment-gateway"
+  ],
+  "edge-computing": [
+    "001-url-shortener", "005-youtube-netflix", "002-news-feed",
+    "live-streaming"
+  ],
+  "compression-encoding": [
+    "002-news-feed", "005-youtube-netflix", "distributed-logging",
+    "video-conferencing"
+  ],
+
+  "feature-store": [
+    "recommendation-algorithm", "002-news-feed", "leaderboard"
+  ],
+  "model-serving-online-vs-batch": [
+    "recommendation-algorithm", "006-typeahead-suggestions", "002-news-feed"
+  ],
+  "vector-databases": [
+    "006-typeahead-suggestions", "recommendation-algorithm", "008-web-crawler"
+  ],
+  "embedding-generation-pipelines": [
+    "recommendation-algorithm", "006-typeahead-suggestions", "002-news-feed"
+  ],
+  "online-learning-vs-offline-training": [
+    "recommendation-algorithm", "002-news-feed", "leaderboard"
+  ],
+  "ab-testing-platform": [
+    "002-news-feed", "ecommerce-system-design", "recommendation-algorithm",
+    "notification-system"
+  ],
+
+  "microservices-vs-monolith": [
+    "ecommerce-system-design", "002-news-feed", "uber-system-design",
+    "notification-system"
+  ],
+  "domain-driven-design": [
+    "ecommerce-system-design", "payment-gateway", "uber-system-design"
+  ],
+  "event-driven-architecture": [
+    "002-news-feed", "ecommerce-system-design", "notification-system",
+    "distributed-job-scheduler"
+  ],
+  "hexagonal-clean-architecture": [
+    "payment-gateway", "ecommerce-system-design"
+  ],
+  "bff-backend-for-frontend": [
+    "002-news-feed", "ecommerce-system-design", "uber-system-design"
+  ],
+
+  "two-generals-byzantine-problems": [
+    "payment-gateway", "stock-exchange", "distributed-locking"
+  ],
+  "read-repair-anti-entropy": [
+    "002-news-feed", "distributed-logging", "004-whatsapp-system-design"
+  ],
+  "tunable-consistency-per-query": [
+    "002-news-feed", "ecommerce-system-design", "google-docs"
+  ],
+  "clock-skew-tolerance-design": [
+    "google-docs", "stock-exchange", "payment-gateway", "distributed-logging"
+  ],
+  "disaster-recovery-rto-rpo": [
+    "payment-gateway", "ecommerce-system-design", "stock-exchange",
+    "distributed-logging"
+  ],
+  "multi-region-active-active-vs-active-passive": [
+    "004-whatsapp-system-design", "002-news-feed", "payment-gateway",
+    "ecommerce-system-design"
+  ],
+  "database-migration-zero-downtime": [
+    "ecommerce-system-design", "002-news-feed", "payment-gateway"
+  ],
+
+  "zero-trust-networking": [
+    "ecommerce-system-design", "payment-gateway", "004-whatsapp-system-design"
+  ],
+  "tokenization-pci": [
+    "payment-gateway", "ecommerce-system-design"
+  ],
+  "field-level-encryption": [
+    "payment-gateway", "004-whatsapp-system-design", "ecommerce-system-design"
+  ],
+  "gdpr-right-to-be-forgotten": [
+    "002-news-feed", "ecommerce-system-design", "google-docs",
+    "004-whatsapp-system-design"
+  ],
+  "llm-serving-infrastructure": [
+    "006-typeahead-suggestions", "recommendation-algorithm", "002-news-feed"
+  ],
+
+  "service-workers-pwa-offline": [
+    "002-news-feed", "google-docs", "ecommerce-system-design"
+  ],
+  "mobile-offline-first-sync": [
+    "003-google-drive", "google-docs", "004-whatsapp-system-design",
+    "notification-system"
+  ],
+  "image-video-pipeline": [
+    "005-youtube-netflix", "002-news-feed", "live-streaming",
+    "003-google-drive"
+  ],
+  "push-notification-protocols": [
+    "notification-system", "004-whatsapp-system-design",
+    "002-news-feed"
+  ],
+  "interview-tactics-playbook": [
+    "001-url-shortener", "002-news-feed", "uber-system-design",
+    "004-whatsapp-system-design", "005-youtube-netflix"
+  ]
+}

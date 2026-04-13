@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Time Synchronization &amp; Clocks — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 240; --accent-s: 55%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Two machines, separated by a network, disagree on the order of events. "Event A at 12:00:00.500" on server 1. "Event B at 12:00:00.400" on server 2. Did B come before A? Only if the clocks agree, and they never perfectly do. <span class="hl-red">Clocks drift, jump, lag, and sometimes go backwards.</span> Any system that reasons about "what happened first" is building on unstable ground unless it's explicit about which clock, and why.</p>
+      <p>Time is the stealth cause of most distributed-systems bugs. Understanding the distinction between physical and logical clocks, and which to use when, is foundational.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Three kinds of clock</h2></div>
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">Wall clock (NTP-synced)</div>
+        <h4>Good for display, bad for ordering</h4>
+        <p>Real-world time via NTP (~10ms accuracy typical, 100ms worst-case). Drifts, jumps on corrections, can leap backward. Use for timestamps shown to users, NOT for deciding event order.</p>
+      </div>
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">Monotonic clock</div>
+        <h4>Intra-process duration</h4>
+        <p>OS-provided, only ever increases. Great for "how long did this operation take?" (timeouts, benchmarks). <span class="hl-red">Not comparable across machines</span> — each starts at process launch.</p>
+      </div>
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">Logical clocks</div>
+        <h4>Causal ordering without real time</h4>
+        <p>Lamport timestamps, <a href="/concepts/vector-clocks-lww">vector clocks</a>, or Hybrid Logical Clocks. Track "event A caused event B" without trusting wall clocks. What any correctness-critical distributed algorithm should use.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Lamport timestamps — the minimum viable logical clock</h2></div>
+    <div class="prose">
+      <p>Every node maintains a counter <code>t</code>.</p>
+      <ul>
+        <li>Local event → <code>t = t + 1</code>.</li>
+        <li>Send a message → include current <code>t</code>.</li>
+        <li>Receive a message with timestamp <code>t'</code> → <code>t = max(t, t') + 1</code>.</li>
+      </ul>
+      <p>Result: if event A happened-before event B (causally), then A's timestamp &lt; B's timestamp. The <em>converse</em> isn't true — smaller-numbered doesn't prove causal precedence, just potential precedence. Lamport timestamps give you a total order; vector clocks give you a partial order with precise causal comparisons.</p>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Lamport Timestamps — Causality Across 3 Nodes</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 720 260" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="ts-arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#9ca3af"/></marker>
+          </defs>
+          <g font-family="Geist, system-ui, sans-serif" font-size="11">
+            <!-- Three timelines -->
+            <text x="20" y="55" font-weight="500" fill="#878480">A</text>
+            <line x1="40" y1="55" x2="700" y2="55" stroke="#ccc9c4" stroke-width="1.5"/>
+            <text x="20" y="135" font-weight="500" fill="#878480">B</text>
+            <line x1="40" y1="135" x2="700" y2="135" stroke="#ccc9c4" stroke-width="1.5"/>
+            <text x="20" y="215" font-weight="500" fill="#878480">C</text>
+            <line x1="40" y1="215" x2="700" y2="215" stroke="#ccc9c4" stroke-width="1.5"/>
+
+            <!-- Events on A: t=1, t=2 -->
+            <circle cx="100" cy="55" r="6" fill="hsl(240,55%,50%)"/>
+            <text x="100" y="40" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11">1</text>
+            <circle cx="280" cy="55" r="6" fill="hsl(240,55%,50%)"/>
+            <text x="280" y="40" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11">2</text>
+            <circle cx="500" cy="55" r="6" fill="hsl(240,55%,50%)"/>
+            <text x="500" y="40" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11">5</text>
+
+            <!-- Events on B -->
+            <circle cx="180" cy="135" r="6" fill="hsl(240,55%,50%)"/>
+            <text x="180" y="155" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11">2</text>
+            <text x="180" y="170" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#878480">max(1,1)+1</text>
+            <circle cx="380" cy="135" r="6" fill="hsl(240,55%,50%)"/>
+            <text x="380" y="155" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11">3</text>
+
+            <!-- Events on C -->
+            <circle cx="430" cy="215" r="6" fill="hsl(240,55%,50%)"/>
+            <text x="430" y="232" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11">4</text>
+            <text x="430" y="246" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#878480">max(0,3)+1</text>
+
+            <!-- Causal arrows -->
+            <line x1="100" y1="61" x2="180" y2="129" stroke="#9ca3af" stroke-width="1.2" marker-end="url(#ts-arr)"/>
+            <line x1="380" y1="141" x2="430" y2="209" stroke="#9ca3af" stroke-width="1.2" marker-end="url(#ts-arr)"/>
+            <line x1="430" y1="209" x2="500" y2="61" stroke="#9ca3af" stroke-width="1.2" marker-end="url(#ts-arr)"/>
+
+            <text x="360" y="22" text-anchor="middle" font-weight="500" fill="#111110">If A happened-before B, then A.ts &lt; B.ts (one direction only)</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-val">~10 ms</div><div class="kv-lbl">NTP typical drift</div></div>
+      <div class="kv-card"><div class="kv-val">~100 ms</div><div class="kv-lbl">NTP worst-case</div></div>
+      <div class="kv-card"><div class="kv-val">~5 ms</div><div class="kv-lbl">Spanner TrueTime ε bound</div></div>
+      <div class="kv-card"><div class="kv-val">&lt; 1 μs</div><div class="kv-lbl">PTP in a controlled LAN</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Deep dive — Spanner's TrueTime, the "give up" solution</h2></div>
+    <div class="prose">
+      <p>Google Spanner wanted globally-consistent transactions — strict serial order of commits across the planet. Logical clocks alone don't provide this (they don't connect to real time). NTP is too loose (100ms is an eternity).</p>
+      <p>Google built <strong>TrueTime</strong>: every datacenter has GPS receivers AND atomic clocks, redundantly. Every machine queries a local time master which reports <code>[earliest, latest]</code> — a bounded uncertainty interval. Typical bound: <strong>ε ≈ 5ms</strong> worldwide, guaranteed.</p>
+      <p>Spanner uses TrueTime to implement <strong>commit wait</strong>: before acknowledging a write at timestamp T, wait until local TrueTime's "earliest" exceeds T. Ensures that any observer polling after the ack sees T in their past. Provides <strong>external consistency</strong> — a globally-linearizable order of commits — at the cost of 5–10ms extra latency per commit.</p>
+      <p>Nobody else has this because nobody else wants to install atomic clocks in every datacenter. CockroachDB mimics it with <strong>Hybrid Logical Clocks</strong> (NTP + logical counter) — almost-as-good external consistency without the atomic-clock CapEx.</p>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Practical rules</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>For timeouts</strong> — use monotonic clock, never wall clock. Wall-clock jumps break timeouts; monotonic ones don't.</li>
+        <li><strong>For audit logs</strong> — wall clock + NTP is fine. Humans will read them; 100ms error doesn't matter.</li>
+        <li><strong>For ordering distributed events</strong> — logical clocks (Lamport / vector). If you need wall-time approximation, use HLC.</li>
+        <li><strong>For distributed transactions</strong> — TrueTime if you're Google, HLC otherwise. Don't roll your own.</li>
+        <li><strong>For leases + expiry</strong> — include enough margin for clock skew. "Lease expires at T" should be treated as "definitely expired by T+ε" by any consumer.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Google Spanner</div><h4>TrueTime</h4><p>GPS + atomic-clock redundant time masters. External consistency at planet scale.</p></div>
+      <div class="rw-card"><div class="rw-name">CockroachDB / YugabyteDB</div><h4>Hybrid Logical Clocks</h4><p>NTP + logical counter. 99% of Spanner's benefit without atomic-clock hardware.</p></div>
+      <div class="rw-card"><div class="rw-name">Cassandra</div><h4>Wall clock + LWW</h4><p>Last-write-wins using wall-clock timestamps. Why Cassandra has a reputation for lost writes — two concurrent writers with skewed clocks silently lose one write.</p></div>
+      <div class="rw-card"><div class="rw-name">Chrony / PTP</div><h4>Sub-millisecond NTP</h4><p>High-precision time protocols for financial + scientific systems. PTP achieves &lt; 1μs in a controlled LAN.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Google Docs uses logical clocks (OT sequence numbers) for concurrent edits. Stock exchange uses PTP for matching-engine determinism. Distributed logging uses HLC for log ordering. Payment gateway uses monotonic clocks for idempotency-key expiry.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

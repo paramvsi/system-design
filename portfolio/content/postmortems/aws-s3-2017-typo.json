@@ -1,0 +1,64 @@
+{
+  "slug": "aws-s3-2017-typo",
+  "title": "S3 us-east-1",
+  "problemNumber": "02",
+  "difficulty": null,
+  "heroDescription": "A single command typo during debugging a billing system took down significant fractions of the internet — Slack, Trello, Quora, Docker Hub, and AWS's own status page — for roughly 4 hours. The blast radius caught Amazon itself by surprise.",
+  "tags": [
+    "Operator error",
+    "us-east-1",
+    "~4 hour outage",
+    "Cascading failure"
+  ],
+  "accent": {
+    "h": 28,
+    "s": 88,
+    "l": 48
+  },
+  "category": "Deploy / operator error",
+  "blurb": "A single command typo during debugging a billing system took down significant fractions of the internet — Slack, Trello, Quora, Docker Hub, and AWS's own status page — for roughly 4 hours. The blast radius caught Amazon ",
+  "sections": [
+    {
+      "id": "tldr",
+      "label": "TL;DR",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">TL;DR</h2></div>\n    <div class=\"prose\">\n      <p>An S3 engineer running a playbook to debug S3 billing system latency typo'd a parameter and accidentally removed a much larger set of servers than intended — including servers running the S3 index subsystem and the placement subsystem. Both subsystems had to be fully restarted; neither had been restarted for years at that scale. Restart took hours; dependent services (including CloudFormation, Lambda, status dashboard, countless customer apps) melted with it.</p>\n    </div>"
+    },
+    {
+      "id": "timeline",
+      "label": "Timeline",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Timeline</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>09:37 PST</strong> — Authorized S3 team member executes a capacity-reduction command intended to remove a small number of servers in the S3 billing subsystem. Typo in the input causes command to target a much wider fleet.</li>\n        <li><strong>09:37 PST</strong> — Two independent critical subsystems become unavailable: (1) the <strong>index subsystem</strong> (handles metadata + location of all S3 objects), (2) the <strong>placement subsystem</strong> (manages allocation of storage for new objects).</li>\n        <li><strong>09:37–11:00</strong> — Engineers begin restarting the removed subsystems. Discover both take significantly longer to start than expected — neither had been fully restarted for many years; integrity checks on startup run for hours.</li>\n        <li><strong>11:37</strong> — AWS status page fails to update because it depends on S3 us-east-1.</li>\n        <li><strong>13:54</strong> — Index subsystem fully recovered. GET/LIST/PUT operations begin returning.</li>\n        <li><strong>17:10</strong> — All S3 APIs fully recovered.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "rootcause",
+      "label": "Root cause",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Root cause</h2></div>\n    <div class=\"prose\">\n      <p>The trigger was a typo. The root cause was that (a) a single command could remove an unbounded number of servers, (b) the blast-radius of those servers was unbounded across critical subsystems, and (c) the system had never been tested end-to-end starting from cold — restart times had slowly grown over years of operation, far beyond anyone's expectation.</p>\n      <p>Amazon's language, in their own post-mortem: removing capacity had not been fully tested at this scale; the time required to restart the index and placement subsystems had not been measured.</p>\n    </div>"
+    },
+    {
+      "id": "impact",
+      "label": "Blast radius",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Blast radius</h2></div>\n    <div class=\"prose\">\n      <p>Massive. Because us-east-1 is disproportionately popular (AWS's oldest region, lowest prices, many customers never bothered moving), a huge fraction of the public internet went down for hours. Affected: Slack, Trello, Medium, Quora, Business Insider, GitHub pages, Coursera, Docker Hub, Giphy. Many Lambda functions, which stored code + state in S3, also failed. AWS's own status dashboard failed because <em>it too</em> depended on S3 us-east-1. Estimated cost to S&amp;P 500 firms: hundreds of millions of dollars in lost productivity.</p>\n    </div>"
+    },
+    {
+      "id": "lessons",
+      "label": "Lessons",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Lessons</h2></div>\n    <div class=\"prose\">\n      <ol>\n        <li><strong>Capacity-removal commands need guardrails.</strong> Post-incident, AWS changed the removal tool to cap how much capacity can be removed in one action, and added explicit confirmation for removals that exceed safe thresholds.</li>\n        <li><strong>Measure actual recovery time, not estimated.</strong> The startup time of the index subsystem had grown over years without anyone measuring it. Disaster-recovery drills that include full cold-start of critical services are the only way to know.</li>\n        <li><strong>Status pages must not depend on the thing being monitored.</strong> AWS dashboard depending on S3 is the canonical example. Host your status page on a provider that shares no failure domains with you.</li>\n        <li><strong>Multi-region is not optional for critical services.</strong> Customers single-homed in us-east-1 learned this the hard way. Spread read replicas and failover routes across regions.</li>\n      </ol>\n    </div>"
+    },
+    {
+      "id": "concepts-used",
+      "label": "Concepts in play",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Concepts in play</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><a href=\"/concepts/blast-radius-minimization\">Blast radius minimization</a> — the system lacked bounded-impact guarantees for tooling.</li>\n        <li><a href=\"/concepts/incident-response\">Incident response</a> — status dashboards cannot share a failure domain with what they observe.</li>\n        <li><a href=\"/concepts/disaster-recovery\">Disaster recovery</a> — drills that test cold-start of critical subsystems.</li>\n        <li><a href=\"/concepts/multi-region-deployment\">Multi-region deployment</a> — single-region dependencies are a ticking clock.</li>\n        <li><a href=\"/concepts/s3-object-storage\">S3 architecture</a> — context for the index + placement subsystems.</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

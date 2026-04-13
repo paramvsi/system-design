@@ -1,0 +1,56 @@
+{
+  "slug": "consensus",
+  "cluster": "Consensus & Coordination",
+  "blurb": "Paxos, Raft, leader election, fencing, split-brain.",
+  "accent": { "h": 270, "s": 55, "l": 52 },
+  "questions": [
+    {
+      "q": "What's the minimum number of nodes in a Raft cluster to tolerate 1 failure?",
+      "choices": ["2", "3", "4", "5"],
+      "correct": 1,
+      "explanation": "Quorum = ⌊N/2⌋ + 1. With N=3, quorum=2, tolerates 1 failure. With N=2, losing 1 leaves only 1 — no quorum. Raft clusters are almost always odd-numbered."
+    },
+    {
+      "q": "Random election timeouts in Raft exist to prevent what?",
+      "choices": ["Clock drift", "Split votes (multiple candidates simultaneously)", "Log divergence", "Partitions"],
+      "correct": 1,
+      "explanation": "If all followers timeout simultaneously, they all become candidates, each votes for itself, no one wins → new election. Random 150–300ms timeouts stagger the transitions."
+    },
+    {
+      "q": "A client acquires a distributed lock with 30-second TTL. The client process pauses for 45 seconds (GC). A second client acquires the lock. What prevents both from writing?",
+      "choices": ["Nothing — both will corrupt", "Fencing tokens (monotonic ID per lock acquisition)", "TTL", "Checksums"],
+      "correct": 1,
+      "explanation": "Fencing: each lock acquisition returns a monotonic token. Target storage rejects writes with a lower token than last seen. Even if two clients believe they hold the lock, only the latest's writes commit."
+    },
+    {
+      "q": "What's 'split brain' in a replicated system?",
+      "choices": ["Dual leaders due to network partition, each accepting writes", "Memory corruption", "Clock skew", "Replica desync"],
+      "correct": 0,
+      "explanation": "Split brain: two nodes each believe they're the leader (usually across a partition), both accept conflicting writes. The GitHub 2018 outage is a canonical example."
+    },
+    {
+      "q": "CAP theorem: during a partition, a CP system chooses to sacrifice what?",
+      "choices": ["Consistency", "Availability (returns errors instead of stale)", "Performance", "Durability"],
+      "correct": 1,
+      "explanation": "CP: during partition, one side stops serving writes (or reads) to preserve consistency. Spanner is CP. Dynamo/Cassandra are AP — serve stale rather than fail."
+    },
+    {
+      "q": "Leader leases (time-bounded leadership certificates) are used to avoid what problem?",
+      "choices": ["Log compaction overhead", "Stale reads from a former leader that hasn't noticed it's been deposed", "Network jitter", "Slow elections"],
+      "correct": 1,
+      "explanation": "A deposed leader with stale state might still serve reads. Leases bound its authority: after N seconds, it cannot serve authoritatively without re-confirming from a quorum."
+    },
+    {
+      "q": "Byzantine fault tolerance (BFT) vs crash fault tolerance (CFT). What makes BFT harder?",
+      "choices": ["More replicas needed", "Nodes may actively lie / return malicious responses — not just crash", "Slower networks", "Clock sync"],
+      "correct": 1,
+      "explanation": "CFT (Raft, Paxos) assumes crashed nodes stop responding. BFT assumes nodes may send corrupt/malicious messages. BFT needs 3f+1 nodes to tolerate f byzantine failures vs 2f+1 for crash faults."
+    },
+    {
+      "q": "The Two Generals problem proves what about distributed systems?",
+      "choices": ["Leader election is always possible", "No finite protocol over lossy channels guarantees common knowledge", "Clock sync is easy", "Byzantine faults are impossible"],
+      "correct": 1,
+      "explanation": "No protocol over an unreliable channel can make both generals certain the other has received the plan. Extends to: no distributed commit protocol is exactly atomic in the face of message loss — 2PC blocks, 3PC timeouts, etc."
+    }
+  ]
+}

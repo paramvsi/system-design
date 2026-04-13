@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Proxy vs Reverse Proxy — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 250; --accent-s: 50%; --accent-l: 48%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Both types of proxy stand between a client and a server. Which one faces which way flips the use case entirely. Candidates mix them up all the time. Interviewers notice.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The mirror-image definition</h2></div>
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">Forward proxy</div>
+        <h4>Represents the client</h4>
+        <p>Clients configure their browser/system to route requests through the proxy. The proxy reaches out to the internet on the client's behalf. Server sees the proxy's IP, not the client's. Used for: egress filtering, caching, anonymity, content filtering in enterprises.</p>
+      </div>
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">Reverse proxy</div>
+        <h4>Represents the server</h4>
+        <p>Clients think they're talking to your server directly; they actually hit the reverse proxy. The proxy forwards to upstream servers. Clients don't know or care about the topology behind the proxy. Used for: load balancing, TLS termination, caching, compression, WAF, hiding internal structure.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">What a reverse proxy actually does</h2></div>
+    <div class="prose">
+      <p>Almost every production web stack has one. The reverse proxy:</p>
+      <ul>
+        <li><strong>Terminates TLS.</strong> Handles the handshake once; backends speak plain HTTP internally. Cheaper than TLS at every app server.</li>
+        <li><strong>Load balances.</strong> Picks which upstream instance gets the request (this overlaps with <a href="/concepts/load-balancer">load balancer</a> territory).</li>
+        <li><strong>Caches.</strong> Stores responses for common URLs. Next request served from proxy memory, upstream not hit.</li>
+        <li><strong>Compresses.</strong> Gzip/Brotli responses before sending to client.</li>
+        <li><strong>Serves static files.</strong> Nginx serves <code>/static/*</code> from disk directly; dynamic requests to the app.</li>
+        <li><strong>Adds/strips headers.</strong> Injects <code>X-Forwarded-For</code> (so backend knows client IP), strips internal headers.</li>
+        <li><strong>Enforces security.</strong> Blocks bad user-agents, applies WAF rules, rate-limits IPs.</li>
+        <li><strong>Hides topology.</strong> "example.com" is one IP; behind it are 47 containers, 3 services, 2 regions. Clients see none of it.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Forward proxy use cases</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Corporate filtering.</strong> Enterprise makes every employee's browser route through a proxy that blocks Facebook, logs every URL, scans for malware.</li>
+        <li><strong>Caching.</strong> ISP-level proxy caches popular content, saves bandwidth. Less common now thanks to CDNs, but still exists.</li>
+        <li><strong>Egress control.</strong> Your servers in a private VPC need to reach external APIs. Route all egress through a proxy with allow-listed destinations — security + audit.</li>
+        <li><strong>Circumvention.</strong> VPNs are a kind of forward proxy — make your traffic look like it came from elsewhere.</li>
+        <li><strong>Anonymity.</strong> Tor is a multi-hop forward proxy.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — X-Forwarded-For and client IP</h2></div>
+    <div class="prose">
+      <p>Reverse proxies introduce a subtle trap: <strong>your app server sees the proxy's IP, not the client's</strong>. If you log "client IP" naïvely, every entry says "the proxy." If you rate-limit by IP, one bad user defeats it by hiding behind the proxy.</p>
+      <p>Solution: the proxy sets <code>X-Forwarded-For: &lt;client-ip&gt;</code> (and <code>X-Real-IP</code>, <code>Forwarded</code> per RFC 7239). Your app reads that header instead of the TCP peer address.</p>
+      <p>Trap: this header is <em>client-controllable</em>. A curl user can send <code>X-Forwarded-For: 127.0.0.1</code>. Your proxy must <strong>strip any inbound X-Forwarded-For and set a fresh one</strong>. Otherwise attackers spoof their apparent IP.</p>
+      <p>With multiple proxies (CDN → LB → app), the header contains a comma-separated chain. Parse it carefully; the leftmost entry is the original client (assuming all proxies in the chain are trusted and set the header correctly).</p>
+      <div class="callout callout-warn">
+        <div class="callout-label">Security gotcha</div>
+        <p>Any code that reads <code>X-Forwarded-For</code> must be paired with "strip it from untrusted sources." Rate limiters, audit logs, and geo-IP checks all fail silently if this is wrong.</p>
+      </div>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">X-Forwarded-For Chain — Client → CDN → ALB → App</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="px-arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#9ca3af"/></marker>
+          </defs>
+          <g font-family="Geist, system-ui, sans-serif" font-size="11">
+            <!-- Boxes -->
+            <rect x="20"  y="100" width="120" height="60" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="80"  y="125" text-anchor="middle" font-weight="500">Client</text>
+            <text x="80"  y="142" text-anchor="middle" font-size="10" fill="#878480" font-family="JetBrains Mono, monospace">203.0.113.42</text>
+
+            <rect x="180" y="100" width="120" height="60" rx="6" fill="hsl(250,50%,94%)" stroke="hsl(250,50%,75%)"/>
+            <text x="240" y="125" text-anchor="middle" font-weight="500">CDN edge</text>
+            <text x="240" y="142" text-anchor="middle" font-size="10" fill="#878480" font-family="JetBrains Mono, monospace">198.51.100.5</text>
+
+            <rect x="340" y="100" width="120" height="60" rx="6" fill="hsl(250,50%,94%)" stroke="hsl(250,50%,75%)"/>
+            <text x="400" y="125" text-anchor="middle" font-weight="500">ALB</text>
+            <text x="400" y="142" text-anchor="middle" font-size="10" fill="#878480" font-family="JetBrains Mono, monospace">10.0.1.50</text>
+
+            <rect x="500" y="100" width="120" height="60" rx="6" fill="hsl(250,50%,94%)" stroke="hsl(250,50%,75%)"/>
+            <text x="560" y="125" text-anchor="middle" font-weight="500">App</text>
+            <text x="560" y="142" text-anchor="middle" font-size="10" fill="#878480" font-family="JetBrains Mono, monospace">10.0.2.18</text>
+
+            <!-- Arrows -->
+            <line x1="140" y1="130" x2="180" y2="130" stroke="#9ca3af" stroke-width="1.5" marker-end="url(#px-arr)"/>
+            <line x1="300" y1="130" x2="340" y2="130" stroke="#9ca3af" stroke-width="1.5" marker-end="url(#px-arr)"/>
+            <line x1="460" y1="130" x2="500" y2="130" stroke="#9ca3af" stroke-width="1.5" marker-end="url(#px-arr)"/>
+
+            <!-- Header values per hop -->
+            <text x="80" y="200" text-anchor="middle" font-size="10" fill="#878480" font-family="JetBrains Mono, monospace">no header</text>
+            <text x="240" y="190" text-anchor="middle" font-size="10" font-family="JetBrains Mono, monospace">XFF: 203.0.113.42</text>
+            <text x="400" y="190" text-anchor="middle" font-size="10" font-family="JetBrains Mono, monospace">XFF: 203.0.113.42, 198.51.100.5</text>
+            <text x="560" y="190" text-anchor="middle" font-size="10" font-family="JetBrains Mono, monospace" fill="hsl(145,55%,28%)" font-weight="500">XFF: 203.0.113.42, 198.51.100.5, 10.0.1.50</text>
+
+            <text x="80" y="225" text-anchor="middle" font-size="10" fill="#878480">peer IP = client</text>
+            <text x="240" y="225" text-anchor="middle" font-size="10" fill="#878480">strip + set</text>
+            <text x="400" y="225" text-anchor="middle" font-size="10" fill="#878480">append</text>
+            <text x="560" y="225" text-anchor="middle" font-size="10" fill="#878480">leftmost = real client</text>
+
+            <text x="360" y="260" text-anchor="middle" font-size="10" fill="hsl(0,70%,40%)" font-weight="500">Trust chain: each proxy must strip inbound XFF then re-add — never trust unfiltered values</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world reverse proxies</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Nginx</div><h4>The default</h4><p>Runs more reverse proxies than anything else. Cheap, fast, config-driven. The "put Nginx in front" pattern is nearly universal.</p></div>
+      <div class="rw-card"><div class="rw-name">HAProxy</div><h4>Reverse proxy + L4/L7 LB</h4><p>Specialized in load balancing with proxy duties. Excellent for high-throughput, low-latency environments.</p></div>
+      <div class="rw-card"><div class="rw-name">Envoy / Istio</div><h4>Service mesh sidecar</h4><p>Every pod gets an Envoy sidecar acting as reverse proxy for incoming traffic and forward proxy for outgoing. Universal traffic management.</p></div>
+      <div class="rw-card"><div class="rw-name">Cloudflare / CloudFront</div><h4>Reverse proxy at global scale</h4><p>Edge nodes in 300+ cities act as reverse proxy to your origin. Caching, DDoS protection, TLS all at the edge.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>URL shortener puts Nginx in front for static redirect caching. News feed uses Envoy as reverse proxy with stream-level load balancing. E-commerce uses CDN as the outermost reverse proxy layer.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

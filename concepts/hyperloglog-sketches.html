@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>HyperLogLog &amp; Sketches — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 60; --accent-s: 65%; --accent-l: 42%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>"How many unique visitors did we have today?" Naive: keep a <code>Set&lt;user_id&gt;</code>. For 100M users, that's <span class="hl-red">6+ GB of RAM</span>. Do it per-URL or per-minute and you're out of memory fast. <strong>HyperLogLog</strong> answers the same question with <span class="hl">12 KB, 99% accuracy</span>. Count-Min Sketch estimates "how often was element X seen?" in similar space. Top-K finds the most frequent items without tracking everyone.</p>
+      <p>These approximate data structures are the only way to do cardinality, frequency, and ranking analytics at scale. Used by Google, Cloudflare, Redis, Postgres, every ad-tech platform.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">HyperLogLog — intuition</h2></div>
+    <div class="prose">
+      <p>Key insight: if you hash items to a uniform random bit string, the <em>maximum number of leading zeros</em> you've seen gives a probabilistic estimate of how many unique items you've hashed. Seen a hash with 10 leading zeros? You've probably seen ~2¹⁰ = 1024 distinct items (since the probability of a random hash starting with 10 zeros is 1/1024).</p>
+      <p>Using just one counter is noisy, so HLL splits items into buckets (via the first few hash bits) and tracks max-leading-zeros per bucket. With m=16384 buckets, you get <strong>~0.81% standard error using ~12 KB</strong>. Extraordinary accuracy/memory tradeoff.</p>
+      <p>Unions are free: <code>HLL(A ∪ B)</code> = element-wise max of their bucket arrays. Lets you aggregate cardinality across dimensions (per-region, per-hour) cheaply.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">The approximate-structure zoo</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Structure</th><th>Answers</th><th>Memory</th><th>Error</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Bloom filter</td><td>"Is X in set?"</td><td>~10 bits per item</td><td>False positives only</td></tr>
+        <tr><td class="algo-name">HyperLogLog</td><td>"How many unique items?"</td><td>~12 KB constant</td><td>~0.8% standard error</td></tr>
+        <tr><td class="algo-name">Count-Min Sketch</td><td>"How many times was X seen?"</td><td>~width × depth × 4 bytes</td><td>Overestimates bounded by ε·N</td></tr>
+        <tr><td class="algo-name">t-Digest</td><td>"What's the P99 latency?"</td><td>~1 KB</td><td>Sub-1% on extreme percentiles</td></tr>
+        <tr><td class="algo-name">MinHash</td><td>"Jaccard similarity between sets?"</td><td>~k × 4 bytes</td><td>O(1/√k) std error</td></tr>
+        <tr><td class="algo-name">Top-K (Space-Saving)</td><td>"Top N most frequent items?"</td><td>~k × (size + counter)</td><td>Exact for items above threshold</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Count-Min Sketch — the frequency counter</h2></div>
+    <div class="prose">
+      <p>Maintain a 2D array of counters, width w × depth d. For each item X:</p>
+      <ul>
+        <li>Hash X with d different hash functions → d bucket indices.</li>
+        <li>Increment the counter at each (row, bucket).</li>
+      </ul>
+      <p>To query frequency of X: hash with same d functions, read d counters, return the <em>minimum</em>. The minimum is the tightest upper bound — the other rows may have been inflated by collisions.</p>
+      <p>Uses: <a href="/concepts/rate-limiting-algorithms">rate limiting</a> (per-IP request counts), heavy-hitter detection (spot the IP doing 10M RPS), ad-tech (approximate frequency capping).</p>
+    
+      <div class="code-caption" data-code-snippet="1">HyperLogLog cardinality in 20 lines</div>
+      <pre><code class="lang-python">import math, mmh3
+
+class HLL:
+    def __init__(self, p=14):  # p=14 → 16 KB, ~0.8% error
+        self.p = p
+        self.m = 1 &lt;&lt; p
+        self.registers = [0] * self.m
+
+    def add(self, item):
+        h = mmh3.hash64(item)[0] &amp; ((1 &lt;&lt; 64) - 1)
+        idx = h &gt;&gt; (64 - self.p)
+        w = (h &lt;&lt; self.p) &amp; ((1 &lt;&lt; 64) - 1) | (1 &lt;&lt; (self.p - 1))
+        self.registers[idx] = max(self.registers[idx],
+                                  64 - w.bit_length() + 1)
+
+    def count(self):
+        alpha = 0.7213 / (1 + 1.079 / self.m)
+        z = sum(2.0 ** -r for r in self.registers)
+        return int(alpha * self.m * self.m / z)
+
+# 16 KB counts cardinalities up to billions with ~0.8% error</code></pre>
+  </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — HLL at Cloudflare scale</h2></div>
+    <div class="prose">
+      <p>Cloudflare publishes daily "unique visitors per zone" stats for every domain. Billions of events per day, millions of domains. Full-fidelity counting = impossible. Their solution:</p>
+      <ul>
+        <li>Each edge PoP maintains a HLL per (zone_id, time_bucket) in memory.</li>
+        <li>Every hour, flush to a central store that UNIONs all edge HLLs → global cardinality per zone per hour.</li>
+        <li>Users query "unique visitors today" → union 24 hourly HLLs, return estimate.</li>
+      </ul>
+      <p>Storage: one HLL per zone per hour = 12 KB. For 10M zones × 24 hours = 2.8 TB/day. The same data as exact counts would require petabytes. Query latency: microseconds for any aggregation window.</p>
+      <p><strong>Interview use:</strong> "For the count-active-users problem we'll use HyperLogLog. Each server maintains a HLL sketch for the current window; we union across the fleet every minute for the global count. Space is constant regardless of user count. 0.8% error is well within product tolerance."</p>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Redis</div><h4>PFADD / PFCOUNT / PFMERGE</h4><p>Native HLL data type. 12 KB per key. Union multiple keys for cross-dimension aggregates.</p></div>
+      <div class="rw-card"><div class="rw-name">Postgres + hll extension</div><h4>Cardinality in SQL</h4><p>Precompute HLLs per partition; queries union them at query time. Citus uses this heavily.</p></div>
+      <div class="rw-card"><div class="rw-name">Google BigQuery / Snowflake</div><h4>APPROX_COUNT_DISTINCT</h4><p>Both default to HLL-based approximation for count-distinct at warehouse scale.</p></div>
+      <div class="rw-card"><div class="rw-name">Druid / ClickHouse</div><h4>HLL + t-Digest native</h4><p>OLAP engines bake in approximate sketches for fast analytical queries over billions of rows.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Count active users is the canonical HLL problem. Leaderboard uses Top-K sketches for high-cardinality ranking. Recommendation algorithm uses MinHash for item-similarity at scale.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

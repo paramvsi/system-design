@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Payment Gateway — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+
+    :root {
+      --accent-h:       155;
+      --accent-s:       65%;
+      --accent-l:       38%;
+      --accent:         hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light:   hsl(var(--accent-h), 80%, 94%);
+      --accent-mid:     hsl(var(--accent-h), 70%, 88%);
+      --accent-text:    hsl(var(--accent-h), var(--accent-s), 32%);
+      --accent-border:  hsl(var(--accent-h), 60%, 80%);
+
+      --hl-yellow:      #fff0a0;
+      --hl-yellow-dark: #a07a00;
+      --hl-accent:      hsl(var(--accent-h), 90%, 88%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 30%);
+
+      --bg:             #ffffff;
+      --bg-subtle:      #f7f7f5;
+      --bg-raised:      #f0eeeb;
+      --bg-code:        #f4f3f0;
+      --border:         #e4e2de;
+      --border-strong:  #ccc9c4;
+
+      --text-primary:   #111110;
+      --text-secondary: #4a4845;
+      --text-muted:     #878480;
+      --text-code:      #2d2c2b;
+
+      --font-serif:     'Instrument Serif', Georgia, serif;
+      --font-sans:      'Geist', system-ui, sans-serif;
+      --font-mono:      'JetBrains Mono', 'Fira Code', monospace;
+
+      --radius-sm:      4px;
+      --radius-md:      8px;
+      --radius-lg:      12px;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--text-primary);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      grid-template-rows: auto 1fr;
+      min-height: 100vh;
+    }
+
+    .topbar {
+      grid-column: 1 / -1;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 52px;
+      padding: 0 24px;
+      background: rgba(255,255,255,0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .topbar-left {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--font-mono); font-size: 13.5px; font-weight: 500;
+      letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted);
+    }
+    .topbar-left a { color: var(--text-muted); text-decoration: none; transition: color 0.2s; }
+    .topbar-left a:hover { color: var(--accent); }
+    .topbar-sep { color: var(--border-strong); user-select: none; }
+    .topbar-problem { color: var(--accent-text); font-weight: 500; }
+    .topbar-right { display: flex; align-items: center; gap: 16px; }
+    .topbar-tag {
+      font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      padding: 3px 8px; border-radius: var(--radius-sm);
+      background: var(--accent-light); color: var(--accent-text);
+    }
+
+    .sidebar {
+      position: sticky; top: 52px; height: calc(100vh - 52px);
+      overflow-y: auto; padding: 28px 20px 40px;
+      border-right: 1px solid var(--border); background: var(--bg-subtle);
+    }
+    .sidebar::-webkit-scrollbar { width: 3px; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+
+    .sidebar-label {
+      font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 12px;
+    }
+    .sidebar-nav { list-style: none; margin-bottom: 32px; }
+    .sidebar-nav li { margin-bottom: 2px; }
+    .sidebar-nav a {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 10px; border-radius: var(--radius-sm);
+      font-size: 15px; font-weight: 400; color: var(--text-secondary);
+      text-decoration: none; transition: all 0.15s ease; position: relative;
+    }
+    .sidebar-nav a::before {
+      content: ''; width: 4px; height: 4px; border-radius: 50%;
+      background: var(--border-strong); flex-shrink: 0; transition: all 0.2s ease;
+    }
+    .sidebar-nav a:hover { background: var(--bg-raised); color: var(--text-primary); }
+    .sidebar-nav a.active { background: var(--accent-light); color: var(--accent-text); font-weight: 500; }
+    .sidebar-nav a.active::before { background: var(--accent); width: 6px; height: 6px; }
+
+    .sidebar-related { list-style: none; margin-top: 8px; }
+    .sidebar-related li { margin-bottom: 4px; }
+    .sidebar-related a { font-size: 14.5px; color: var(--text-muted); text-decoration: none; transition: color 0.15s; }
+    .sidebar-related a:hover { color: var(--accent); }
+
+    .main { padding: 0 48px 120px; max-width: 860px; min-width: 0; }
+
+    .hero { padding: 56px 0 40px; border-bottom: 1px solid var(--border); margin-bottom: 48px; }
+    .hero-number {
+      font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+      letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 12px;
+    }
+    .hero h1 {
+      font-family: var(--font-serif); font-size: 48px; font-weight: 400;
+      line-height: 1.1; color: var(--text-primary); margin-bottom: 16px; letter-spacing: -0.02em;
+    }
+    .hero-desc { font-size: 17px; line-height: 1.65; color: var(--text-secondary); max-width: 600px; margin-bottom: 20px; }
+    .hero-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+    .hero-tag {
+      font-family: var(--font-mono); font-size: 12px; font-weight: 400;
+      letter-spacing: 0.04em; padding: 4px 10px; border-radius: var(--radius-sm);
+      background: var(--bg-raised); color: var(--text-muted); border: 1px solid var(--border);
+    }
+
+    .section {
+      margin-bottom: 56px; opacity: 0; transform: translateY(20px);
+      animation: fadeUp 0.5s ease forwards;
+    }
+    .section:nth-child(1)  { animation-delay: 0.05s; }
+    .section:nth-child(2)  { animation-delay: 0.10s; }
+    .section:nth-child(3)  { animation-delay: 0.15s; }
+    .section:nth-child(4)  { animation-delay: 0.20s; }
+    .section:nth-child(5)  { animation-delay: 0.25s; }
+    .section:nth-child(6)  { animation-delay: 0.30s; }
+    .section:nth-child(7)  { animation-delay: 0.35s; }
+    .section:nth-child(8)  { animation-delay: 0.40s; }
+    .section:nth-child(9)  { animation-delay: 0.45s; }
+    .section:nth-child(10) { animation-delay: 0.50s; }
+    .section:nth-child(11) { animation-delay: 0.55s; }
+
+    @keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
+
+    .section-number {
+      font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+      letter-spacing: 0.06em; color: var(--accent); margin-bottom: 6px;
+    }
+    .section h2 {
+      font-family: var(--font-serif); font-size: 30px; font-weight: 400;
+      color: var(--text-primary); margin-bottom: 20px; letter-spacing: -0.01em;
+    }
+    .section h3 {
+      font-family: var(--font-sans); font-size: 16px; font-weight: 600;
+      color: var(--text-primary); margin: 28px 0 10px;
+    }
+    .section p { color: var(--text-secondary); margin-bottom: 14px; max-width: 680px; }
+    .section ul, .section ol { padding-left: 20px; margin-bottom: 16px; color: var(--text-secondary); }
+    .section li { margin-bottom: 6px; }
+
+    .hl { background: var(--hl-yellow); color: var(--hl-yellow-dark); padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+    .hl-accent { background: var(--hl-accent); color: var(--hl-accent-dark); padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+    .hl-red { background: hsl(0, 85%, 93%); color: hsl(0, 70%, 35%); padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+    .hl-green { background: hsl(145, 60%, 90%); color: hsl(145, 55%, 28%); padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+
+    .card {
+      background: var(--bg-subtle); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 20px 24px; margin-bottom: 16px;
+    }
+    .card-accent { background: var(--accent-light); border-color: var(--accent-border); }
+    .card h4 { font-family: var(--font-sans); font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; }
+    .card p { font-size: 16px; color: var(--text-secondary); margin-bottom: 0; }
+    .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+
+    .code-block {
+      background: var(--bg-code); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 16px 20px; margin-bottom: 16px; overflow-x: auto;
+    }
+    .code-block code {
+      font-family: var(--font-mono); font-size: 14.5px; font-weight: 400;
+      color: var(--text-code); line-height: 1.7;
+    }
+    .code-label {
+      font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+      letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px;
+    }
+    .inline-code {
+      font-family: var(--font-mono); font-size: 15px; background: var(--bg-code);
+      border: 1px solid var(--border); padding: 1px 6px; border-radius: var(--radius-sm); color: var(--text-code);
+    }
+
+    .table-wrap { overflow-x: auto; margin-bottom: 16px; border: 1px solid var(--border); border-radius: var(--radius-md); }
+    .table-wrap table { width: 100%; border-collapse: collapse; font-size: 15.5px; }
+    .table-wrap th {
+      font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+      letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted);
+      text-align: left; padding: 10px 16px; background: var(--bg-subtle); border-bottom: 1px solid var(--border);
+    }
+    .table-wrap td { padding: 10px 16px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
+    .table-wrap tr:last-child td { border-bottom: none; }
+
+    .scale-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .scale-card {
+      background: var(--bg-subtle); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 16px; text-align: center;
+    }
+    .scale-card .number { font-family: var(--font-mono); font-size: 22px; font-weight: 500; color: var(--accent-text); margin-bottom: 2px; }
+    .scale-card .label { font-size: 13.5px; color: var(--text-muted); }
+
+    .arch-diagram {
+      background: var(--bg-subtle); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 32px; margin-bottom: 20px; overflow-x: auto;
+    }
+    .arch-diagram svg { display: block; margin: 0 auto; }
+    .arch-diagram .node { cursor: pointer; transition: filter 0.2s; }
+    .arch-diagram .node:hover { filter: brightness(0.95); }
+    .arch-diagram .node rect, .arch-diagram .node-rect { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arch-diagram .node-label { font-family: 'Geist', system-ui, sans-serif; font-size: 12px; font-weight: 500; fill: var(--text-primary); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+    .arch-diagram .node-sublabel { font-family: 'JetBrains Mono', monospace; font-size: 8.5px; fill: var(--text-muted); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+    .arch-diagram .edge { stroke: var(--border-strong); stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+    .arch-diagram .edge-label { font-family: 'JetBrains Mono', monospace; font-size: 8px; fill: var(--text-muted); text-anchor: middle; }
+    .node-highlight rect { stroke: var(--accent) !important; stroke-width: 2.5 !important; }
+    .node-highlight .node-label { fill: var(--accent-text) !important; }
+
+    .flow-stepper {
+      background: var(--bg-subtle); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 24px; margin-bottom: 20px;
+    }
+    .flow-stepper-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .flow-stepper-title { font-family: var(--font-mono); font-size: 12px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+    .flow-stepper-controls { display: flex; gap: 8px; }
+    .flow-btn {
+      font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+      padding: 5px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+      background: var(--bg); color: var(--text-secondary); cursor: pointer; transition: all 0.15s;
+    }
+    .flow-btn:hover { background: var(--accent-light); border-color: var(--accent-border); color: var(--accent-text); }
+    .flow-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .flow-btn-primary { background: var(--accent); border-color: var(--accent); color: white; }
+    .flow-btn-primary:hover { opacity: 0.9; background: var(--accent); color: white; }
+    .flow-steps { display: flex; gap: 4px; align-items: center; margin-bottom: 16px; overflow-x: auto; padding-bottom: 4px; }
+    .flow-node {
+      font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+      padding: 6px 12px; border-radius: var(--radius-sm); background: var(--bg);
+      border: 1px solid var(--border); color: var(--text-muted); white-space: nowrap; transition: all 0.3s ease;
+    }
+    .flow-node.active { background: var(--accent-light); border-color: var(--accent); color: var(--accent-text); box-shadow: 0 0 0 3px var(--accent-mid); }
+    .flow-node.done { background: var(--accent-light); border-color: var(--accent-border); color: var(--accent-text); }
+    .flow-arrow { color: var(--border-strong); font-size: 16px; flex-shrink: 0; }
+    .flow-desc {
+      font-size: 16px; color: var(--text-secondary); line-height: 1.6;
+      padding: 14px 16px; background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius-md); min-height: 52px;
+    }
+    .flow-counter { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); margin-top: 10px; text-align: right; }
+
+    .mermaid-wrap {
+      background: var(--bg-subtle); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 24px; margin-bottom: 20px; overflow-x: auto;
+    }
+    .mermaid { text-align: center; }
+
+    .tradeoff { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .tradeoff-option { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px 20px; }
+    .tradeoff-option.chosen { border-color: var(--accent-border); background: var(--accent-light); }
+    .tradeoff-label { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px; }
+    .tradeoff-label.yes { color: hsl(145, 55%, 32%); }
+    .tradeoff-label.no  { color: var(--text-muted); }
+    .tradeoff-option h4 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+    .tradeoff-option p { font-size: 15px; color: var(--text-secondary); margin-bottom: 0; }
+
+    .callout {
+      border-left: 3px solid var(--accent); padding: 14px 18px;
+      background: var(--accent-light); border-radius: 0 var(--radius-md) var(--radius-md) 0; margin-bottom: 16px;
+    }
+    .callout p { font-size: 16px; color: var(--accent-text); margin-bottom: 0; }
+    .callout-warn { border-left-color: hsl(38, 92%, 50%); background: hsl(38, 80%, 94%); }
+    .callout-warn p { color: hsl(38, 70%, 28%); }
+    .callout-danger { border-left-color: hsl(0, 72%, 52%); background: hsl(0, 80%, 95%); }
+    .callout-danger p { color: hsl(0, 65%, 32%); }
+
+    .tip-card {
+      display: flex; gap: 14px; padding: 16px 20px; background: var(--bg-subtle);
+      border: 1px solid var(--border); border-radius: var(--radius-md); margin-bottom: 10px;
+    }
+    .tip-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+    .tip-content { font-size: 16px; color: var(--text-secondary); line-height: 1.6; }
+    .tip-content strong { color: var(--text-primary); font-weight: 600; }
+
+    .similar-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .similar-card {
+      display: block; text-decoration: none; background: var(--bg-subtle);
+      border: 1px solid var(--border); border-radius: var(--radius-md);
+      padding: 18px 20px; transition: all 0.2s ease;
+    }
+    .similar-card:hover { border-color: var(--accent-border); background: var(--accent-light); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+    .similar-card h4 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+    .similar-card p { font-size: 13.5px; color: var(--text-muted); margin-bottom: 0; }
+
+    .evolution-step { display: flex; gap: 16px; margin-bottom: 20px; position: relative; }
+    .evolution-step:not(:last-child)::after {
+      content: ''; position: absolute; left: 15px; top: 36px; bottom: -20px;
+      width: 2px; background: var(--border);
+    }
+    .evolution-marker {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--accent-light); border: 2px solid var(--accent-border);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-mono); font-size: 13.5px; font-weight: 600;
+      color: var(--accent-text); flex-shrink: 0;
+    }
+    .evolution-content h4 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+    .evolution-content p { font-size: 15.5px; color: var(--text-secondary); margin-bottom: 0; }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .main { padding: 0 20px 80px; }
+      .hero h1 { font-size: 34px; }
+      .tradeoff { grid-template-columns: 1fr; }
+      .card-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <header class="topbar">
+    <div class="topbar-left">
+      <a href="../index.html">System Design</a>
+      <span class="topbar-sep">/</span>
+      <span class="topbar-problem">Payment Gateway</span>
+    </div>
+    <div class="topbar-right">
+      <span class="topbar-tag">Hard</span>
+    </div>
+  </header>
+
+  <aside class="sidebar">
+    <div class="sidebar-label">Sections</div>
+    <ul class="sidebar-nav" id="sidebar-nav">
+      <li><a href="#problem">Problem Statement</a></li>
+      <li><a href="#requirements">Requirements</a></li>
+      <li><a href="#scale">Scale Estimation</a></li>
+      <li><a href="#api">API Design</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#deep-dive">Deep Dive</a></li>
+      <li><a href="#tradeoffs">Tradeoffs</a></li>
+      <li><a href="#failures">Failure Scenarios</a></li>
+      <li><a href="#interview-tips">Interview Tips</a></li>
+      <li><a href="#similar">Similar Problems</a></li>
+      <li><a href="#evolution">Evolution</a></li>
+    </ul>
+    <div class="sidebar-label">Related</div>
+    <ul class="sidebar-related">
+      <li><a href="../e-commerce/index.html">E-Commerce Platform</a></li>
+      <li><a href="../rate-limiter/index.html">Rate Limiter</a></li>
+      <li><a href="../notification-system/index.html">Notification System</a></li>
+      <li><a href="../kafka/index.html">Distributed Queue (Kafka)</a></li>
+    </ul>
+  </aside>
+
+  <main class="main">
+
+    <!-- ── Hero ── -->
+    <div class="hero">
+      <div class="hero-number">System Design — 06</div>
+      <h1>Payment Gateway</h1>
+      <p class="hero-desc">
+        Design a system like Stripe or Amazon Pay that orchestrates multi-party financial transactions
+        across unreliable networks — guaranteeing money is never lost, duplicated, or stuck in limbo.
+      </p>
+      <div class="hero-tags">
+        <span class="hero-tag">Idempotency</span>
+        <span class="hero-tag">Exactly-Once</span>
+        <span class="hero-tag">Saga Pattern</span>
+        <span class="hero-tag">PCI-DSS</span>
+        <span class="hero-tag">Double-Entry Ledger</span>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 01 · PROBLEM STATEMENT ═══════════════ -->
+    <div class="section" id="problem">
+      <div class="section-number">01</div>
+      <h2>Problem Statement</h2>
+      <p>
+        Design a payment gateway that sits between a customer clicking "Pay Now" and money actually moving between bank accounts.
+        This isn't just "process a credit card" — it's a multi-party financial relay across <span class="hl">6 participants</span>
+        (customer, merchant, gateway, processor, card network, issuing bank) where every handoff is a network call that can fail, timeout, or return ambiguous results.
+      </p>
+      <p>
+        The system must process <span class="hl">millions of financial transactions per day</span> while guaranteeing
+        <span class="hl-accent">exactly-once semantics</span> at the business level. Most systems tolerate inconsistency — a tweet appearing late is fine,
+        a leaderboard being slightly stale is acceptable. Payments are different: this is the one system where every failure mode has a direct financial consequence.
+      </p>
+
+      <div class="callout">
+        <p><strong>Core question:</strong> How do you guarantee that money is never lost, duplicated, or stuck in limbo — even when networks fail, services crash, and third-party providers go down?</p>
+      </div>
+
+      <h3>What Makes This Unique</h3>
+      <div class="card-grid">
+        <div class="card">
+          <h4>Idempotency Is Existential</h4>
+          <p>A network timeout after calling Visa means you don't know if the charge went through. Without bulletproof idempotency, retries cause double charges — not a bug, a lawsuit.</p>
+        </div>
+        <div class="card">
+          <h4>State Machine Is the Product</h4>
+          <p>A payment isn't a single action — it's a lifecycle: INITIATED → AUTHORIZED → CAPTURED → SETTLED (or FAILED, REFUNDED, DISPUTED). Every transition must be auditable and reversible.</p>
+        </div>
+        <div class="card">
+          <h4>Distributed Saga Across Organizations</h4>
+          <p>You can't wrap Visa, your DB, and Kafka in a single transaction. You need sagas, compensation, and reconciliation across systems you don't control.</p>
+        </div>
+        <div class="card">
+          <h4>Compliance Shapes Architecture</h4>
+          <p>PCI-DSS mandates network segmentation for card data. The tokenization vault runs in an isolated environment. Legal constraints drive technical decisions.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 02 · REQUIREMENTS ═══════════════ -->
+    <div class="section" id="requirements">
+      <div class="section-number">02</div>
+      <h2>Requirements</h2>
+
+      <h3>Functional Requirements</h3>
+      <div class="card">
+        <ul>
+          <li><strong>Authorize + Capture (two-phase):</strong> Authorize puts a hold on funds; capture takes the money when the item ships. Separate operations because Amazon doesn't know if an item is in stock until the warehouse confirms.</li>
+          <li><strong>Refunds (full and partial):</strong> A customer returns 2 of 3 items — refund $30 of $50 back to the original payment method. Track refund state independently (pending → processing → succeeded).</li>
+          <li><strong>Idempotency on every mutation:</strong> Every API call that changes state accepts a client-provided idempotency key. Same key twice returns the cached result — no duplicate processing.</li>
+          <li><strong>Retry and recover from ambiguous failures:</strong> When a processor call times out, query-back before retrying. Never double-charge, never lose a successful auth.</li>
+          <li><strong>Webhook notifications:</strong> Push events (authorized, captured, refunded, disputed) to merchants with retry logic and HMAC signature verification.</li>
+          <li><strong>Tokenization:</strong> Never store raw card numbers. Client-side SDK tokenizes card data in an isolated Card Data Environment (CDE).</li>
+          <li><strong>Multi-currency support:</strong> Customer pays in AED, merchant settles in USD. Exchange rate applied at capture time, not auth time.</li>
+          <li><strong>Fraud detection (pre-authorization):</strong> Synchronous fraud checks — velocity, AVS, CVV, device fingerprinting — before sending to the processor.</li>
+        </ul>
+      </div>
+
+      <h3>Non-Functional Requirements</h3>
+      <div class="card">
+        <ul>
+          <li><strong>Availability:</strong> <span class="hl">99.999% (five nines)</span> — payment downtime = lost revenue. One minute during Prime Day could mean millions in abandoned carts.</li>
+          <li><strong>Consistency:</strong> <span class="hl-accent">CP over AP</span> for payment state — a ghost charge (processor charged but no record in our system) is worse than temporary unavailability.</li>
+          <li><strong>Latency:</strong> <span class="hl">P99 &lt; 2 seconds</span> end-to-end. The processor call alone takes 300ms–1.2s, leaving ~700ms budget for internal processing.</li>
+          <li><strong>Throughput:</strong> <span class="hl">50,000 TPS</span> design target (2.5x Prime Day peak). Payment systems can't gracefully degrade by dropping requests.</li>
+          <li><strong>Auditability:</strong> Every state change produces an immutable audit log — who, what, when, previous state, new state. Legally required. Append-only, no deletes.</li>
+          <li><strong>PCI-DSS:</strong> Network segmentation, HSM-backed encryption, quarterly vulnerability scans. The CDE is a walled garden.</li>
+          <li><strong>Reconciliation:</strong> End-of-day, our records must match exactly what the banks say. Double-entry bookkeeping — every cent accounted for.</li>
+        </ul>
+      </div>
+
+      <div class="callout-warn callout">
+        <p><strong>Key insight:</strong> Payment state requires strong consistency (CP). Reporting, analytics, and merchant dashboards can tolerate eventual consistency (AP). Apply the right model to the right data.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 03 · SCALE ESTIMATION ═══════════════ -->
+    <div class="section" id="scale">
+      <div class="section-number">03</div>
+      <h2>Scale Estimation</h2>
+
+      <p>All numbers derived from Amazon's known order volume: <span class="hl">~1.5B orders/quarter → 17M orders/day</span>. Each order triggers ~5 payment API calls (auth, capture, status checks, potential retry/refund), giving <span class="hl">~85M payment events/day</span>.</p>
+
+      <div class="scale-grid">
+        <div class="scale-card">
+          <div class="number">~1,000</div>
+          <div class="label">Steady-State TPS</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">20,000</div>
+          <div class="label">Prime Day Peak TPS</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">50,000</div>
+          <div class="label">Design Target TPS</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~40 TB/yr</div>
+          <div class="label">Transaction Storage</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~46 TB/yr</div>
+          <div class="label">Audit Log Storage</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~20 GB</div>
+          <div class="label">Idempotency Hot Store</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">&lt; 700ms</div>
+          <div class="label">Internal Latency Budget</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">50–100</div>
+          <div class="label">API Server Instances</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>Numbers That Drive Architecture</h4>
+        <p>
+          <strong>50K TPS →</strong> Stateless, horizontally scaled API tier behind load balancers.
+          <strong>20 GB idempotency store →</strong> Redis cluster with 48-hour TTL — fits in memory, needs sub-ms latency.
+          <strong>40 TB/year, never deletable →</strong> Tiered storage: hot (30 days, primary DB), warm (1 year, read replicas), cold (1–7 years, S3 + Athena).
+          <strong>1,200ms P99 from processors →</strong> Async where possible — auth is sync (customer waiting), capture and settlement can be async.
+        </p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 04 · API DESIGN ═══════════════ -->
+    <div class="section" id="api">
+      <div class="section-number">04</div>
+      <h2>API Design</h2>
+
+      <p>Every endpoint is designed around one principle: <strong>the caller must never be uncertain about what happened to their money.</strong> Idempotency keys on every mutation, explicit state transitions, and clear error semantics.</p>
+
+      <div class="code-label">Authorize Payment</div>
+      <div class="code-block"><code><pre>POST /v1/payments/authorize
+Authorization: Bearer sk_live_merchant_abc123
+Idempotency-Key: ord_2024_0609_xyz789
+
+{
+  "amount": 4999,              // cents — never floating point
+  "currency": "USD",
+  "payment_method": {
+    "type": "card",
+    "token": "tok_visa_4242"   // tokenized, never raw PAN
+  },
+  "capture_mode": "manual",    // "manual" (Amazon) or "automatic" (coffee shop)
+  "merchant_reference": "order_20250609_001"
+}
+
+→ 201 Created
+{
+  "id": "pay_9f8e7d6c5b4a",
+  "status": "authorized",
+  "amount_authorized": 4999,
+  "amount_captured": 0,
+  "amount_refunded": 0,
+  "authorization_expires_at": "2025-06-16T14:30:00Z",
+  "fraud_check": { "risk_score": 12, "risk_level": "low" },
+  "processor_response": { "code": "approved", "auth_code": "A1B2C3" }
+}</pre></code></div>
+
+      <div class="code-label">Capture Payment (at shipment)</div>
+      <div class="code-block"><code><pre>POST /v1/payments/pay_9f8e7d6c5b4a/capture
+Idempotency-Key: cap_shipment_001
+
+{ "amount": 2999 }             // partial capture — only 1 of 2 items shipped
+
+→ 200 OK
+{
+  "status": "partially_captured",
+  "amount_authorized": 4999,
+  "amount_captured": 2999,
+  "amount_remaining": 2000
+}</pre></code></div>
+
+      <div class="code-label">Refund</div>
+      <div class="code-block"><code><pre>POST /v1/payments/pay_9f8e7d6c5b4a/refund
+Idempotency-Key: refund_rma_456
+
+{
+  "amount": 2999,
+  "reason": "customer_returned"  // required for dispute defense
+}
+
+→ 200 OK
+{
+  "status": "partially_refunded",
+  "refunds": [{
+    "id": "ref_def456",
+    "status": "pending",         // refunds take 5–10 business days
+    "estimated_arrival": "2025-06-18"
+  }]
+}</pre></code></div>
+
+      <div class="code-label">Error Response</div>
+      <div class="code-block"><code><pre>{
+  "error": {
+    "type": "card_declined",
+    "code": "insufficient_funds",
+    "decline_code": "do_not_retry",    // vs "retry_allowed"
+    "message": "The card has insufficient funds."
+  }
+}</pre></code></div>
+
+      <div class="callout">
+        <p><strong>Key design decisions:</strong> Amounts in cents (integers, never floats) to avoid rounding errors. Three separate amount fields (authorized, captured, refunded) for partial operations. <span class="inline-code">decline_code</span> tells merchants whether retrying is futile or might work.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 05 · HIGH-LEVEL ARCHITECTURE ═══════════════ -->
+    <div class="section" id="architecture">
+      <div class="section-number">05</div>
+      <h2>High-Level Architecture</h2>
+
+      <p>Three distinct paths with different latency and consistency requirements: <span class="hl-accent">Sync Hot Path</span> (authorization, customer waiting, &lt;2s), <span class="hl-accent">Async Warm Path</span> (capture/refund, merchant triggered, seconds of delay OK), and <span class="hl-accent">Batch Cold Path</span> (settlement/reconciliation, daily, correctness over speed).</p>
+
+      <div class="arch-diagram">
+        <svg viewBox="0 0 880 520" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="#ccc9c4"/>
+            </marker>
+          </defs>
+
+          <!-- Row 1: Client → Gateway → Idempotency → Orchestrator -->
+          <g class="node" id="node-client" onclick="hlNode('node-client')">
+            <rect class="node-rect" x="10" y="80" width="100" height="52" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="60" y="101">Client</text>
+            <text class="node-sublabel" x="60" y="118">Mobile / Web</text>
+          </g>
+          <g class="node" id="node-gateway" onclick="hlNode('node-gateway')">
+            <rect class="node-rect" x="150" y="80" width="110" height="52" fill="hsl(155,80%,94%)" stroke="hsl(155,60%,80%)"/>
+            <text class="node-label" x="205" y="101">API Gateway</text>
+            <text class="node-sublabel" x="205" y="118">Rate Limit · Auth</text>
+          </g>
+          <g class="node" id="node-redis" onclick="hlNode('node-redis')">
+            <rect class="node-rect" x="300" y="80" width="110" height="52" fill="hsl(155,80%,94%)" stroke="hsl(155,60%,80%)"/>
+            <text class="node-label" x="355" y="101">Idempotency</text>
+            <text class="node-sublabel" x="355" y="118">Redis Cluster</text>
+          </g>
+          <g class="node" id="node-orch" onclick="hlNode('node-orch')">
+            <rect class="node-rect" x="450" y="80" width="120" height="52" fill="hsl(155,80%,94%)" stroke="hsl(155,60%,80%)"/>
+            <text class="node-label" x="510" y="101">Orchestrator</text>
+            <text class="node-sublabel" x="510" y="118">Saga Coordinator</text>
+          </g>
+
+          <!-- Row 2: Fraud, Token Vault, Processor Router -->
+          <g class="node" id="node-fraud" onclick="hlNode('node-fraud')">
+            <rect class="node-rect" x="350" y="190" width="110" height="52" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="405" y="211">Fraud Service</text>
+            <text class="node-sublabel" x="405" y="228">&lt; 80ms sync</text>
+          </g>
+          <g class="node" id="node-vault" onclick="hlNode('node-vault')">
+            <rect class="node-rect" x="490" y="190" width="110" height="52" fill="hsl(0,70%,94%)" stroke="hsl(0,50%,80%)"/>
+            <text class="node-label" x="545" y="211">Token Vault</text>
+            <text class="node-sublabel" x="545" y="228">CDE · HSM</text>
+          </g>
+          <g class="node" id="node-router" onclick="hlNode('node-router')">
+            <rect class="node-rect" x="640" y="80" width="110" height="52" fill="hsl(155,80%,94%)" stroke="hsl(155,60%,80%)"/>
+            <text class="node-label" x="695" y="101">Processor Router</text>
+            <text class="node-sublabel" x="695" y="118">Smart Routing</text>
+          </g>
+
+          <!-- External processors -->
+          <g class="node" id="node-visa" onclick="hlNode('node-visa')">
+            <rect class="node-rect" x="790" y="55" width="80" height="40" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="830" y="78">Visa / MC</text>
+          </g>
+          <g class="node" id="node-proc2" onclick="hlNode('node-proc2')">
+            <rect class="node-rect" x="790" y="105" width="80" height="40" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="830" y="128">Adyen</text>
+          </g>
+
+          <!-- Row 3: Payment DB + Outbox -->
+          <g class="node" id="node-db" onclick="hlNode('node-db')">
+            <rect class="node-rect" x="450" y="300" width="120" height="52" fill="hsl(155,80%,94%)" stroke="hsl(155,60%,80%)"/>
+            <text class="node-label" x="510" y="321">Payment DB</text>
+            <text class="node-sublabel" x="510" y="338">CockroachDB · ACID</text>
+          </g>
+          <g class="node" id="node-outbox" onclick="hlNode('node-outbox')">
+            <rect class="node-rect" x="300" y="300" width="110" height="52" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="355" y="321">Outbox Poller</text>
+            <text class="node-sublabel" x="355" y="338">At-Least-Once</text>
+          </g>
+
+          <!-- Row 4: Kafka + Consumers -->
+          <g class="node" id="node-kafka" onclick="hlNode('node-kafka')">
+            <rect class="node-rect" x="150" y="300" width="110" height="52" fill="hsl(155,80%,94%)" stroke="hsl(155,60%,80%)"/>
+            <text class="node-label" x="205" y="321">Kafka</text>
+            <text class="node-sublabel" x="205" y="338">Event Bus</text>
+          </g>
+          <g class="node" id="node-webhook" onclick="hlNode('node-webhook')">
+            <rect class="node-rect" x="20" y="400" width="110" height="52" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="75" y="421">Webhooks</text>
+            <text class="node-sublabel" x="75" y="438">HMAC Signed</text>
+          </g>
+          <g class="node" id="node-ledger" onclick="hlNode('node-ledger')">
+            <rect class="node-rect" x="160" y="400" width="110" height="52" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="215" y="421">Ledger</text>
+            <text class="node-sublabel" x="215" y="438">Double-Entry</text>
+          </g>
+          <g class="node" id="node-settle" onclick="hlNode('node-settle')">
+            <rect class="node-rect" x="300" y="400" width="120" height="52" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="360" y="421">Settlement</text>
+            <text class="node-sublabel" x="360" y="438">Daily Reconciliation</text>
+          </g>
+
+          <!-- Edges: Sync Hot Path -->
+          <line class="edge" x1="110" y1="106" x2="150" y2="106"/>
+          <line class="edge" x1="260" y1="106" x2="300" y2="106"/>
+          <line class="edge" x1="410" y1="106" x2="450" y2="106"/>
+          <line class="edge" x1="570" y1="106" x2="640" y2="106"/>
+          <line class="edge" x1="750" y1="85" x2="790" y2="78"/>
+          <line class="edge" x1="750" y1="115" x2="790" y2="122"/>
+
+          <!-- Edges: Orchestrator to supporting services -->
+          <line class="edge" x1="485" y1="132" x2="430" y2="190"/>
+          <line class="edge" x1="530" y1="132" x2="545" y2="190"/>
+
+          <!-- Edges: Orchestrator to DB -->
+          <line class="edge" x1="510" y1="132" x2="510" y2="300"/>
+
+          <!-- Edges: DB to Outbox -->
+          <line class="edge" x1="450" y1="326" x2="410" y2="326"/>
+          <!-- Outbox to Kafka -->
+          <line class="edge" x1="300" y1="326" x2="260" y2="326"/>
+          <!-- Kafka to consumers -->
+          <line class="edge" x1="185" y1="352" x2="85" y2="400"/>
+          <line class="edge" x1="205" y1="352" x2="215" y2="400"/>
+          <line class="edge" x1="225" y1="352" x2="345" y2="400"/>
+
+          <!-- Edge labels -->
+          <text class="edge-label" x="130" y="98">HTTPS</text>
+          <text class="edge-label" x="280" y="98">Dedup</text>
+          <text class="edge-label" x="430" y="98">Validate</text>
+          <text class="edge-label" x="610" y="98">Route</text>
+          <text class="edge-label" x="520" y="225">Detokenize</text>
+          <text class="edge-label" x="440" y="225">Risk Score</text>
+          <text class="edge-label" x="530" y="220">&#8203;</text>
+          <text class="edge-label" x="480" y="275">ACID Write + Outbox</text>
+          <text class="edge-label" x="360" y="365">Publish</text>
+        </svg>
+      </div>
+
+      <!-- Flow Stepper -->
+      <div class="flow-stepper">
+        <div class="flow-stepper-header">
+          <span class="flow-stepper-title">Authorization Flow — Step Through</span>
+          <div class="flow-stepper-controls">
+            <button class="flow-btn" onclick="resetFlow()" id="flow-reset" disabled>Reset</button>
+            <button class="flow-btn flow-btn-primary" onclick="runFlow()" id="flow-next">Next Step →</button>
+          </div>
+        </div>
+        <div class="flow-steps" id="flow-steps"></div>
+        <div class="flow-desc" id="flow-desc">Click <strong>Next Step</strong> to walk through the authorization flow.</div>
+        <div class="flow-counter" id="flow-counter"></div>
+      </div>
+
+      <h3>Component Summary</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Component</th><th>Tech</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td>API Gateway</td><td>Nginx / Envoy</td><td>Edge policy, rate limiting, auth, TLS termination</td></tr>
+            <tr><td>Idempotency Store</td><td>Redis Cluster (6 nodes)</td><td>Sub-ms dedup with SET NX, 48hr TTL, ~20 GB</td></tr>
+            <tr><td>Orchestrator</td><td>Go/Java, 50–100 instances</td><td>Stateless saga coordinator — payment lifecycle</td></tr>
+            <tr><td>Fraud Service</td><td>Python/Go + ML model</td><td>Sync risk scoring in &lt;80ms, tiered checks</td></tr>
+            <tr><td>Token Vault (CDE)</td><td>HSM + encrypted DB</td><td>PCI-DSS isolated card storage, field-level encryption</td></tr>
+            <tr><td>Processor Router</td><td>Go (low latency)</td><td>Multi-processor abstraction, cost/availability routing</td></tr>
+            <tr><td>Payment DB</td><td>CockroachDB</td><td>Source of truth, ACID transactions, strong consistency</td></tr>
+            <tr><td>Outbox Poller</td><td>Go/Java, 3–5 instances</td><td>Reliable event publishing — eliminates dual-write</td></tr>
+            <tr><td>Event Bus</td><td>Kafka (9+ brokers)</td><td>Durable async event backbone, partition ordering</td></tr>
+            <tr><td>Webhook Service</td><td>Go/Node, 10–15 instances</td><td>Signed merchant notifications with exponential backoff</td></tr>
+            <tr><td>Ledger</td><td>PostgreSQL</td><td>Double-entry bookkeeping — debits must equal credits</td></tr>
+            <tr><td>Settlement Engine</td><td>Spark (batch)</td><td>Daily reconciliation against processor settlement files</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 06 · DEEP DIVE ═══════════════ -->
+    <div class="section" id="deep-dive">
+      <div class="section-number">06</div>
+      <h2>Deep Dive — Idempotency &amp; Exactly-Once Processing</h2>
+
+      <p>
+        Exactly-once payment processing isn't one mechanism — it's <span class="hl">three layers</span> working together.
+        Miss any one and the guarantee breaks. At 50K TPS with a 0.1% timeout rate, you get
+        <span class="hl">432,000 ambiguous transactions per day</span> where you don't know if the charge went through.
+      </p>
+
+      <h3>Layer 1 — Client-Side Idempotency Key</h3>
+      <p>
+        The merchant generates a unique key per intended payment action and sends it with every request (including retries).
+        The key represents <strong>intent</strong>, not the request — e.g., <span class="inline-code">order_123_authorize</span>.
+        The merchant generates it (not us) because only they know whether a request is a retry or a new payment.
+      </p>
+
+      <h3>Layer 2 — Gateway-Side Deduplication (Redis Protocol)</h3>
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant R as Redis
+    participant O as Orchestrator
+    participant P as Processor
+    participant DB as Payment DB
+
+    C->>R: SET NX idempotency:K
+    alt Key is NEW
+        R-->>O: NX succeeded
+        O->>O: Validate request
+        O->>P: Charge $49.99
+        P-->>O: Approved (auth_code)
+        O->>DB: BEGIN: UPDATE payment + INSERT outbox COMMIT
+        DB-->>O: Committed
+        O->>R: SET K = {status: completed, response: ...}
+        O-->>C: 201 Authorized
+    else Key EXISTS (completed)
+        R-->>O: Cached response found
+        O->>O: Verify params hash matches
+        O-->>C: 200 Return cached result
+    else Key EXISTS (processing)
+        R-->>O: Status = processing
+        alt Recent (< 30s)
+            O-->>C: 202 Accepted (Retry-After: 2s)
+        else Stale (> 30s)
+            O->>DB: Check for existing payment record
+            alt Found in DB
+                O->>R: Update to completed
+                O-->>C: 200 Return DB result
+            else Not in DB
+                O->>P: Query-back: did you process this?
+                O->>O: Re-process or record result
+            end
+        end
+    end
+        </div>
+      </div>
+
+      <h3>The Crash Point Analysis</h3>
+      <p>The order of operations matters. If we crash at each step, here's what happens:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Crash Point</th><th>State</th><th>Recovery</th></tr></thead>
+          <tbody>
+            <tr><td>After validation</td><td>Redis: processing, DB: nothing</td><td>Retry re-processes safely</td></tr>
+            <tr><td>After fraud check</td><td>Redis: processing, DB: nothing</td><td>Retry re-runs fraud (stateless)</td></tr>
+            <tr><td>After token lookup</td><td>Redis: processing, DB: nothing</td><td>Retry re-fetches (read-only)</td></tr>
+            <tr><td><span class="hl-red">After processor call</span></td><td><span class="hl-red">Redis: processing, DB: nothing, Visa may have charged</span></td><td><span class="hl-red">DANGER ZONE → Layer 3</span></td></tr>
+            <tr><td>After DB write</td><td>Redis: processing, DB: has record</td><td>Retry finds DB record, updates Redis</td></tr>
+            <tr><td>After Redis update</td><td>Redis: completed, DB: has record</td><td>Normal path — no issue</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Layer 3 — Processor-Level Deduplication &amp; Recovery</h3>
+      <p>
+        When we detect the dangerous crash point (after processor call, before DB write), we use three strategies in priority order:
+      </p>
+      <div class="card-grid">
+        <div class="card card-accent">
+          <h4>Strategy 1: Processor Idempotency Keys</h4>
+          <p>Most modern processors support their own idempotency. We forward our key — if we retry, the processor returns the original result. No double charge.</p>
+        </div>
+        <div class="card">
+          <h4>Strategy 2: Query-Back</h4>
+          <p>Ask the processor: "Did you process charge X?" before retrying. Adds ~300ms but prevents double-charging with legacy processors.</p>
+        </div>
+        <div class="card">
+          <h4>Strategy 3: Pessimistic Reconciliation</h4>
+          <p>If query-back also fails: don't retry. Mark as "ambiguous." Daily reconciliation resolves it. We'd rather fail a payment than double-charge.</p>
+        </div>
+      </div>
+
+      <h3>The Four Invariants</h3>
+      <div class="callout">
+        <p>
+          <strong>1.</strong> For any key K, at most one processor charge is made — even across crashes and retries.<br/>
+          <strong>2.</strong> If a client receives success, the payment is durably recorded in the DB.<br/>
+          <strong>3.</strong> If a client receives failure, either no charge was made, or it will be auto-reversed via reconciliation.<br/>
+          <strong>4.</strong> No idempotency key is permanently locked — every "processing" state either completes, times out, or expires.
+        </p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 07 · TRADEOFFS ═══════════════ -->
+    <div class="section" id="tradeoffs">
+      <div class="section-number">07</div>
+      <h2>Key Design Decisions &amp; Tradeoffs</h2>
+
+      <h3>SQL vs NoSQL for Payment State</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>SQL (PostgreSQL / CockroachDB)</h4>
+          <p>ACID transactions for state + outbox in one commit. FOR UPDATE row locks prevent partial capture race conditions. Cross-row constraints (captured ≤ authorized) are trivial.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>DynamoDB / Cassandra</h4>
+          <p>Near-infinite horizontal scale without manual sharding, but no multi-table ACID transactions. You'd reimplement consistency in application code — risky for money.</p>
+        </div>
+      </div>
+
+      <h3>Consistency Model for Payment State</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Strong Consistency (CP)</h4>
+          <p>Writes require quorum. A ghost charge (processor charged but our DB has no record) is catastrophic. We'd rather return 503 than lose track of money.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Eventual Consistency (AP)</h4>
+          <p>Higher availability, but two replicas could disagree on payment status. A payment simultaneously "captured" and "failed" is unacceptable.</p>
+        </div>
+      </div>
+
+      <h3>Event Delivery: Transactional Outbox vs CDC vs Dual Write</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Transactional Outbox</h4>
+          <p>Event INSERT in same ACID transaction as state update. Poller publishes to Kafka. You control event schema, it's decoupled from DB schema, and no dual-write risk.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>CDC (Debezium) / Dual Write</h4>
+          <p>CDC couples event schema to DB schema. Dual write has no atomicity — DB write succeeds but Kafka publish fails means downstream never learns about the payment.</p>
+        </div>
+      </div>
+
+      <h3>Single vs Multi-Processor Routing</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Multi-Processor with Smart Routing</h4>
+          <p>Cost optimization saves ~$310M/year at Amazon scale. Failover if one processor has an outage. Authorization rate optimization recovers 2–3% of declines via cascading.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Single Processor (e.g., Stripe only)</h4>
+          <p>One integration, one contract, simple. But your SLA is capped by their reliability, and you're locked into their pricing at scale.</p>
+        </div>
+      </div>
+
+      <h3>Two-Phase Auth+Capture vs Single Charge</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Separate Auth + Capture</h4>
+          <p>Amazon charges at shipment, not checkout. Supports partial captures for split shipments. Voids are free and instant (vs refunds costing fees and taking 5–10 days).</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Single Charge Endpoint</h4>
+          <p>Simpler API — one call does everything. Fine for instant-delivery businesses (coffee shop). But can't handle e-commerce fulfillment flows.</p>
+        </div>
+      </div>
+
+      <h3>Fraud Check: Synchronous vs Async</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Tiered Sync (Fast-Path Optimization)</h4>
+          <p>80% of transactions skip expensive Tier 3 checks (low-risk). Average fraud latency: ~44ms instead of 80ms for all. Post-auth async review catches stragglers.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Full Sync for All / Fully Async</h4>
+          <p>Full sync adds 80ms to every transaction. Fully async means you've authorized fraud and must reverse — terrible UX and costly chargebacks.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 08 · FAILURE SCENARIOS ═══════════════ -->
+    <div class="section" id="failures">
+      <div class="section-number">08</div>
+      <h2>What Can Go Wrong</h2>
+
+      <div class="card">
+        <h4>🔴 Processor Timeout (Most Common)</h4>
+        <p>
+          Charge sent to Visa, response never arrives. Customer may or may not be charged. <strong>Never retry blindly.</strong>
+          Query-back the processor first. If query-back also fails, mark as "ambiguous" and resolve in daily reconciliation.
+          We'd rather fail a payment than double-charge — a failed payment loses one sale; a double charge loses trust.
+        </p>
+      </div>
+
+      <div class="card">
+        <h4>🔴 DB Primary Failure During Payment Write</h4>
+        <p>
+          Processor approved, DB crashes before COMMIT. With <strong>synchronous replication</strong>: if COMMIT was replicated, the new primary has the record.
+          If not, the retry uses the same idempotency key — processor returns original result, we write it successfully on the second attempt.
+          Without sync replication: ghost charges — customer charged but no record in our system. Catastrophic.
+        </p>
+      </div>
+
+      <div class="card">
+        <h4>🟡 Redis Cluster Failure (Idempotency Layer Down)</h4>
+        <p>
+          Fall back to DB-based dedup: <span class="inline-code">SELECT FROM payments WHERE idempotency_key = K</span>. Slower (~15ms vs 1ms) but functional.
+          Small window where two simultaneous requests could both pass the DB check — processor idempotency (Layer 3) is the safety net.
+          Flag all payments during Redis outage for manual review.
+        </p>
+      </div>
+
+      <div class="card">
+        <h4>🟡 Cascade Failure Under Load (Death Spiral)</h4>
+        <p>
+          Fraud service gets slow → orchestrator retries → retries double load → fraud gets slower → everything collapses.
+          <strong>Prevention:</strong> Circuit breakers (trip at 50% failure rate, stop calling fraud entirely), retry budgets (cap at 10% of traffic),
+          bulkhead isolation (separate thread pools for auth/capture/refund), load shedding (reject status checks before captures before auths).
+        </p>
+      </div>
+
+      <div class="card">
+        <h4>🟡 Outbox Poller Lag</h4>
+        <p>
+          Payments process correctly but events don't reach Kafka. Webhooks stop, settlement queue isn't fed.
+          <strong>Recovery:</strong> Poller is stateless — restart picks up pending events. Scale horizontally with partitioned polling.
+          Monitor outbox depth: alert at 1,000 pending, page at 10,000.
+        </p>
+      </div>
+
+      <div class="card">
+        <h4>🟢 Reconciliation Mismatch</h4>
+        <p>
+          Our ledger says $12,847,293; processor says $12,847,518. Diff: $225. Common causes: timing boundary (different settlement days),
+          currency conversion drift, lost outbox events. <strong>Resolution:</strong> Automated matching catches 99.5%, automated rules resolve 80% of exceptions,
+          remaining 0.1% goes to manual review with 48hr SLA. Double-entry ledger self-diagnoses whether mismatch is internal or external.
+        </p>
+      </div>
+
+      <div class="card">
+        <h4>🟢 Fraud Service Degradation</h4>
+        <p>
+          Tiered fallback: <strong>Level 1</strong> (degraded, P99 > 80ms) — full check for high-risk only, fast-path low-risk with async review.
+          <strong>Level 2</strong> (critical, error rate > 30%) — blocklist check only, $500 hard limit, async review within 2 minutes.
+          <strong>Level 3</strong> (complete failure) — blocklist only (local cache), hard decline > $200, page VP of Engineering.
+        </p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 09 · INTERVIEW TIPS ═══════════════ -->
+    
+  <section class="section" id="antipatterns">
+    <div class="section-head"><span class="section-n">⚠</span><h2 class="section-title">Anti-patterns</h2></div>
+    <div class="prose">
+      
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Single DB transaction wrapping bank call</div>
+        <p class="why">External call inside a lock is minutes of blocked rows.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Auth/capture are separate external calls; saga with idempotency key per step.</div>
+    </div>
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Retry failed payments blindly</div>
+        <p class="why">Double-charge = angry customers + chargebacks.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Idempotency key per attempt; dedup on (key, user). Only retry on safe errors (5xx, timeouts).</div>
+    </div>
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Store card numbers directly</div>
+        <p class="why">PCI nightmare + breach exposure.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Tokenize via provider (Stripe, Braintree); store only the token + last-4 + exp.</div>
+    </div>
+    </div>
+  </section>
+
+  <div class="section" id="interview-tips">
+      <div class="section-number">09</div>
+      <h2>Interview Tips</h2>
+
+      <div class="tip-card">
+        <span class="tip-icon">💡</span>
+        <div class="tip-content">
+          <strong>Lead with the auth/capture split.</strong><br/>
+          Ask "Should we support separate auth and capture?" as your first clarifying question. This immediately signals domain knowledge — most candidates treat payment as a single "charge" operation. Explain why: Amazon charges at shipment, not checkout.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">⚡</span>
+        <div class="tip-content">
+          <strong>Make idempotency your deep dive.</strong><br/>
+          Say: "The most interesting challenge is exactly-once processing. Let me walk through the three layers." Then present the crash scenario — what happens when Visa's response is lost. This demonstrates edge-case thinking and distributed systems mastery.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🎯</span>
+        <div class="tip-content">
+          <strong>Draw incrementally, not all at once.</strong><br/>
+          Start with 4 boxes (client → gateway → orchestrator → processor). Add each component only when a requirement demands it. "I need idempotency, so I'll add Redis here." This shows you reason from requirements, not pattern-match.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🧠</span>
+        <div class="tip-content">
+          <strong>Say "CP over AP" and explain why.</strong><br/>
+          "I'm choosing strong consistency for payment state because a ghost charge — where the processor charged but our system has no record — is worse than temporary unavailability. I'd rather return 503 than lose track of money."
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🔥</span>
+        <div class="tip-content">
+          <strong>Mention reconciliation — most candidates don't.</strong><br/>
+          "Every day, we verify our ledger matches the processor's settlement file. We use double-entry bookkeeping — if debits ≠ credits, something is wrong." This shows you understand the financial dimension, not just the technical one.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">⚠️</span>
+        <div class="tip-content">
+          <strong>Don't forget PCI-DSS and tokenization.</strong><br/>
+          "Card data never touches our main infrastructure. A client-side SDK sends card details directly to an isolated tokenization vault. Our API servers only see opaque tokens." Without this, your design fails a compliance audit on day one.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">📐</span>
+        <div class="tip-content">
+          <strong>Amounts in cents, never floats.</strong><br/>
+          "I store amounts as integers in cents because 0.1 + 0.2 ≠ 0.3 in floating point. At 500M transactions, rounding errors compound into real reconciliation mismatches." Small detail that signals real-world experience.
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 10 · SIMILAR PROBLEMS ═══════════════ -->
+    <div class="section" id="similar">
+      <div class="section-number">10</div>
+      <h2>Similar Problems</h2>
+
+      <div class="similar-grid">
+        <a href="../e-commerce/index.html" class="similar-card">
+          <h4>E-Commerce Platform</h4>
+          <p>Two sides of the same coin — order system calls gateway at checkout (auth) and shipment (capture). Tightly coupled operationally.</p>
+        </a>
+        <a href="../notification-system/index.html" class="similar-card">
+          <h4>Notification System</h4>
+          <p>Webhook delivery IS a notification system — at-least-once delivery, exponential backoff, HMAC signing, event replay API.</p>
+        </a>
+        <a href="../rate-limiter/index.html" class="similar-card">
+          <h4>Rate Limiter / API Gateway</h4>
+          <p>Edge layer shares token bucket rate limiting, circuit breaker patterns, and priority-based load shedding.</p>
+        </a>
+        <a href="../kafka/index.html" class="similar-card">
+          <h4>Distributed Queue (Kafka)</h4>
+          <p>Kafka is the async backbone — partition ordering, consumer groups, offset management, dead letter topics.</p>
+        </a>
+        <a href="#" class="similar-card">
+          <h4>Banking / Ledger System</h4>
+          <p>Double-entry bookkeeping, immutable audit logs, multi-currency handling, reconciliation against external parties.</p>
+        </a>
+        <a href="#" class="similar-card">
+          <h4>Saga / Transaction Coordinator</h4>
+          <p>Payment auth is a saga: fraud → tokenize → processor → DB. If step 3 succeeds but step 4 fails, you need compensation.</p>
+        </a>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 11 · EVOLUTION ═══════════════ -->
+    <div class="section" id="evolution">
+      <div class="section-number">11</div>
+      <h2>Evolution</h2>
+      <p>How this design grows from MVP to planet-scale. Every stage is triggered by a specific pain point — not by anticipating scale you don't have yet. The only things you must get right from day one: the <strong>API contract</strong> (auth/capture split) and the <strong>idempotency guarantee</strong>.</p>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">1</div>
+        <div class="evolution-content">
+          <h4>MVP — Single Merchant, Single Processor (10 TPS)</h4>
+          <p>Single API server → PostgreSQL → Stripe. Idempotency via DB unique constraint. No Redis, no Kafka, no outbox. Use Stripe's tokenization (Elements) so you never see card data. <strong>Critical:</strong> Build auth/capture split and idempotency contract from day one — these API decisions are near-impossible to change later.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">2</div>
+        <div class="evolution-content">
+          <h4>Growing — Multiple Merchants (500 TPS)</h4>
+          <p>Add Redis for idempotency (DB unique constraint doesn't scale past ~200 TPS). Add webhook delivery + transactional outbox (merchants need push notifications). Build fraud rules engine after first chargeback incident. Separate token vault to reduce Stripe per-transaction fees. System splits into sync path and async path — this separation is permanent.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">3</div>
+        <div class="evolution-content">
+          <h4>Scaling — Multi-Processor (5K TPS)</h4>
+          <p>Add multi-processor routing (cost optimization + failover after first processor outage). Build double-entry ledger and automated daily reconciliation. Shard DB by merchant_id. ML-based fraud scoring replaces rules engine. Add circuit breakers and retry budgets after first cascade failure.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">4</div>
+        <div class="evolution-content">
+          <h4>Reliable — Multi-Region (20K TPS)</h4>
+          <p>Active-active across 3 regions with CockroachDB for global strong consistency. PCI-DSS Level 1 certification (required above 6M txn/year). 3D Secure / SCA for European PSD2 compliance. Dedicated dispute management system. Regional fraud models — fraud patterns differ by geography.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">5</div>
+        <div class="evolution-content">
+          <h4>Planet-Scale — Financial Platform (50K+ TPS)</h4>
+          <p>Payment platform as a product — other companies build on your gateway. Direct card network integrations bypassing third-party processors. Real-time streaming settlement replacing daily batch. Embedded finance: lending, BNPL, insurance built on payment data. AI-powered fraud that adapts in real-time.</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: 'hsl(155, 80%, 94%)',
+      primaryTextColor: '#111110',
+      primaryBorderColor: 'hsl(155, 60%, 80%)',
+      lineColor: '#ccc9c4',
+      secondaryColor: '#f7f7f5',
+      tertiaryColor: '#f0eeeb',
+      fontFamily: 'Geist, system-ui, sans-serif',
+      fontSize: '13px'
+    }
+  });
+
+  (function() {
+    const sections = document.querySelectorAll('.section[id]');
+    const navLinks = document.querySelectorAll('#sidebar-nav a');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+          navLinks.forEach(link => {
+            link.classList.toggle('active', link.getAttribute('href') === '#' + id);
+          });
+        }
+      });
+    }, { rootMargin: '-80px 0px -60% 0px', threshold: 0 });
+    sections.forEach(s => observer.observe(s));
+  })();
+
+  let highlightedNode = null;
+  function hlNode(id) {
+    if (highlightedNode) document.getElementById(highlightedNode).classList.remove('node-highlight');
+    if (highlightedNode === id) { highlightedNode = null; return; }
+    document.getElementById(id).classList.add('node-highlight');
+    highlightedNode = id;
+  }
+
+  const FLOW_NODES = [
+    'Client',
+    'API Gateway',
+    'Redis (Dedup)',
+    'Orchestrator',
+    'Fraud Service',
+    'Token Vault',
+    'Processor Router',
+    'Payment DB + Outbox',
+    'Kafka → Webhooks'
+  ];
+
+  const FLOW_DESCS = [
+    'Customer clicks "Pay Now." The browser sends an HTTPS request with payment token, amount, and the merchant\'s idempotency key.',
+    'API Gateway terminates TLS, validates the merchant API key, applies rate limiting, and injects a request ID for distributed tracing.',
+    'Redis SET NX checks the idempotency key. If key exists with a completed result, return it immediately — no re-processing. If key is new, lock it as "processing."',
+    'The orchestrator validates the request (amount > 0, currency supported, auth not expired) and begins the payment saga across multiple services.',
+    'Synchronous fraud check in < 80ms. Tiered: Tier 1 (blocklist, 5ms) → Tier 2 (ML scoring, 30ms) → Tier 3 (deep analysis, 80ms, only for medium-risk). Returns approve/decline/review.',
+    'Token vault (isolated CDE network) resolves the opaque payment token to processor-specific card credentials. HSM-backed decryption. Only the orchestrator can request detokenization.',
+    'Processor router selects the optimal processor based on card type, currency, region, cost, and current health. Sends the charge request with a 5-second hard timeout. Failover to backup processor if primary returns errors.',
+    'Single ACID transaction: UPDATE payment status to "authorized" AND INSERT outbox event. Both succeed or both fail. This eliminates the dual-write problem. The outbox poller publishes to Kafka asynchronously.',
+    'Events flow to Kafka, then fan out: webhook service notifies the merchant (HMAC-signed, with exponential backoff retry), ledger creates double-entry bookkeeping records, and settlement queue prepares for end-of-day reconciliation.'
+  ];
+
+  let flowStep = -1;
+  const flowStepsEl = document.getElementById('flow-steps');
+  const flowDescEl  = document.getElementById('flow-desc');
+  const flowCounter = document.getElementById('flow-counter');
+  const flowNextBtn = document.getElementById('flow-next');
+  const flowResetBtn = document.getElementById('flow-reset');
+
+  FLOW_NODES.forEach((name, i) => {
+    if (i > 0) {
+      const arrow = document.createElement('span');
+      arrow.className = 'flow-arrow';
+      arrow.textContent = '→';
+      flowStepsEl.appendChild(arrow);
+    }
+    const node = document.createElement('span');
+    node.className = 'flow-node';
+    node.id = 'fnode-' + i;
+    node.textContent = name;
+    flowStepsEl.appendChild(node);
+  });
+
+  function runFlow() {
+    flowStep++;
+    if (flowStep >= FLOW_NODES.length) {
+      flowNextBtn.disabled = true;
+      flowDescEl.innerHTML = '<strong>✓ Flow complete.</strong> The customer sees "Payment Authorized" in under 2 seconds. Click Reset to walk through again.';
+      return;
+    }
+    flowResetBtn.disabled = false;
+    for (let i = 0; i < flowStep; i++) {
+      document.getElementById('fnode-' + i).classList.remove('active');
+      document.getElementById('fnode-' + i).classList.add('done');
+    }
+    document.getElementById('fnode-' + flowStep).classList.add('active');
+    document.getElementById('fnode-' + flowStep).scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    flowDescEl.innerHTML = FLOW_DESCS[flowStep];
+    flowCounter.textContent = `Step ${flowStep + 1} of ${FLOW_NODES.length}`;
+    if (flowStep === FLOW_NODES.length - 1) flowNextBtn.textContent = 'Finish ✓';
+  }
+
+  function resetFlow() {
+    flowStep = -1;
+    FLOW_NODES.forEach((_, i) => {
+      const el = document.getElementById('fnode-' + i);
+      el.classList.remove('active', 'done');
+    });
+    flowDescEl.innerHTML = 'Click <strong>Next Step</strong> to walk through the authorization flow.';
+    flowCounter.textContent = '';
+    flowNextBtn.disabled = false;
+    flowNextBtn.textContent = 'Next Step →';
+    flowResetBtn.disabled = true;
+  }
+</script>
+
+</body>
+</html>

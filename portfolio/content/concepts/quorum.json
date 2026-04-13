@@ -1,0 +1,59 @@
+{
+  "slug": "quorum",
+  "title": "Quorum",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 295,
+    "s": 55,
+    "l": 48
+  },
+  "category": "Distributed Systems",
+  "blurb": "In a replicated system, you have N copies of the data. Do you write to all N before returning? Just 1? Somewhere in between? Do you read from all N (slow), or 1 (possibly stale)? The answer is a quorum — a minimum number",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>In a <a href=\"/concepts/replication\">replicated</a> system, you have N copies of the data. Do you write to all N before returning? Just 1? Somewhere in between? Do you read from all N (slow), or 1 (possibly stale)? The answer is a <strong>quorum</strong> — a minimum number of replicas that must acknowledge a write (W) or participate in a read (R). Tuning N, W, R independently lets you pick exactly the consistency-availability-latency tradeoff you want <em>per query</em>.</p>\n      <p>Understanding quorum math is fundamental to Dynamo-style systems (Cassandra, DynamoDB, Riak) and to consensus-based ones (Raft, Paxos).</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The magic inequality",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The magic inequality</h2></div>\n    <div class=\"prose\">\n      <p>With N replicas, writes go to W of them, reads query R of them.</p>\n      <p><strong>If W + R &gt; N</strong>, any read is guaranteed to overlap with the latest write — at least one of the R replicas read saw the write, so you get the newest value.</p>\n      <p><strong>If W + R ≤ N</strong>, reads can miss the latest write. That's fine for eventual consistency; catastrophic for a bank ledger.</p>\n      <p>The magic: you pick W and R per operation based on what you need.</p>\n    </div>\n\n    <div class=\"diagram-wrap\">\n      <div class=\"diagram-head\"><span class=\"diagram-label\">W + R &gt; N = Overlap</span><span class=\"diagram-type\">SVG</span></div>\n      <div class=\"diagram-body\">\n        <svg class=\"arch-svg\" viewBox=\"0 0 600 240\" xmlns=\"http://www.w3.org/2000/svg\">\n          <g font-family=\"Geist, system-ui, sans-serif\" font-size=\"12\">\n            <text x=\"300\" y=\"30\" text-anchor=\"middle\" font-weight=\"500\">N=5, W=3, R=3 → overlap on at least one replica</text>\n            <!-- 5 replicas -->\n            <g transform=\"translate(50,80)\">\n              <circle cx=\"30\" cy=\"30\" r=\"26\" fill=\"hsl(295,55%,90%)\" stroke=\"hsl(295,55%,48%)\" stroke-width=\"2\"></circle>\n              <text x=\"30\" y=\"35\" text-anchor=\"middle\">R1</text>\n              <circle cx=\"130\" cy=\"30\" r=\"26\" fill=\"hsl(295,55%,90%)\" stroke=\"hsl(295,55%,48%)\" stroke-width=\"2\"></circle>\n              <text x=\"130\" y=\"35\" text-anchor=\"middle\">R2</text>\n              <circle cx=\"230\" cy=\"30\" r=\"26\" fill=\"hsl(45,85%,88%)\" stroke=\"hsl(45,70%,40%)\" stroke-width=\"2.5\"></circle>\n              <text x=\"230\" y=\"35\" text-anchor=\"middle\">R3</text>\n              <text x=\"230\" y=\"80\" text-anchor=\"middle\" font-size=\"10\" fill=\"hsl(45,70%,28%)\">overlap</text>\n              <circle cx=\"330\" cy=\"30\" r=\"26\" fill=\"hsl(190,70%,88%)\" stroke=\"hsl(190,60%,42%)\" stroke-width=\"2\"></circle>\n              <text x=\"330\" y=\"35\" text-anchor=\"middle\">R4</text>\n              <circle cx=\"430\" cy=\"30\" r=\"26\" fill=\"hsl(190,70%,88%)\" stroke=\"hsl(190,60%,42%)\" stroke-width=\"2\"></circle>\n              <text x=\"430\" y=\"35\" text-anchor=\"middle\">R5</text>\n            </g>\n            <g transform=\"translate(50,170)\">\n              <text x=\"0\" y=\"15\" font-size=\"11\" fill=\"hsl(295,55%,48%)\">W=3 writes (R1, R2, R3)</text>\n              <text x=\"300\" y=\"15\" font-size=\"11\" fill=\"hsl(190,60%,42%)\">R=3 reads (R3, R4, R5)</text>\n            </g>\n          </g>\n        </svg>\n      </div>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Tuning per workload",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Tuning per workload</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>W</th><th>R</th><th>Behavior</th><th>Use for</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">N</td><td>1</td><td>Write to all, read from one. Fast reads, slow writes.</td><td>Read-heavy, strong consistency</td></tr>\n        <tr><td class=\"algo-name\">1</td><td>N</td><td>Write to one, read from all. Fast writes, slow reads.</td><td>Write-heavy OK-to-delay reads</td></tr>\n        <tr><td class=\"algo-name\">⌈(N+1)/2⌉</td><td>⌈(N+1)/2⌉</td><td>Both majority. Balanced.</td><td>General default — Dynamo's \"quorum\"</td></tr>\n        <tr><td class=\"algo-name\">1</td><td>1</td><td>Write one, read one. No overlap guarantee.</td><td>Eventual consistency OK — counters, cache</td></tr>\n        <tr><td class=\"algo-name\">0</td><td>0</td><td>No durability guarantees.</td><td>Never</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — sloppy quorum",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Deep dive — sloppy quorum</h2></div>\n    <div class=\"prose\">\n      <p>Strict quorum says: writes must go to W of <em>the N home replicas</em>. If a network partition isolates them, writes fail. Good for correctness, bad for availability.</p>\n      <p><strong>Sloppy quorum</strong> (Dynamo): if the home replicas are unreachable, write to <em>any</em> W healthy nodes, marking them as temporary holders. When the network heals, <strong>hinted handoff</strong> transfers the data back to the real home replicas.</p>\n      <p>Result: writes keep succeeding during partitions. Reads from the home replicas might temporarily miss recent writes (they're on the temporary holders). Availability ↑, consistency temporarily ↓. Cassandra and DynamoDB both default to sloppy quorum — it's the reason they feel always-up during AWS regional incidents.</p>\n      <div class=\"callout\">\n        <div class=\"callout-label\">Interview answer</div>\n        <p>\"We use quorum reads/writes: W=R=⌈(N+1)/2⌉=3 of N=5 replicas. This guarantees read-your-writes strongly. For latency-critical reads on low-stakes data (e.g. engagement counters), we drop to R=1, accepting eventual consistency.\"</p>\n      </div>\n    \n      <div class=\"code-caption\" data-code-snippet=\"1\">Quorum N/R/W (Dynamo-style)</div>\n      <pre><code class=\"lang-python\"># N = total replicas, R = read quorum, W = write quorum\n# Consistency iff R + W &gt; N\n\ndef write(key, value, replicas, W):\n    acks = 0\n    for r in replicas:\n        try:\n            r.put(key, value)\n            acks += 1\n            if acks &gt;= W: return \"ok\"\n        except Exception:\n            pass\n    return \"failed\" if acks &lt; W else \"ok\"\n\ndef read(key, replicas, R):\n    results = []\n    for r in replicas:\n        try: results.append(r.get(key))\n        except: pass\n        if len(results) &gt;= R: break\n    # Return value with latest vector clock; trigger read-repair for stale\n    return max(results, key=lambda x: x.version) if results else None\n\n# N=3, R=2, W=2 → tolerates 1 failure per op; strong consistency.\n# N=3, R=1, W=3 → fast reads, slow writes.\n# N=3, R=1, W=1 → eventual consistency.</code></pre>\n  </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Cassandra</div><h4>Per-query tunable</h4><p>Consistency levels: <code>ONE</code>, <code>QUORUM</code>, <code>ALL</code>, <code>LOCAL_QUORUM</code>. Most apps pick <code>LOCAL_QUORUM</code> for reads + writes.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">DynamoDB</div><h4>Implicit quorum</h4><p>Strong reads query a quorum, eventual reads read one replica. You toggle per request.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Raft / Paxos</div><h4>Majority quorum mandatory</h4><p>Commit requires N/2+1 acks. Leader election requires N/2+1 votes. Classic majority overlap theorem.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">MongoDB</div><h4>Write concern + read preference</h4><p><code>w: \"majority\"</code> for writes, <code>readConcern: \"majority\"</code> for reads. Same quorum pattern wrapped in different vocabulary.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>News feed uses local-quorum writes for feed entries (durability) + eventual reads for scale. WhatsApp uses quorum writes on the message-persist path. Distributed logging uses quorum for log commit visibility.</p></div>"
+    }
+  ],
+  "archSvg": "<svg class=\"arch-svg\" viewBox=\"0 0 600 240\" xmlns=\"http://www.w3.org/2000/svg\">\n          <g font-family=\"Geist, system-ui, sans-serif\" font-size=\"12\">\n            <text x=\"300\" y=\"30\" text-anchor=\"middle\" font-weight=\"500\">N=5, W=3, R=3 → overlap on at least one replica</text>\n            <!-- 5 replicas -->\n            <g transform=\"translate(50,80)\">\n              <circle cx=\"30\" cy=\"30\" r=\"26\" fill=\"hsl(295,55%,90%)\" stroke=\"hsl(295,55%,48%)\" stroke-width=\"2\"></circle>\n              <text x=\"30\" y=\"35\" text-anchor=\"middle\">R1</text>\n              <circle cx=\"130\" cy=\"30\" r=\"26\" fill=\"hsl(295,55%,90%)\" stroke=\"hsl(295,55%,48%)\" stroke-width=\"2\"></circle>\n              <text x=\"130\" y=\"35\" text-anchor=\"middle\">R2</text>\n              <circle cx=\"230\" cy=\"30\" r=\"26\" fill=\"hsl(45,85%,88%)\" stroke=\"hsl(45,70%,40%)\" stroke-width=\"2.5\"></circle>\n              <text x=\"230\" y=\"35\" text-anchor=\"middle\">R3</text>\n              <text x=\"230\" y=\"80\" text-anchor=\"middle\" font-size=\"10\" fill=\"hsl(45,70%,28%)\">overlap</text>\n              <circle cx=\"330\" cy=\"30\" r=\"26\" fill=\"hsl(190,70%,88%)\" stroke=\"hsl(190,60%,42%)\" stroke-width=\"2\"></circle>\n              <text x=\"330\" y=\"35\" text-anchor=\"middle\">R4</text>\n              <circle cx=\"430\" cy=\"30\" r=\"26\" fill=\"hsl(190,70%,88%)\" stroke=\"hsl(190,60%,42%)\" stroke-width=\"2\"></circle>\n              <text x=\"430\" y=\"35\" text-anchor=\"middle\">R5</text>\n            </g>\n            <g transform=\"translate(50,170)\">\n              <text x=\"0\" y=\"15\" font-size=\"11\" fill=\"hsl(295,55%,48%)\">W=3 writes (R1, R2, R3)</text>\n              <text x=\"300\" y=\"15\" font-size=\"11\" fill=\"hsl(190,60%,42%)\">R=3 reads (R3, R4, R5)</text>\n            </g>\n          </g>\n        </svg>",
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

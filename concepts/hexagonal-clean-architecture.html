@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Hexagonal &amp; Clean Architecture — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 175; --accent-s: 60%; --accent-l: 40%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>You wrote your business logic in a controller class that calls Postgres directly via an ORM and HTTP-responds with JSON. Year 2: you need to support gRPC. Year 3: you need to use DynamoDB instead of Postgres. Year 4: the same logic runs as a Lambda function. Each migration is a 6-month rewrite because business logic, framework concerns, and infrastructure are tangled together.</p>
+      <p><strong>Hexagonal architecture</strong> (Alistair Cockburn, 2005) and its sibling <strong>Clean architecture</strong> (Bob Martin, 2012) are the discipline of separating <em>core business logic</em> from <em>delivery mechanism</em> and <em>infrastructure</em>. Same code runs as REST, gRPC, CLI, queue consumer, or test harness — with no changes to the business logic.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Ports and adapters</h2></div>
+    <div class="prose">
+      <p>Hexagonal's metaphor: imagine your application as a hexagon. Inside the hexagon is the business logic (the "core"). Around the edges are <strong>ports</strong> — interfaces the core defines for what it needs from the outside. Outside the hexagon are <strong>adapters</strong> — concrete implementations of those ports.</p>
+      <ul>
+        <li><strong>Driving ports</strong> (left side): the world calls into the core. HTTP controller, gRPC handler, CLI command, message-queue consumer — all are adapters that translate external requests into calls on driving ports.</li>
+        <li><strong>Driven ports</strong> (right side): the core calls out to the world. Repository for storage, email sender, payment gateway client — adapters implement these ports.</li>
+      </ul>
+      <p>The core knows nothing about HTTP, JSON, SQL, or the cloud. It works in pure domain language. Swap any adapter without changing core code.</p>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Ports &amp; Adapters Topology</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg">
+          <g font-family="Geist, system-ui, sans-serif" font-size="11">
+            <!-- Core hexagon -->
+            <polygon points="280,80 440,80 520,160 440,240 280,240 200,160" fill="hsl(175,60%,90%)" stroke="hsl(175,60%,40%)" stroke-width="2"/>
+            <text x="360" y="155" text-anchor="middle" font-weight="600" fill="hsl(175,60%,28%)">Domain Core</text>
+            <text x="360" y="175" text-anchor="middle" font-size="10" fill="hsl(175,60%,28%)">pure business logic</text>
+            <text x="360" y="195" text-anchor="middle" font-size="10" fill="hsl(175,60%,28%)">no framework, no I/O</text>
+
+            <!-- Driving adapters (left) -->
+            <rect x="40"  y="40"  width="120" height="40" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="100" y="65"  text-anchor="middle" font-size="11">HTTP controller</text>
+            <rect x="40"  y="100" width="120" height="40" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="100" y="125" text-anchor="middle" font-size="11">gRPC handler</text>
+            <rect x="40"  y="160" width="120" height="40" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="100" y="185" text-anchor="middle" font-size="11">CLI command</text>
+            <rect x="40"  y="220" width="120" height="40" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="100" y="245" text-anchor="middle" font-size="11">Test harness</text>
+            <text x="100" y="285" text-anchor="middle" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">DRIVING ADAPTERS</text>
+
+            <!-- Driven adapters (right) -->
+            <rect x="560" y="40"  width="120" height="40" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="620" y="65"  text-anchor="middle" font-size="11">Postgres repo</text>
+            <rect x="560" y="100" width="120" height="40" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="620" y="125" text-anchor="middle" font-size="11">Email gateway</text>
+            <rect x="560" y="160" width="120" height="40" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="620" y="185" text-anchor="middle" font-size="11">Stripe client</text>
+            <rect x="560" y="220" width="120" height="40" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="620" y="245" text-anchor="middle" font-size="11">In-memory mock</text>
+            <text x="620" y="285" text-anchor="middle" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">DRIVEN ADAPTERS</text>
+
+            <!-- Lines from adapters to core edges -->
+            <line x1="160" y1="60"  x2="200" y2="160" stroke="#9ca3af" stroke-width="1"/>
+            <line x1="160" y1="120" x2="200" y2="160" stroke="#9ca3af" stroke-width="1"/>
+            <line x1="160" y1="180" x2="200" y2="160" stroke="#9ca3af" stroke-width="1"/>
+            <line x1="160" y1="240" x2="200" y2="160" stroke="#9ca3af" stroke-width="1"/>
+
+            <line x1="520" y1="160" x2="560" y2="60"  stroke="#9ca3af" stroke-width="1"/>
+            <line x1="520" y1="160" x2="560" y2="120" stroke="#9ca3af" stroke-width="1"/>
+            <line x1="520" y1="160" x2="560" y2="180" stroke="#9ca3af" stroke-width="1"/>
+            <line x1="520" y1="160" x2="560" y2="240" stroke="#9ca3af" stroke-width="1"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Clean Architecture — Bob Martin's variant</h2></div>
+    <div class="prose">
+      <p>Same idea, expressed as concentric layers:</p>
+      <ol>
+        <li><strong>Entities</strong> — the most stable rules. Business invariants. Plain objects.</li>
+        <li><strong>Use cases</strong> — application-specific orchestration. "Place an order" workflow.</li>
+        <li><strong>Interface adapters</strong> — controllers, presenters, repositories. Translate between use cases and frameworks.</li>
+        <li><strong>Frameworks &amp; drivers</strong> — Spring, Postgres, AWS SDK. The outermost shell.</li>
+      </ol>
+      <p>The <strong>dependency rule</strong>: source code dependencies only point inward. Outer layers know about inner; inner layers know nothing about outer. Entities don't import anything framework-related. Use cases import entities but not Postgres.</p>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">When it's worth it</h2></div>
+    <div class="prose">
+      <p><strong>Worth it when:</strong></p>
+      <ul>
+        <li>Business logic is genuinely complex (insurance pricing, banking rules, scheduling).</li>
+        <li>You'll outlive multiple framework choices (5+ year systems).</li>
+        <li>You need fast unit tests that don't touch I/O. Hexagonal makes the core trivially testable.</li>
+        <li>You have ports you actually want to swap (multiple persistence backends, multiple delivery channels).</li>
+      </ul>
+      <p><strong>Overkill when:</strong></p>
+      <ul>
+        <li>CRUD app with thin business logic — you'd be building scaffolding for nothing.</li>
+        <li>Throwaway prototype — speed of iteration beats long-term flexibility.</li>
+        <li>Small team where one developer wears all hats — the architectural overhead exceeds the value.</li>
+      </ul>
+      <div class="callout callout-warn">
+        <div class="callout-label">Common failure mode</div>
+        <p>Teams adopt clean architecture as boilerplate, end up with 4-layer indirection on every CRUD endpoint. The pattern only pays off when the inner core is genuinely complex. For thin domains, you've added ceremony with no benefit.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — testability is the killer feature</h2></div>
+    <div class="prose">
+      <p>The single best argument for hexagonal architecture: <strong>your domain core can be tested without spinning up Postgres, Kafka, Redis, or any framework</strong>. Tests run in milliseconds, don't flake, can be exhaustive.</p>
+      <p>Pattern:</p>
+      <ul>
+        <li>Define a <code>OrderRepository</code> port (interface).</li>
+        <li>Production has <code>PostgresOrderRepository</code> implementation.</li>
+        <li>Tests use <code>InMemoryOrderRepository</code>.</li>
+        <li>Domain logic — "OrderPlacementService" — accepts a repo via constructor injection.</li>
+      </ul>
+      <p>Result: you can run 10,000 tests of order placement logic in 2 seconds. CI feedback loop tightens dramatically. Bugs caught at the unit-test level, not in slow integration tests.</p>
+      <p>This is also the foundation of TDD — you can't TDD a system where every method does I/O. You can TDD a system whose core is pure functions over domain types.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"We use ports and adapters. Domain core has no framework or I/O dependencies. Postgres, REST, Kafka, Stripe are all adapters around defined ports. This makes the core unit-testable in milliseconds and lets us swap any infra concern (e.g., DynamoDB instead of Postgres) without touching domain logic."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Banks &amp; insurance</div><h4>Complex domain → hexagonal pays off</h4><p>Pricing engines, underwriting rules, compliance checks — pure domain code separated from frameworks. Replaces decade-old mainframes with clean Java/Kotlin services.</p></div>
+      <div class="rw-card"><div class="rw-name">DDD-heavy startups (modern Java/Kotlin)</div><h4>Hexagonal is the default</h4><p>Spring Boot communities adopt hexagonal as best practice. Reference templates from the Spring team itself.</p></div>
+      <div class="rw-card"><div class="rw-name">Functional-language shops</div><h4>Naturally hexagonal</h4><p>Clojure, F#, Haskell make pure domain logic + IO at edges idiomatic. Hexagonal is just "how you write code."</p></div>
+      <div class="rw-card"><div class="rw-name">Anti-pattern at small startups</div><h4>Common mis-application</h4><p>10-person team adopting 4-layer hexagonal for a CRUD app drowns in indirection. Match architectural cost to actual complexity.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Payment gateway naturally maps to hexagonal — domain (charge, refund, dispute) cleanly separated from PSP adapters (Stripe, Adyen, Braintree). E-commerce platforms with complex pricing/promotion rules benefit from clean architecture in the pricing core.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

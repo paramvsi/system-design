@@ -1,0 +1,77 @@
+{
+  "slug": "tls-https",
+  "title": "TLS & HTTPS",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 155,
+    "s": 55,
+    "l": 40
+  },
+  "category": "Networking & Delivery",
+  "blurb": "Every byte between a client and your server passes through routers you don't control. Without encryption, anyone on the path reads passwords, session tokens, the works. TLS encrypts it all — but also adds latency (the ha",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>Every byte between a client and your server passes through routers you don't control. Without encryption, anyone on the path reads passwords, session tokens, the works. TLS encrypts it all — but also adds latency (the handshake) and cost (certificate management). Getting this right matters; getting it wrong is a CVE.</p>\n      <p>TLS + HTTP = HTTPS. In 2025 there is no reason to serve anything over plain HTTP. Let's Encrypt made certs free. Let's understand what's actually happening under the lock icon.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "What TLS provides",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">What TLS provides</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>Confidentiality</strong> — encrypted in transit.</li>\n        <li><strong>Integrity</strong> — tampered bytes detected (via HMAC).</li>\n        <li><strong>Authentication</strong> — you're actually talking to <code>api.example.com</code>, not a man-in-the-middle pretending to be (via the certificate chain).</li>\n      </ul>\n      <p>Mutual TLS (mTLS) adds the reverse: the server verifies the client too. Used heavily in service-to-service auth inside trusted networks.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "The TLS 1.3 handshake",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">The TLS 1.3 handshake</h2></div>\n    <div class=\"prose\">\n      <p>One round-trip in TLS 1.3 (vs two in 1.2). Standard procedure for a new connection:</p>\n      <ol>\n        <li><strong>ClientHello</strong> — client sends supported cipher suites, a random number, and its ephemeral public key.</li>\n        <li><strong>ServerHello</strong> — server picks a cipher, sends its certificate, its own random, its ephemeral public key, and a MAC over everything.</li>\n        <li>Both sides derive a shared secret from the two ephemeral keys (Diffie-Hellman). Subsequent data is encrypted with AES-GCM or ChaCha20-Poly1305 using the derived key.</li>\n      </ol>\n      <p>Total: one round-trip. For a repeat visitor with session resumption, zero round-trips to start sending data (0-RTT mode).</p>\n    </div>\n\n    <div class=\"diagram-wrap\">\n      <div class=\"diagram-head\"><span class=\"diagram-label\">TLS 1.3 Handshake</span><span class=\"diagram-type\">Mermaid</span></div>\n      <div class=\"diagram-body\">\n        <div class=\"mermaid\">\nsequenceDiagram\n    participant C as Client\n    participant S as Server\n\n    C-&gt;&gt;S: ClientHello<br>- cipher suites<br>- client random<br>- DH public key\n    S-&gt;&gt;C: ServerHello + Certificate + Finished<br>- chosen cipher<br>- server random<br>- DH public key<br>- signed cert chain\n    Note over C,S: Both derive shared secret via DH\n    C-&gt;&gt;S: Finished (encrypted) + HTTP request\n    S--&gt;&gt;C: HTTP response (encrypted)\n        </div>\n      </div>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Certificate chain",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Certificate chain</h2></div>\n    <div class=\"prose\">\n      <p>Your server presents a certificate signed by an intermediate CA, which is signed by a root CA. Browsers ship with the root CAs' public keys baked in; the chain verifies up to that trust anchor.</p>\n      <p>When your cert is about to expire, your deploy has to refresh it. Let's Encrypt issues 90-day certs; their ACME protocol automates renewal via bots like <code>certbot</code>. Always automate renewal — manual means you'll forget once, and the outage is a 2am incident.</p>\n      <p>SNI (Server Name Indication): since many sites share one IP, the client sends the hostname in the ClientHello so the server knows which cert to present. Before SNI, you needed one IP per cert; today, Cloudflare serves 10M+ sites from the same IPs.</p>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "Where TLS terminates",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Where TLS terminates</h2></div>\n    <div class=\"tradeoff-grid\">\n      <div class=\"tradeoff-option chosen\">\n        <div class=\"tradeoff-label\">At the edge / load balancer</div>\n        <h4>Terminate at the LB; plain HTTP internally</h4>\n        <p>The <a href=\"/concepts/load-balancer\">LB</a> or CDN handles TLS. Internal traffic is plain HTTP over a private network. Simpler; faster internally. Required for header-based routing (LB can't route if it can't read the request).</p>\n      </div>\n      <div class=\"tradeoff-option\">\n        <div class=\"tradeoff-label\">End-to-end TLS</div>\n        <h4>Encrypted all the way to the app</h4>\n        <p>TLS terminates at the app or at each service. Required in zero-trust architectures. Adds CPU cost and makes some LB features (path-based routing of encrypted traffic) harder.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — 0-RTT and the replay risk",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Deep dive — 0-RTT and the replay risk</h2></div>\n    <div class=\"prose\">\n      <p>TLS 1.3's 0-RTT mode lets a returning client send application data in the <em>first</em> packet, using a pre-shared key from a previous session. The handshake takes zero round-trips. Amazing for mobile networks with 200ms+ RTT.</p>\n      <p>The trap: <strong>0-RTT data is replayable</strong>. An attacker who recorded the original request can replay it to the server, which has no way to distinguish \"fresh request\" from \"replay.\" For idempotent GETs, harmless. For POST that charges a card — catastrophic.</p>\n      <p>Mitigation: restrict 0-RTT to safe methods (GET, HEAD) at the LB level. All mainstream LB stacks offer this as a config flag. Use 0-RTT for static content, fall back to 1-RTT for mutations.</p>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Let's Encrypt</div><h4>Free certs + ACME automation</h4><p>Revolutionized cert management. Default for most startups and indie projects. 90-day certs, auto-renewed.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Cloudflare</div><h4>Terminates TLS at 300 PoPs</h4><p>Universal SSL free. Your origin only speaks HTTPS to Cloudflare; CF speaks HTTPS to the world.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">mTLS in service mesh</div><h4>Istio, Linkerd</h4><p>Inside Kubernetes: every pod has a cert; every service call is mTLS. Zero-trust networking without app changes.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">AWS ACM</div><h4>Managed certs for AWS services</h4><p>Issues and auto-renews certs for ALB, CloudFront, API Gateway. No manual rotation.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "08",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">08</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Payment gateway requires end-to-end TLS — PCI compliance mandates it. WhatsApp uses TLS for client-server + Signal Protocol for end-to-end encryption. Every public-facing API problem uses TLS by default.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [
+    {
+      "sectionId": "how-it-works",
+      "source": "sequenceDiagram\n    participant C as Client\n    participant S as Server\n\n    C->>S: ClientHello- cipher suites- client random- DH public key\n    S->>C: ServerHello + Certificate + Finished- chosen cipher- server random- DH public key- signed cert chain\n    Note over C,S: Both derive shared secret via DH\n    C->>S: Finished (encrypted) + HTTP request\n    S-->>C: HTTP response (encrypted)",
+      "index": 0
+    }
+  ],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

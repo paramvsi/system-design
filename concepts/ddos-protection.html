@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>DDoS Protection — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 350; --accent-s: 70%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>A botnet of 100,000 compromised devices each sends 10 requests/sec at your site. 1M RPS at your origin. Your LB handles 50k. Site is down. No users can reach you until the attack stops or you have defenses.</p>
+      <p>DDoS (Distributed Denial of Service) attacks come in many flavors — volumetric (fill pipes), protocol (exhaust connections), application (expensive requests). Defenses live at every layer. In 2025, "we use Cloudflare" is not a complete answer — understand what happens at each layer and why.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The three layers of attack</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Layer</th><th>Attack type</th><th>Example</th><th>Goal</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">L3/L4 Volumetric</td><td>Saturate network bandwidth</td><td>UDP floods, amplification (DNS, NTP)</td><td>Fill your pipes so legitimate traffic can't reach you</td></tr>
+        <tr><td class="algo-name">L3/L4 Protocol</td><td>Exhaust connection state</td><td>SYN floods, Slowloris</td><td>Consume server TCP state so new connections fail</td></tr>
+        <tr><td class="algo-name">L7 Application</td><td>Abuse expensive endpoints</td><td>100k requests/sec to <code>/search?q=...</code></td><td>Hit endpoints that take DB/CPU work; exhaust backend</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Defenses at each layer</h2></div>
+    <div class="prose">
+      <p><strong>L3/L4 defenses (volumetric + protocol):</strong></p>
+      <ul>
+        <li><strong>Scrubbing centers</strong> (Cloudflare, AWS Shield, Radware). Traffic enters a provider network with terabits of capacity. Bad packets filtered out; clean traffic forwarded.</li>
+        <li><strong>Anycast</strong>. The same IP served from 300 PoPs. Attack traffic distributes across all; no single site is overwhelmed.</li>
+        <li><strong>SYN cookies</strong>. Kernel trick so servers don't allocate state for incomplete handshakes.</li>
+        <li><strong>Rate-limit at the edge</strong>. Drop packets exceeding per-IP thresholds before they reach expensive processing.</li>
+      </ul>
+      <p><strong>L7 defenses (application-layer):</strong></p>
+      <ul>
+        <li><strong>Rate limiting per IP / API key / user</strong> (see <a href="/concepts/rate-limiting-algorithms">rate limiting algorithms</a>). 100 RPS max per anonymous IP is a reasonable baseline.</li>
+        <li><strong>CAPTCHA / JS challenges</strong> for suspicious traffic. Bots fail; humans pass.</li>
+        <li><strong>WAF (Web Application Firewall)</strong> rules. Block patterns (SQLi, XSS, known bad paths).</li>
+        <li><strong>Bot detection</strong> via behavioral signals (mouse movement, TLS fingerprinting, header anomalies).</li>
+        <li><strong>Load shedding</strong> at the application: when CPU &gt; 80%, drop new requests fast rather than queue them.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Deep dive — amplification attacks</h2></div>
+    <div class="prose">
+      <p>An amplification attack is the scariest volumetric kind because <em>the attacker sends a small packet and gets a huge response sent to the target</em>. Ratio is called the "amplification factor."</p>
+      <ul>
+        <li><strong>DNS amplification</strong> (factor ~50×): attacker spoofs source IP as the target, sends a 60-byte DNS query to an open resolver. Resolver sends a 3000-byte response to the target.</li>
+        <li><strong>NTP amplification</strong> (factor ~550×): similar trick with NTP's monlist command.</li>
+        <li><strong>Memcached amplification</strong> (factor up to 50,000×!): exposed memcached servers respond with huge blobs to small requests. GitHub was hit with a 1.35 Tbps attack this way in 2018.</li>
+      </ul>
+      <p>Mitigation: the amplification source (open DNS resolvers, exposed memcached) shouldn't exist — bad configuration on someone else's server. Defense for you: <strong>ingress at a scrubbing center absorbs the volume</strong>. Your origin never sees it.</p>
+      <p>Also: never allow open DNS/NTP/memcached on the public internet. Rate-limit outgoing UDP. Be part of the fix.</p>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Attack Scale Per Layer — 100k-Bot Botnet</span>
+        <span class="diagram-type">Numbers</span>
+      </div>
+      <div class="diagram-body">
+        <table class="algo-table" style="margin:0">
+          <thead><tr><th>Layer</th><th>Attack</th><th>Bandwidth</th><th>Defense capacity</th></tr></thead>
+          <tbody>
+            <tr><td class="algo-name">L3 volumetric</td><td>UDP flood, 1 KB packets × 100k bots × 1k pps</td><td>~800 Gbps</td><td>Cloudflare ~250 Tbps · AWS Shield ~3 Tbps</td></tr>
+            <tr><td class="algo-name">L3 amplification</td><td>NTP monlist, 50× factor, 100k bots</td><td>~40 Tbps possible</td><td>Scrubbing center mandatory</td></tr>
+            <tr><td class="algo-name">L4 SYN flood</td><td>100k bots × 10k pps × 64 B SYN</td><td>~50 Gbps + state exhaustion</td><td>SYN cookies + LB connection limits</td></tr>
+            <tr><td class="algo-name">L7 HTTP flood</td><td>100k bots × 10 RPS</td><td><strong>1M RPS</strong> at your LB</td><td>Origin LB ~50k RPS · need edge rate-limit</td></tr>
+            <tr><td class="algo-name">L7 expensive endpoint</td><td>100k bots × 1 RPS hitting <code>/search?q=*</code></td><td>100k RPS at the DB</td><td>WAF + per-IP limit + bot detection</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Real-world providers</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Cloudflare</div><h4>Edge + scrubbing + WAF</h4><p>Free tier includes DDoS protection. Handles tens-of-terabits attacks routinely. "Magic Transit" for full-network protection of origin servers.</p></div>
+      <div class="rw-card"><div class="rw-name">AWS Shield</div><h4>Managed by AWS</h4><p>Standard tier included with ELB/CloudFront. Advanced tier adds WAF, attack metrics, cost protection.</p></div>
+      <div class="rw-card"><div class="rw-name">Akamai Kona</div><h4>Enterprise scrubbing</h4><p>Used by banks, governments, Fortune 50. Expensive; global presence.</p></div>
+      <div class="rw-card"><div class="rw-name">Google Cloud Armor</div><h4>For GCP workloads</h4><p>Per-IP, per-region rules; adaptive protection that learns normal traffic shapes.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Rate limiter problem is a core DDoS defense at the application layer. URL shortener uses Cloudflare for edge DDoS protection. Public APIs rate-limit aggressively per key.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

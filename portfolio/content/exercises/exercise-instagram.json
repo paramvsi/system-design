@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-instagram",
+  "title": "Instagram / Photo + Reels Sharing",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 330,
+    "s": 72,
+    "l": 52
+  },
+  "category": "Social & Feed",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>Design a photo + short-video sharing app at planet scale. 2B MAU, ~95M uploads/day, read-heavy ~100:1. Home feed blends followed accounts with algorithmic recommendations; reels feed is purely algorithmic.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n      \n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Split the problem into (a) media pipeline, (b) feed, (c) reels ranker. They have different architectures and different read/write ratios.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>For feed: hybrid fan-out. Push-on-write to normal users, pull-on-read for celebrities. The threshold is the design choice.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>For media: direct-to-S3 uploads with pre-signed URLs; async transcoding; CDN with tiered storage for cost.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+1</span> Back-of-envelope: 95M uploads/day → ~1,200/sec writes, ~290k feed loads/sec, ~3 PB/day media</li>\n      <li><span class=\"rubric-points\">+2</span> Media pipeline: direct-to-S3 via pre-signed URLs; async transcoder emits 5–10 derivatives; CDN lazy-pulls on first view</li>\n      <li><span class=\"rubric-points\">+2</span> Hybrid fan-out explicitly: push for ≤ N-follower users, pull-on-read for celebrities (N ≈ 100k follower threshold)</li>\n      <li><span class=\"rubric-points\">+1</span> Feed storage: Redis sorted-sets per user (timeline); posts sharded by user_id in Cassandra</li>\n      <li><span class=\"rubric-points\">+1</span> Reels vs home feed are separate products: different ranker, different candidate pool</li>\n      <li><span class=\"rubric-points\">+1</span> Storage tiering: hot (SSD) / warm (HDD) / cold (Glacier) — discusses cost saving math</li>\n      <li><span class=\"rubric-points\">+1</span> Mentions collapse_id or equivalent for dedup across retries; idempotency on PUT</li>\n      <li><span class=\"rubric-points\">+1</span> Addresses failure modes: celebrity hot-key on feed cache; upload token abuse; CDN cache miss cascade</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Proposes storing photo bytes in Postgres / MySQL</li>\n        <li>Uploads go through app servers (byte proxy) instead of direct-to-S3</li>\n        <li>Fan-out naively to all followers regardless of celebrity status</li>\n        <li>Synchronous transcoding blocking the upload request</li>\n        <li>Ignores feed read QPS (290k/sec) — treats as just a write problem</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 1
+}

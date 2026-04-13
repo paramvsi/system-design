@@ -1,0 +1,71 @@
+{
+  "slug": "message-queue-vs-pubsub",
+  "title": "Message Queue vs Pub/Sub",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 45,
+    "s": 88,
+    "l": 45
+  },
+  "category": "Messaging & Async",
+  "blurb": "Two teams both say \"we use a queue.\" One means point-to-point work distribution (one message, one consumer takes it, runs a job). The other means broadcast (one event, N subscribers each process it). These have different",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>Two teams both say \"we use a queue.\" One means <strong>point-to-point work distribution</strong> (one message, one consumer takes it, runs a job). The other means <strong>broadcast</strong> (one event, N subscribers each process it). These have different correctness properties, different failure modes, different products. Confusing them has wrecked many systems.</p>\n      <p>In interviews: \"would you use SQS or Kafka for this?\" is really asking if you understand the difference.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The two shapes",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The two shapes</h2></div>\n    <div class=\"tradeoff-grid\">\n      <div class=\"tradeoff-option chosen\">\n        <div class=\"tradeoff-label\">Message queue (point-to-point)</div>\n        <h4>One consumer wins each message</h4>\n        <p>Producer enqueues, N consumers compete. Each message is delivered to exactly one consumer. Queue is a <em>work distribution mechanism</em>. SQS, RabbitMQ (classic queues), Redis BLPOP. Used for: job queues, email sending, image processing.</p>\n      </div>\n      <div class=\"tradeoff-option\">\n        <div class=\"tradeoff-label\">Pub/Sub (broadcast)</div>\n        <h4>Every subscriber gets every message</h4>\n        <p>Publisher emits, all N subscribers receive. Each subscriber processes independently. Pub/Sub is a <em>fan-out mechanism</em>. Kafka (topic + consumer groups), SNS, Redis pub/sub, NATS. Used for: event streaming, cache invalidation, audit logs.</p>\n      </div>\n    </div>\n    <div class=\"callout callout-warn\">\n      <div class=\"callout-label\">The confusing middle</div>\n      <p>Kafka is technically pub/sub, but a \"consumer group\" acts like a queue (each partition consumed by one member of the group). So Kafka does both — which is why it's everywhere. RabbitMQ also does both via exchange types. The difference is <em>per-usage</em>, not per-product.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "Queue semantics",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Queue semantics</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>Durability</strong> — messages persist (disk) until ACKed. Crashed consumer → message redelivered.</li>\n        <li><strong>Visibility timeout</strong> — when a consumer picks up a message, it's invisible to others for N seconds. If the consumer ACKs, gone; if not, re-queued. Prevents duplicate work unless the consumer crashes.</li>\n        <li><strong>At-least-once delivery</strong> — on retries, a message may be delivered twice. Consumers must be idempotent.</li>\n        <li><strong>FIFO vs unordered</strong> — SQS has both (standard = unordered, higher throughput; FIFO = strict order, lower throughput). RabbitMQ is FIFO within a queue.</li>\n        <li><strong>Dead letter queue</strong> — messages that fail N times move to a DLQ for inspection. Critical for production.</li>\n      </ul>\n    \n      <div class=\"code-caption\" data-code-snippet=\"1\">Simple in-memory pub/sub with backpressure</div>\n      <pre><code class=\"lang-python\">import asyncio\nfrom collections import defaultdict\n\nclass PubSub:\n    def __init__(self, buffer_size=1000):\n        self.channels = defaultdict(list)  # topic -&gt; [asyncio.Queue]\n\n    def subscribe(self, topic):\n        q = asyncio.Queue(maxsize=1000)\n        self.channels[topic].append(q)\n        return q\n\n    async def publish(self, topic, msg):\n        dead = []\n        for q in self.channels[topic]:\n            try:\n                q.put_nowait(msg)   # drop on backpressure, don't block\n            except asyncio.QueueFull:\n                dead.append(q)       # slow consumer → disconnect\n        for q in dead: self.channels[topic].remove(q)\n\n# Real systems (Redis pub/sub, Kafka) follow this shape but with durability\n# + cluster-wide routing. In-memory version is the mental model.</code></pre>\n  </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Pub/Sub semantics",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Pub/Sub semantics</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>Topics.</strong> Producers publish to a topic name. Consumers subscribe by topic.</li>\n        <li><strong>Retention.</strong> Kafka retains messages by time (7 days default). Subscribers can replay from any offset. SNS + most pub/sub systems deliver and forget.</li>\n        <li><strong>Consumer groups (Kafka).</strong> Members of the same group share a topic's load (partition affinity). Two different groups each get all messages — the fan-out property.</li>\n        <li><strong>Ordering</strong> — guaranteed <em>within a partition</em> (Kafka) or <em>within a topic for one subscriber</em> (RabbitMQ topic exchange). Not cross-partition.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "When to reach for each",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">When to reach for each</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Use case</th><th>Shape</th><th>Product</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Background jobs (thumbnails)</td><td>Queue</td><td>SQS, RabbitMQ, Sidekiq</td></tr>\n        <tr><td class=\"algo-name\">Event streaming, audit log</td><td>Pub/Sub</td><td>Kafka</td></tr>\n        <tr><td class=\"algo-name\">Email dispatch</td><td>Queue</td><td>SQS, RabbitMQ</td></tr>\n        <tr><td class=\"algo-name\">Cache invalidation fan-out</td><td>Pub/Sub</td><td>Redis Pub/Sub, NATS</td></tr>\n        <tr><td class=\"algo-name\">Multiple services react to an order</td><td>Pub/Sub</td><td>Kafka (per-consumer-group semantics)</td></tr>\n        <tr><td class=\"algo-name\">Low-latency chat delivery</td><td>Pub/Sub</td><td>NATS, Redis Pub/Sub</td></tr>\n        <tr><td class=\"algo-name\">Payment processing</td><td>Queue + idempotency keys</td><td>SQS FIFO, Kafka compacted</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — why Kafka ate the world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Deep dive — why Kafka ate the world</h2></div>\n    <div class=\"prose\">\n      <p>Kafka unified queue and pub/sub by storing messages in a <strong>distributed commit log</strong>. Every message appended to a partition file, retained by time. Consumers read by offset — they can rewind, replay, or skip.</p>\n      <p>Four properties this gives you for free:</p>\n      <ul>\n        <li><strong>Replay.</strong> A new service can consume messages from 7 days ago. Classic queues delete on ACK — no replay possible.</li>\n        <li><strong>Multiple independent consumers.</strong> Add a second analytics pipeline; it reads from the same topic without affecting the first.</li>\n        <li><strong>High throughput.</strong> Sequential append to disk is fast. A single Kafka broker handles ~500k messages/sec. Partitioning scales horizontally.</li>\n        <li><strong>Exactly-once semantics</strong> (with transactional API) — because consumers track offsets, and Kafka supports atomic offset + message writes.</li>\n      </ul>\n      <p>The cost: Kafka is heavy operationally. Zookeeper (or KRaft), brokers, topic planning, consumer lag monitoring. Don't reach for Kafka if SQS fits — SQS is fully managed and you pay per message. Reach for Kafka when you need replay, high throughput, or many independent consumers of the same stream.</p>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Stripe</div><h4>SQS for jobs, Kafka for events</h4><p>Webhook delivery uses SQS (point-to-point retry). Event audit log uses Kafka (long retention, many consumers).</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Uber</div><h4>Kafka for everything streaming</h4><p>Billions of events/day — trip updates, driver locations, analytics. Kafka's throughput and replay are non-negotiable at Uber's scale.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Shopify</div><h4>Kafka for order processing</h4><p>Pub/Sub model: order placed → cart, inventory, shipping, analytics, email services all consume independently.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Discord</div><h4>Pub/Sub for chat delivery</h4><p>Message written → published to a channel topic → all connected user sessions subscribed to the channel receive it.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "08",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">08</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>News feed uses Kafka for fan-out events. Notification system uses queue (per-channel delivery). Distributed job scheduler uses Kafka as the task bus. WhatsApp uses pub/sub for broadcasting messages to active sessions.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 4
+}

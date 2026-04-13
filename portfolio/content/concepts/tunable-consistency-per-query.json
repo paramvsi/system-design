@@ -1,0 +1,65 @@
+{
+  "slug": "tunable-consistency-per-query",
+  "title": "Tunable Consistency per Query",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 285,
+    "s": 60,
+    "l": 48
+  },
+  "category": "Distributed Systems",
+  "blurb": "\"What consistency does our database give us?\" is the wrong question. Different queries need different guarantees. A user's password change must be strongly consistent (next login should see the new hash). A like-count di",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>\"What consistency does our database give us?\" is the wrong question. Different queries need different guarantees. A user's password change must be strongly consistent (next login should see the new hash). A like-count display can be eventually consistent (15 seconds of staleness invisible).</p>\n      <p>Forcing strong consistency on everything is expensive. Forcing weak consistency on everything is unsafe. <strong>Tunable per-query consistency</strong> — choosing the level at the call site, per request — is how Dynamo-style and modern distributed databases let you have both. The interview-grade answer to \"is this CP or AP?\" is \"it depends per query.\"</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The consistency knobs",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The consistency knobs</h2></div>\n    <div class=\"prose\">\n      <p>Two settings per operation, both relative to N replicas:</p>\n      <ul>\n        <li><strong>W</strong> = how many replicas must ack before write returns success.</li>\n        <li><strong>R</strong> = how many replicas must respond before read returns.</li>\n      </ul>\n      <p>Magic inequality: <span class=\"hl\">W + R &gt; N</span> guarantees any read overlaps with the latest write — strong consistency. <code>W + R ≤ N</code> = eventual consistency. See <a href=\"/concepts/quorum\">quorum</a>.</p>\n      <p>Common settings on N=3:</p>\n    </div>\n    <table class=\"algo-table\">\n      <thead><tr><th>W</th><th>R</th><th>Property</th><th>Cost</th><th>Use for</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">3</td><td>1</td><td>Read-your-writes for free</td><td>Slow writes</td><td>Read-heavy critical data</td></tr>\n        <tr><td class=\"algo-name\">2 (QUORUM)</td><td>2 (QUORUM)</td><td>Strong consistency, balanced</td><td>Both moderate</td><td>Default for important data</td></tr>\n        <tr><td class=\"algo-name\">1</td><td>1</td><td>Eventual</td><td>Fastest, both</td><td>Counters, cache, low-stakes data</td></tr>\n        <tr><td class=\"algo-name\">3 (ALL)</td><td>3 (ALL)</td><td>Strong + redundant verification</td><td>Slow + brittle (one down = blocked)</td><td>Audit data — rare</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "Per-query application",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Per-query application</h2></div>\n    <div class=\"prose\">\n      <p>The real superpower: pick the level <em>per call site</em>, not per database.</p>\n      <pre style=\"background:#f4f3f0;padding:12px;border-radius:6px;font-size:12px;font-family:var(--font-mono);overflow-x:auto\">// Cassandra example\nsession.execute(insert(orders), ConsistencyLevel.QUORUM);  // strong\nsession.execute(insert(view_log), ConsistencyLevel.ONE);   // eventual\n\nsession.execute(select(user_profile), ConsistencyLevel.QUORUM);  // strong read\nsession.execute(select(like_count), ConsistencyLevel.ONE);       // eventual</pre>\n      <p>Same DB, same connection, same cluster. The application code chooses per query. Each query pays only what it needs.</p>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Beyond W/R — full consistency menu",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Beyond W/R — full consistency menu</h2></div>\n    <div class=\"prose\">\n      <p>Modern systems offer a richer menu than just W/R numbers:</p>\n      <ul>\n        <li><strong>Linearizable</strong> — strongest. Reads see effects in real-time order. Cassandra's <code>SERIAL</code>, Spanner default.</li>\n        <li><strong>Sequential / strong-after-read</strong> — operations from any one client appear in order. Most apps' actual need.</li>\n        <li><strong>Bounded staleness</strong> — \"may be up to 5 seconds stale.\" Predictable upper bound. Useful for \"this dashboard updates every 5s\" UX.</li>\n        <li><strong>Session consistency / read-your-writes</strong> — within one user's session, reads always see their writes. Implemented via session-pinned routing or version vectors.</li>\n        <li><strong>Eventual</strong> — converges in finite time, no specific bound. Cheapest.</li>\n      </ul>\n      <p>DynamoDB exposes \"strong\" vs \"eventual\" reads as a flag per request. CockroachDB / Spanner default to linearizable but allow per-transaction <code>BOUNDED STALENESS</code> for read-only reporting queries — 100× faster for analytics that don't need real-time.</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — the routing pattern",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — the routing pattern</h2></div>\n    <div class=\"prose\">\n      <p>Per-query consistency is enabled by a smart driver/coordinator:</p>\n      <ol>\n        <li>App makes call with consistency level annotation.</li>\n        <li>Coordinator picks N replicas owning the key (via <a href=\"/concepts/consistent-hashing\">consistent hashing</a>).</li>\n        <li>Sends request to enough of them to satisfy W or R.</li>\n        <li>Waits for that many acks; returns.</li>\n        <li>Async fires off requests to remaining replicas (for read repair / write fan-out beyond W).</li>\n      </ol>\n      <p>The cost shows up in latency. Strong reads (R=2) wait for the 2nd-fastest replica to respond. P99 latency follows the slow tail of the slowest replica in the quorum. This is why <a href=\"/concepts/request-hedging\">hedging</a> and aggressive timeout tuning matter so much.</p>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">Interview answer</div>\n        <p>\"We tune consistency per query. Critical writes (orders, payments) use QUORUM. High-throughput counters use ONE. User profile reads use QUORUM by default but drop to ONE in batch jobs that don't need real-time. Each query pays for the consistency it actually needs — no global tax.\"</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Cassandra</div><h4>Per-query level</h4><p>11 levels: ONE, TWO, THREE, QUORUM, ALL, LOCAL_QUORUM, EACH_QUORUM, etc. Apps annotate each query.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">DynamoDB</div><h4>Strong vs Eventual flag</h4><p>Boolean per GetItem. Strong is ~2× cost in read-capacity units. Apps choose per request.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Spanner / CockroachDB</div><h4>Bounded staleness queries</h4><p>Default linearizable. Optional <code>AS OF SYSTEM TIME -10s</code> for analytics — 100× cheaper, fine for non-critical reads.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">MongoDB</div><h4>Read concern + Write concern</h4><p>Per-operation. <code>readConcern: \"majority\"</code>, <code>writeConcern: { w: \"majority\" }</code>. Fine-grained control like Cassandra.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>News feed mixes QUORUM writes (post creation) with ONE reads (feed display). E-commerce checkout uses QUORUM for orders + ONE for product-view-count updates. Google Docs uses linearizable for OT operations + bounded staleness for \"saved\" indicators.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

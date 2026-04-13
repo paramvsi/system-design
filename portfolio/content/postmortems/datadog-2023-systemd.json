@@ -1,0 +1,64 @@
+{
+  "slug": "datadog-2023-systemd",
+  "title": "systemd Update",
+  "problemNumber": "03",
+  "difficulty": null,
+  "heroDescription": "A routine Ubuntu systemd security update, applied automatically to tens of thousands of Datadog VMs across all 5 regions, broke networking on every affected host. Datadog's observability service — the one customers trust to tell them when they're down — went dark for 24 hours.",
+  "tags": [
+    "Auto-update",
+    "systemd",
+    "All regions",
+    "24h outage"
+  ],
+  "accent": {
+    "h": 255,
+    "s": 50,
+    "l": 50
+  },
+  "category": "Deploy / operator error",
+  "blurb": "A routine Ubuntu systemd security update, applied automatically to tens of thousands of Datadog VMs across all 5 regions, broke networking on every affected host. Datadog's observability service — the one customers trust",
+  "sections": [
+    {
+      "id": "tldr",
+      "label": "TL;DR",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">TL;DR</h2></div>\n    <div class=\"prose\">\n      <p>Datadog's VMs had Ubuntu unattended-upgrades enabled. An Ubuntu security patch to systemd-networkd shipped; VMs auto-updated; the update restarted networking on each VM in a way that broke CNI config for the running K8s pods. Every region affected simultaneously because unattended-upgrades runs on a cron schedule that doesn't vary by region. Datadog, whose entire business is \"observability you can trust,\" went dark — customers couldn't see their own systems' metrics during the outage.</p>\n    </div>"
+    },
+    {
+      "id": "timeline",
+      "label": "Timeline",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Timeline</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>Pre-event</strong> — Datadog VMs run Ubuntu with unattended-upgrades enabled — standard security best practice.</li>\n        <li><strong>~06:00 UTC Mar 8</strong> — Ubuntu pushes systemd-networkd security patch.</li>\n        <li><strong>~06:00 UTC</strong> — Datadog VMs across 5 regions begin applying the patch as cron runs unattended-upgrades.</li>\n        <li><strong>06:00–06:30</strong> — systemd-networkd restart on each VM removes K8s CNI config. Pods lose networking. Datadog internal services cascade.</li>\n        <li><strong>06:30–08:00</strong> — Datadog engineers realize scale of impact. Disable unattended-upgrades everywhere. Build + ship a fix that re-programs CNI.</li>\n        <li><strong>08:00–24:00</strong> — Gradual region-by-region recovery. Service fully recovered ~24 hours later.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "rootcause",
+      "label": "Root cause",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Root cause</h2></div>\n    <div class=\"prose\">\n      <p>The specific bug: Ubuntu's systemd patch triggered a \"reload\" of networking that doesn't actually cooperate with Kubernetes CNI plugins. CNI sets up virtual interfaces + iptables rules at pod-creation time. systemd-networkd reload cleared those rules. Pods now had interfaces but no routing.</p>\n      <p>The deeper cause: unattended-upgrades was running across ALL VMs simultaneously. Multi-region redundancy didn't help because the update landed everywhere at the same hour. \"Multi-region\" was a geography strategy, not a time-schedule strategy.</p>\n    </div>"
+    },
+    {
+      "id": "impact",
+      "label": "Blast radius",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Blast radius</h2></div>\n    <div class=\"prose\">\n      <p>24 hours of Datadog unavailability, globally. Customers operating critical infrastructure couldn't see their own metrics, alerts, logs, or APM traces. Estimated ~18,000 paid customers impacted. Service credits + customer trust hits. The irony — a monitoring company blind during its own outage — led to significant internal process changes.</p>\n    </div>"
+    },
+    {
+      "id": "lessons",
+      "label": "Lessons",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Lessons</h2></div>\n    <div class=\"prose\">\n      <ol>\n        <li><strong>\"Multi-region\" must include \"multi-time.\"</strong> Regional redundancy is useless against a synchronized global cause. Stagger auto-updates by region.</li>\n        <li><strong>Auto-updates on production are a double-edged sword.</strong> Security team loves them. Infra team hates them. The real answer: auto-updates with staged rollouts + the ability to pause if something breaks.</li>\n        <li><strong>Monitoring systems need special care.</strong> A monitoring platform is mission-critical to customers by definition. Its own reliability bar has to exceed the bar of the systems it monitors.</li>\n        <li><strong>Treat the OS as a dependency.</strong> OS + distribution + kernel + init system is part of your stack. Upgrades are code changes. Canary + monitor them.</li>\n      </ol>\n    </div>"
+    },
+    {
+      "id": "concepts-used",
+      "label": "Concepts in play",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Concepts in play</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><a href=\"/concepts/deployment-strategies-blue-green-canary\">Deployment strategies</a> — auto-upgrades need canaries too.</li>\n        <li><a href=\"/concepts/multi-region-deployment\">Multi-region</a> — redundancy across space doesn't save you from a synchronized cause.</li>\n        <li><a href=\"/concepts/kubernetes\">Kubernetes</a> — CNI + systemd coupling.</li>\n        <li><a href=\"/concepts/monitoring-alerting\">Monitoring</a> — the meta-problem of monitoring your monitors.</li>\n        <li><a href=\"/concepts/chaos-engineering\">Chaos engineering</a> — \"what if all regions update at once?\" is a testable scenario.</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

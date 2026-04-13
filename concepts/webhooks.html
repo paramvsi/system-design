@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Webhooks — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 165; --accent-s: 65%; --accent-l: 42%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Stripe processes a payment. Your app needs to know when it succeeds. Two options:</p>
+      <ul>
+        <li><strong>Polling:</strong> your app calls Stripe every 30 seconds asking "did payment X succeed yet?" Wasteful at scale (millions of polls/sec for events that happen rarely). High latency to learn (up to 30s).</li>
+        <li><strong>Webhook:</strong> Stripe POSTs to <em>your</em> URL (<code>https://your-app.com/webhooks/stripe</code>) the moment the payment completes. Sub-second notification, zero waste.</li>
+      </ul>
+      <p>Webhooks are the standard async-callback pattern across the modern API ecosystem — Stripe, GitHub, Slack, Twilio, every webhook-capable SaaS. Building a <em>reliable</em> webhook system is harder than it looks.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The shape of a good webhook</h2></div>
+    <div class="prose">
+      <p>A typical webhook POST:</p>
+      <pre style="background:#f4f3f0;padding:12px;border-radius:6px;font-size:12px;font-family:var(--font-mono);overflow-x:auto">POST /webhooks/stripe HTTP/1.1
+Host: your-app.com
+Stripe-Signature: t=1700000000,v1=abc123...
+Content-Type: application/json
+
+{
+  "id": "evt_3OABC123",
+  "type": "payment_intent.succeeded",
+  "created": 1700000000,
+  "data": { "object": { ... } }
+}</pre>
+      <ul>
+        <li><strong>Stable URL</strong> per integration. Configurable in the sender's dashboard.</li>
+        <li><strong>HMAC signature header</strong> proves the sender. Receiver verifies with shared secret. Without this, anyone can forge events to your endpoint.</li>
+        <li><strong>Event ID</strong> for <a href="/concepts/idempotency">idempotency</a> — sender may retry; receiver must dedupe.</li>
+        <li><strong>Event type</strong> dispatches to handlers.</li>
+        <li><strong>Timestamp + signature window</strong> prevents replay (reject events older than 5 min).</li>
+      </ul>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Webhook Receiver — Signature First, Then Dedup, Then ACK</span>
+        <span class="diagram-type">Mermaid</span>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+sequenceDiagram
+    participant S as Sender (e.g. Stripe)
+    participant R as Receiver (your app)
+    participant DB as Idempotency Table
+    participant Q as Worker Queue
+
+    S->>R: POST /webhooks/stripe<br/>headers: Stripe-Signature, body: {event}
+    R->>R: 1. Verify HMAC signature (raw body)
+    Note over R: Reject 401 if invalid
+    R->>R: 2. Verify timestamp within 5 min
+    Note over R: Reject 401 if stale (replay)
+    R->>DB: 3. INSERT event_id (idempotency check)
+    alt First time
+        DB-->>R: ok
+        R->>Q: enqueue for processing
+        R-->>S: 200 OK (within 1s)
+    else Already seen
+        DB-->>R: duplicate key
+        R-->>S: 200 OK (no-op)
+    end
+    Note over Q: Worker processes async — never block the ACK
+        </div>
+      </div>
+    </div>
+
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-val">3 days</div><div class="kv-lbl">Stripe webhook retry window</div></div>
+      <div class="kv-card"><div class="kv-val">24 hr</div><div class="kv-lbl">GitHub webhook retry window</div></div>
+      <div class="kv-card"><div class="kv-val">5 min</div><div class="kv-lbl">signature replay window</div></div>
+      <div class="kv-card"><div class="kv-val">&lt; 1 s</div><div class="kv-lbl">target ACK time</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Receiver-side rules</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Verify the signature first.</strong> Reject unsigned or stale events with 401. Anyone can hit your URL.</li>
+        <li><strong>Persist before processing.</strong> Insert event_id into a "processed" table. Idempotency built in. Subsequent retries dedupe instantly.</li>
+        <li><strong>Return 200 fast.</strong> Senders typically retry on non-2xx OR on timeout (often 10-30s). Long processing → ack quickly, push real work to a queue.</li>
+        <li><strong>Don't crash on unknown event types.</strong> Senders add new types regularly. Log + ack 200 instead of 500.</li>
+        <li><strong>Be ready for out-of-order delivery.</strong> Network = no order guarantees. Reorder by timestamp if the order matters.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Sender-side reliability</h2></div>
+    <div class="prose">
+      <p>You're Stripe. Your customer's webhook endpoint returns 500 because their server is down. What do you do?</p>
+      <ol>
+        <li><strong>Retry with exponential backoff.</strong> Most webhook senders retry for 24-72 hours on failure. <a href="/concepts/retry-backoff-jitter">Backoff with jitter</a> prevents thundering-herd recovery.</li>
+        <li><strong>At-least-once delivery.</strong> Same event may arrive multiple times. Receiver dedupes via event_id (the contract).</li>
+        <li><strong>Per-endpoint queues</strong> — a slow customer endpoint shouldn't block others. Bulkhead one queue per destination.</li>
+        <li><strong>Dashboard for failures</strong> — show customers which events failed. Allow manual replay.</li>
+        <li><strong>Eventual stop.</strong> After N days of failure, stop retrying and notify the integration owner. Endless retries waste compute.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — the security checklist</h2></div>
+    <div class="prose">
+      <p>Webhooks are public HTTP endpoints. Security failures are common and severe. The mandatory checklist:</p>
+      <ul>
+        <li><strong>HMAC signature.</strong> Sender computes <code>HMAC(secret, timestamp + body)</code>. Receiver re-computes and compares. Use constant-time comparison to prevent timing attacks.</li>
+        <li><strong>Timestamp window.</strong> Reject events older than 5 minutes. Prevents replay of old captured events.</li>
+        <li><strong>HTTPS only.</strong> Plain HTTP exposes the signature + body to network attackers.</li>
+        <li><strong>IP allowlist (optional).</strong> Senders publish their IP ranges (Stripe, GitHub do); receivers can firewall to those. Defense in depth.</li>
+        <li><strong>Rotate secrets.</strong> If the shared secret leaks, generate a new one. Allow both old + new for a transition window.</li>
+        <li><strong>Don't trust the URL itself.</strong> Don't put the secret in the URL — it ends up in logs.</li>
+      </ul>
+      <div class="callout callout-warn">
+        <div class="callout-label">Common bug</div>
+        <p>"We checked the signature later, after parsing the body" → attacker can send malformed JSON that crashes your parser before signature check. Always: read raw body, verify signature, then parse.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Stripe webhooks</div><h4>Industry gold standard</h4><p>HMAC signed, retried for 3 days, dashboard with failed-event replay. Pioneered idempotency-key + signature pattern.</p></div>
+      <div class="rw-card"><div class="rw-name">GitHub webhooks</div><h4>Push, PR, issues, releases</h4><p>HMAC-SHA256 signed via X-Hub-Signature-256. Per-repo configurable; per-org for org events.</p></div>
+      <div class="rw-card"><div class="rw-name">Twilio</div><h4>SMS, voice, status callbacks</h4><p>Validates via X-Twilio-Signature. Retries delivery on non-2xx. Standard webhook pattern.</p></div>
+      <div class="rw-card"><div class="rw-name">Svix / Hookdeck</div><h4>Webhook-as-a-service</h4><p>SaaS that handles delivery, retries, signing for you. Used by APIs that don't want to build the reliability layer.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Payment gateway publishes webhooks for every charge/refund/dispute. E-commerce uses webhooks for order-state notifications. Notification system itself is fundamentally a webhook delivery problem.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

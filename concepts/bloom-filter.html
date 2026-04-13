@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Bloom Filter — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 80; --accent-s: 55%; --accent-l: 42%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>You have 1 billion URLs you've already crawled. Before crawling a new URL, you want to check "have I seen this before?" A hash set costs <span class="hl-red">~100 GB of RAM</span> for 1B URLs. Most queries will be for URLs you've never seen. You just want to <em>skip</em> the expensive DB lookup when you already know the answer.</p>
+      <p>A <strong>Bloom filter</strong> answers "is this item in the set?" using a few megabytes instead of gigabytes. Catch: small false-positive rate (says yes when answer is no). Zero false negatives — if it says "no," it's definitely no.</p>
+      <p>Perfect for "skip the DB read if we already know we won't find it." Used by Cassandra, HBase, Chrome's malware checker, web crawlers, and every serious caching system.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">How it works</h2></div>
+    <div class="prose">
+      <p>A Bloom filter is a bit array of <code>m</code> bits plus <code>k</code> hash functions.</p>
+      <ul>
+        <li><strong>Add an item:</strong> hash it k times, set those k bits to 1.</li>
+        <li><strong>Check an item:</strong> hash it k times, check those k bits. If all are 1 → probably in the set. If any is 0 → definitely not in the set.</li>
+      </ul>
+      <p>A false positive happens when the k bits for a never-seen item happen to all be set by other items' hashes. Tunable — more bits per item + more hash functions = lower false-positive rate, at the cost of memory and CPU.</p>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head"><span class="diagram-label">Bloom Filter Operations</span><span class="diagram-type">SVG</span></div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 620 200" xmlns="http://www.w3.org/2000/svg">
+          <g font-family="Geist, system-ui, sans-serif" font-size="11">
+            <!-- Bit array -->
+            <text x="20" y="50" font-weight="500">Bits:</text>
+            <g>
+              <rect x="55" y="35" width="28" height="28" fill="#fff" stroke="#ccc9c4"/>
+              <text x="69" y="54" text-anchor="middle">0</text>
+              <rect x="83" y="35" width="28" height="28" fill="hsl(80,55%,85%)" stroke="hsl(80,55%,42%)" stroke-width="1.5"/>
+              <text x="97" y="54" text-anchor="middle">1</text>
+              <rect x="111" y="35" width="28" height="28" fill="#fff" stroke="#ccc9c4"/>
+              <text x="125" y="54" text-anchor="middle">0</text>
+              <rect x="139" y="35" width="28" height="28" fill="hsl(80,55%,85%)" stroke="hsl(80,55%,42%)" stroke-width="1.5"/>
+              <text x="153" y="54" text-anchor="middle">1</text>
+              <rect x="167" y="35" width="28" height="28" fill="#fff" stroke="#ccc9c4"/>
+              <text x="181" y="54" text-anchor="middle">0</text>
+              <rect x="195" y="35" width="28" height="28" fill="hsl(80,55%,85%)" stroke="hsl(80,55%,42%)" stroke-width="1.5"/>
+              <text x="209" y="54" text-anchor="middle">1</text>
+              <rect x="223" y="35" width="28" height="28" fill="#fff" stroke="#ccc9c4"/>
+              <text x="237" y="54" text-anchor="middle">0</text>
+              <rect x="251" y="35" width="28" height="28" fill="#fff" stroke="#ccc9c4"/>
+              <text x="265" y="54" text-anchor="middle">0</text>
+              <rect x="279" y="35" width="28" height="28" fill="hsl(80,55%,85%)" stroke="hsl(80,55%,42%)" stroke-width="1.5"/>
+              <text x="293" y="54" text-anchor="middle">1</text>
+              <rect x="307" y="35" width="28" height="28" fill="#fff" stroke="#ccc9c4"/>
+              <text x="321" y="54" text-anchor="middle">0</text>
+            </g>
+
+            <!-- Add item -->
+            <text x="20" y="110" font-weight="500">add("cat"):</text>
+            <text x="110" y="110" fill="#878480">h1("cat")=1, h2("cat")=3, h3("cat")=5 → set bits 1,3,5</text>
+
+            <!-- Check -->
+            <text x="20" y="145" font-weight="500">contains("dog"):</text>
+            <text x="130" y="145" fill="#878480">h1,h2,h3 → bits 0,3,8 · bit 0 is 0 → </text>
+            <text x="410" y="145" fill="hsl(0,70%,35%)" font-weight="500">definitely NOT in set</text>
+
+            <text x="20" y="175" font-weight="500">contains("cat"):</text>
+            <text x="130" y="175" fill="#878480">h1,h2,h3 → bits 1,3,5 · all set → </text>
+            <text x="380" y="175" fill="hsl(145,55%,28%)" font-weight="500">probably in set</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Sizing — the math that matters</h2></div>
+    <div class="prose">
+      <p>For <code>n</code> items and target false-positive rate <code>p</code>:</p>
+      <ul>
+        <li>Bits needed: <code>m = −n × ln(p) / (ln 2)²</code></li>
+        <li>Optimal hash functions: <code>k = (m/n) × ln 2</code></li>
+      </ul>
+      <p>In practical terms:</p>
+    
+      <div class="code-caption" data-code-snippet="1">Bloom filter in ~25 lines</div>
+      <pre><code class="lang-python">import mmh3
+from bitarray import bitarray
+
+class BloomFilter:
+    def __init__(self, size=10_000_000, k=7):
+        self.size = size
+        self.k = k
+        self.bits = bitarray(size)
+        self.bits.setall(0)
+
+    def _hashes(self, item):
+        h1 = mmh3.hash(item, 0) % self.size
+        h2 = mmh3.hash(item, 1) % self.size
+        return [(h1 + i * h2) % self.size for i in range(self.k)]
+
+    def add(self, item):
+        for h in self._hashes(item):
+            self.bits[h] = 1
+
+    def contains(self, item):
+        return all(self.bits[h] for h in self._hashes(item))
+
+# 10M bits + 7 hashes → ~1% false-positive at ~1M inserts; 1.2 MB total</code></pre>
+  </div>
+    <table class="algo-table">
+      <thead><tr><th>Items (n)</th><th>False-positive rate</th><th>Size</th><th>Hashes (k)</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">1M</td><td>1%</td><td>1.2 MB</td><td>7</td></tr>
+        <tr><td class="algo-name">1M</td><td>0.1%</td><td>1.8 MB</td><td>10</td></tr>
+        <tr><td class="algo-name">1B</td><td>1%</td><td>~1.2 GB</td><td>7</td></tr>
+        <tr><td class="algo-name">1B</td><td>0.01%</td><td>~2.4 GB</td><td>14</td></tr>
+      </tbody>
+    </table>
+    <div class="prose">
+      <p>Compare: storing 1B 64-byte URLs in a hash set = 64 GB minimum, probably 100+ GB with overhead. The Bloom filter uses ~2% of that.</p>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">What Bloom filters can't do</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Remove items.</strong> Unsetting a bit might clear part of another item's fingerprint. Use a <strong>counting Bloom filter</strong> (each cell is a counter) if deletions matter.</li>
+        <li><strong>Enumerate items.</strong> You can't get back the list you put in. Bloom filters are lossy.</li>
+        <li><strong>Guarantee positives.</strong> You still need the backing store when the filter says "yes." The filter only saves you when it says "no."</li>
+      </ul>
+      <p>Rule of thumb: a Bloom filter is a <strong>negative cache</strong>. It eliminates reads you'd have made to the real store for items that definitely aren't there.</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — when it shines</h2></div>
+    <div class="prose">
+      <p><strong>LSM-tree lookups (Cassandra, RocksDB, HBase).</strong> Each level has Bloom filters. On lookup, check the filter for a level; if "no," skip. Avoids reading millions of SSTables per query. Classic use case.</p>
+      <p><strong>Web crawler.</strong> 100B URLs. "Have I seen this URL?" Bloom filter says no 99% of the time → skip DB entirely. The 1% false positives cost an occasional unnecessary DB check, but system-wide saves 99× the reads.</p>
+      <p><strong>Chrome's malware checker.</strong> Local Bloom filter of known bad URLs. Most URLs the user visits don't match → zero network call. Hits require a network check against Google's real database.</p>
+      <p><strong>CDNs and deduplication.</strong> "Have I seen this file already?" Before computing hashes or storing the file, Bloom filter check on chunk fingerprint. Saves massive I/O in backup systems.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"Use a Bloom filter to short-circuit lookups for items that aren't in our set. Size it for the target false-positive rate; 1% is usually plenty because the backing store confirms positives anyway. Memory savings are 20–50× vs a hash set."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Cassandra / RocksDB</div><h4>Per-SSTable Bloom filter</h4><p>Each SSTable has its own filter. Lookups skip SSTables that definitely don't contain the key. Essential to LSM-tree performance.</p></div>
+      <div class="rw-card"><div class="rw-name">Redis</div><h4>RedisBloom module</h4><p>Bloom filter as a Redis data type. <code>BF.ADD</code>, <code>BF.EXISTS</code>. Scalable filters grow capacity dynamically.</p></div>
+      <div class="rw-card"><div class="rw-name">Bitcoin SPV wallets</div><h4>Privacy-preserving queries</h4><p>Clients use Bloom filters to request only transactions "probably involving me" from full nodes, without revealing exactly which addresses.</p></div>
+      <div class="rw-card"><div class="rw-name">Chrome Safe Browsing</div><h4>Local prefix filter</h4><p>Hash prefixes of known malicious URLs. Client checks locally first; only falls back to Google's server on match.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Web crawler uses Bloom filters for URL deduplication at scale. URL shortener can use them to reject obviously-invalid codes before hitting the DB. Mutual connections uses them to reject non-friend lookups.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

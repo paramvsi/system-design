@@ -1,0 +1,1652 @@
+[
+  {
+    "slug": "bff-backend-for-frontend",
+    "title": "Backend for Frontend (BFF)",
+    "difficulty": null,
+    "accent": {
+      "h": 195,
+      "s": 65,
+      "l": 45
+    },
+    "tags": [],
+    "category": "Architecture Patterns",
+    "blurb": "One backend serves your iOS app, Android app, web SPA, and partner API. iOS wants compact JSON for slow networks. Web wants every field for the rich UI. Partners want a stable contract that never changes. You can't make ",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "domain-driven-design",
+    "title": "Domain-Driven Design",
+    "difficulty": null,
+    "accent": {
+      "h": 220,
+      "s": 60,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Architecture Patterns",
+    "blurb": "\"What does Order mean?\" In your warehouse system, Order = a list of SKUs to pick. In your billing system, Order = an invoice with payment terms. In your shipping system, Order = a box with an address. Same word, three co",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "event-driven-architecture",
+    "title": "Event-Driven Architecture",
+    "difficulty": null,
+    "accent": {
+      "h": 305,
+      "s": 60,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Architecture Patterns",
+    "blurb": "Order placed. Now: charge card, decrement inventory, send confirmation email, notify warehouse, update analytics, trigger fraud check, alert support if VIP. Six things must happen.",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "hexagonal-clean-architecture",
+    "title": "Hexagonal & Clean Architecture",
+    "difficulty": null,
+    "accent": {
+      "h": 175,
+      "s": 60,
+      "l": 40
+    },
+    "tags": [],
+    "category": "Architecture Patterns",
+    "blurb": "You wrote your business logic in a controller class that calls Postgres directly via an ORM and HTTP-responds with JSON. Year 2: you need to support gRPC. Year 3: you need to use DynamoDB instead of Postgres. Year 4: the",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "microservices-vs-monolith",
+    "title": "Microservices vs Monolith",
+    "difficulty": null,
+    "accent": {
+      "h": 25,
+      "s": 80,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Architecture Patterns",
+    "blurb": "\"Should we go microservices?\" is one of the most consequential — and most misunderstood — architectural decisions. Pick microservices too early and you'll spend years debugging distributed systems instead of building fea",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "cache-eviction",
+    "title": "Cache Eviction",
+    "difficulty": null,
+    "accent": {
+      "h": 15,
+      "s": 70,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Caching",
+    "blurb": "Your cache has 16 GB of RAM. Your working set grows to 20 GB. Something must go. Which entries you evict — and which you keep — is the difference between a 95% hit rate and a 50% hit rate. At scale, that gap is millions ",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "cache-stampede",
+    "title": "Cache Stampede",
+    "difficulty": null,
+    "accent": {
+      "h": 5,
+      "s": 75,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Caching",
+    "blurb": "Your homepage is served from Redis. TTL 5 minutes. At T = 0, the cache expires. At T = 0.001s, 10,000 concurrent requests all miss the cache and all query the origin database at the same time. The DB, designed for 100 RP",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "cache-strategies",
+    "title": "Cache Strategies",
+    "difficulty": null,
+    "accent": {
+      "h": 8,
+      "s": 72,
+      "l": 52
+    },
+    "tags": [],
+    "category": "Caching",
+    "blurb": "A database lookup costs 1–10ms. A cache lookup costs 0.1–1ms. Your feed page makes 40 lookups. Without a cache you're over 100ms just on DB; with one you're under 5ms. That's the difference between a snappy app and a slo",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "cdn-vs-application-cache",
+    "title": "CDN vs Application Cache",
+    "difficulty": null,
+    "accent": {
+      "h": 180,
+      "s": 60,
+      "l": 40
+    },
+    "tags": [],
+    "category": "Caching",
+    "blurb": "Both are caches. Both reduce load on your origin. They live at different layers of the stack, cache different things, and solve different problems. A candidate who says \"we'll use a cache\" and can't distinguish them is p",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "bloom-filter",
+    "title": "Bloom Filter",
+    "difficulty": null,
+    "accent": {
+      "h": 80,
+      "s": 55,
+      "l": 42
+    },
+    "tags": [],
+    "category": "Data Structures",
+    "blurb": "You have 1 billion URLs you've already crawled. Before crawling a new URL, you want to check \"have I seen this before?\" A hash set costs ~100 GB of RAM for 1B URLs. Most queries will be for URLs you've never seen. You ju",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "erasure-coding",
+    "title": "Erasure Coding",
+    "difficulty": null,
+    "accent": {
+      "h": 100,
+      "s": 50,
+      "l": 38
+    },
+    "tags": [],
+    "category": "Data Structures",
+    "blurb": "Storing 1 PB of files with 3× replication = 3 PB of disk. Storage at scale is dominated by disk cost, and 3× is expensive — Facebook's photos, Netflix's video, Google's mail all add up to exabytes. Erasure coding achieve",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "geospatial-indexes",
+    "title": "Geospatial Indexes",
+    "difficulty": null,
+    "accent": {
+      "h": 38,
+      "s": 92,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Data Structures",
+    "blurb": "\"Find all drivers within 2km of (37.77°N, 122.42°W).\" A standard index on (lat, lng) doesn't help — you'd scan every row checking distance. Geospatial indexes let you answer proximity queries in milliseconds over million",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "hyperloglog-sketches",
+    "title": "HyperLogLog & Sketches",
+    "difficulty": null,
+    "accent": {
+      "h": 60,
+      "s": 65,
+      "l": 42
+    },
+    "tags": [],
+    "category": "Data Structures",
+    "blurb": "\"How many unique visitors did we have today?\" Naive: keep a Set<user_id>. For 100M users, that's 6+ GB of RAM. Do it per-URL or per-minute and you're out of memory fast. HyperLogLog answers the same question with 12 KB, ",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "memory-mapped-files",
+    "title": "Memory-Mapped Files (mmap)",
+    "difficulty": null,
+    "accent": {
+      "h": 250,
+      "s": 55,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Data Structures",
+    "blurb": "Reading a 100 GB file the normal way: read() in chunks, copy from kernel buffer to user buffer, process. Two copies per byte. Slow at scale. mmap maps the file's bytes directly into your process's virtual memory — access",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "merkle-trees",
+    "title": "Merkle Trees",
+    "difficulty": null,
+    "accent": {
+      "h": 125,
+      "s": 55,
+      "l": 40
+    },
+    "tags": [],
+    "category": "Data Structures",
+    "blurb": "Two Cassandra replicas hold 100M rows each. They're supposed to be identical. Something went wrong and one has a few stale entries. Comparing all 100M rows to find the differences would take hours and saturate the networ",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "url-encoding-base62",
+    "title": "URL Encoding & Base62",
+    "difficulty": null,
+    "accent": {
+      "h": 217,
+      "s": 91,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Data Structures",
+    "blurb": "\"Make me a short URL.\" Sounds trivial. The shortcode must be: unique, URL-safe, short (6-8 chars), and ideally non-guessable. Plus, you need to mint billions of them at thousands per second without coordination overhead.",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "acid-vs-base",
+    "title": "ACID vs BASE",
+    "difficulty": null,
+    "accent": {
+      "h": 330,
+      "s": 60,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Databases",
+    "blurb": "\"Strong consistency\" and \"eventual consistency\" are the two ends of a spectrum that drives every data-layer decision. Pick strong when you must (payments, inventory, anything involving money or exclusivity). Pick eventua",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "cap-theorem",
+    "title": "CAP Theorem",
+    "difficulty": null,
+    "accent": {
+      "h": 285,
+      "s": 60,
+      "l": 45
+    },
+    "tags": [],
+    "category": "Databases",
+    "blurb": "Every distributed database picks one of two behaviors when the network between nodes breaks: return stale data or refuse to serve the request. CAP is the formal statement that you cannot avoid this choice. Pretending oth",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "cdc-change-data-capture",
+    "title": "Change Data Capture (CDC)",
+    "difficulty": null,
+    "accent": {
+      "h": 305,
+      "s": 60,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Databases",
+    "blurb": "Your transactional DB has the source-of-truth for orders. You also need: a search index in Elasticsearch, a denormalized read store in Redis, an analytics warehouse, a notifications pipeline triggered on order events. Fi",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "connection-pooling",
+    "title": "Connection Pooling",
+    "difficulty": null,
+    "accent": {
+      "h": 25,
+      "s": 80,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Databases",
+    "blurb": "Opening a TCP connection takes 1 round-trip. Adding TLS adds another. Adding Postgres handshake adds 2-3 more. Each connection: ~5-10ms of pure overhead before any query runs. If your app opens a new connection per reque",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "data-lake-vs-warehouse",
+    "title": "Data Lake vs Warehouse",
+    "difficulty": null,
+    "accent": {
+      "h": 195,
+      "s": 65,
+      "l": 40
+    },
+    "tags": [],
+    "category": "Databases",
+    "blurb": "\"Where do analytics queries run?\" If you say \"Postgres,\" you've never had real analytics needs. Running aggregations over 10 TB of order history on your transactional DB tanks every API. Analytics belongs in a separate s",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "database-federation",
+    "title": "Database Federation",
+    "difficulty": null,
+    "accent": {
+      "h": 240,
+      "s": 60,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Databases",
+    "blurb": "One huge database holds everything: users, orders, products, reviews, notifications, sessions. As the company grows, this DB becomes the bottleneck — every team's slow query affects everyone, schema changes touch everyon",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "database-types",
+    "title": "Database Types",
+    "difficulty": null,
+    "accent": {
+      "h": 230,
+      "s": 55,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Databases",
+    "blurb": "\"We'll use a database\" is not an architecture decision — it's punting. Every system design interview eventually asks: Postgres or Cassandra? Redis or DynamoDB? Mongo or Elasticsearch? The answer is never \"it depends\" alo",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "transactions-distributed",
+    "title": "Distributed Transactions",
+    "difficulty": null,
+    "accent": {
+      "h": 0,
+      "s": 70,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Databases",
+    "blurb": "User clicks \"Buy.\" You must: charge card (payments service) + decrement inventory (warehouse service) + create order (orders DB). All three or none — partial is catastrophic (card charged, no order). In one database, ACI",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "indexing",
+    "title": "Indexing",
+    "difficulty": null,
+    "accent": {
+      "h": 38,
+      "s": 90,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Databases",
+    "blurb": "A database table with 100M rows. A query: WHERE email = 'x@y.com'. Without an index, the DB scans all 100M rows — seconds per query. With a B-tree index, it's ~10 lookups, 0.5ms total. That's a 10,000× difference and the",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "normalization-vs-denormalization",
+    "title": "Normalization vs Denormalization",
+    "difficulty": null,
+    "accent": {
+      "h": 200,
+      "s": 65,
+      "l": 45
+    },
+    "tags": [],
+    "category": "Databases",
+    "blurb": "Your data model has two extremes. Fully normalized: every fact lives in exactly one place, connected by foreign keys. Great for writes (update once, seen everywhere), bad for reads (join 5 tables to render one page). Ful",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "pacelc-theorem",
+    "title": "PACELC Theorem",
+    "difficulty": null,
+    "accent": {
+      "h": 275,
+      "s": 60,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Databases",
+    "blurb": "CAP only describes what happens during a partition — but partitions are rare. Most of your system's life is spent in the no-partition state, where CAP has nothing to say. The real everyday tradeoff there is between laten",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "replication",
+    "title": "Replication",
+    "difficulty": null,
+    "accent": {
+      "h": 175,
+      "s": 62,
+      "l": 38
+    },
+    "tags": [],
+    "category": "Databases",
+    "blurb": "One database server holds your data. The disk dies. You lose everything. Replication — keeping copies on multiple servers — solves three problems at once: durability (survive hardware failures), availability (serve reads",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "sharding",
+    "title": "Sharding",
+    "difficulty": null,
+    "accent": {
+      "h": 260,
+      "s": 60,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Databases",
+    "blurb": "One server, even a massive one, tops out around ~100k writes/sec. Replication buys you read scale but not write scale — the leader is still a bottleneck. Once writes exceed one box, you shard: split the data across N box",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "sql-vs-nosql",
+    "title": "SQL vs NoSQL",
+    "difficulty": null,
+    "accent": {
+      "h": 210,
+      "s": 70,
+      "l": 45
+    },
+    "tags": [],
+    "category": "Databases",
+    "blurb": "Picking the wrong database is the most expensive architectural mistake you can make early. You can change a cache vendor in a weekend; you can't change your database in a quarter. Interviewers want to see a justified cho",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "write-ahead-log-wal",
+    "title": "Write-Ahead Log (WAL)",
+    "difficulty": null,
+    "accent": {
+      "h": 30,
+      "s": 75,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Databases",
+    "blurb": "You commit a transaction. Two milliseconds later, the power fails. On reboot, is the commit there? If yes, your DB is durable. If no, it's a lie. The trick every durable datastore uses — Postgres, MySQL, Cassandra, SQLit",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "clock-skew-tolerance-design",
+    "title": "Clock-Skew Tolerance Design",
+    "difficulty": null,
+    "accent": {
+      "h": 240,
+      "s": 55,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Distributed Systems",
+    "blurb": "You read time-sync-clocks and learned wall clocks drift, NTP misbehaves, leap seconds break things. Now what? You can't avoid using time entirely — TTLs, timeouts, scheduling, ordering, JWT expiry all need it. Clock-skew",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "consensus-paxos-raft",
+    "title": "Consensus — Paxos & Raft",
+    "difficulty": null,
+    "accent": {
+      "h": 245,
+      "s": 62,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Distributed Systems",
+    "blurb": "Five nodes each think they might be the leader. The old leader's network cable was unplugged; now it's plugged back in. Who's in charge? Who accepts writes? If two nodes both think they're leader, they both accept writes",
+    "problemNumber": null,
+    "readMinutes": 5
+  },
+  {
+    "slug": "consistent-hashing",
+    "title": "Consistent Hashing",
+    "difficulty": null,
+    "accent": {
+      "h": 160,
+      "s": 58,
+      "l": 40
+    },
+    "tags": [],
+    "category": "Distributed Systems",
+    "blurb": "You have 10 cache servers. You route keys to them with hash(key) mod 10. It works beautifully. Then you add an 11th server. Now ~90% of your keys hash to a different server — your entire cache invalidates. Origin gets ha",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "distributed-locking",
+    "title": "Distributed Locking",
+    "difficulty": null,
+    "accent": {
+      "h": 355,
+      "s": 70,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Distributed Systems",
+    "blurb": "Two instances of your service want to send a reminder email for order #42. Both run the cron job at the same second. Without coordination, the user gets two emails. Or two payment workers process the same refund. Or two ",
+    "problemNumber": null,
+    "readMinutes": 5
+  },
+  {
+    "slug": "gossip-protocols",
+    "title": "Gossip Protocols",
+    "difficulty": null,
+    "accent": {
+      "h": 140,
+      "s": 55,
+      "l": 42
+    },
+    "tags": [],
+    "category": "Distributed Systems",
+    "blurb": "1000 nodes in a Cassandra cluster. Each needs to know about the others — who's alive, what ranges they own, their load. Centralized approach (one server polls all 1000) creates a SPOF and a bottleneck. Broadcasting (each",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "heartbeat-failure-detection",
+    "title": "Heartbeat & Failure Detection",
+    "difficulty": null,
+    "accent": {
+      "h": 12,
+      "s": 72,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Distributed Systems",
+    "blurb": "Is node 7 dead, or is its network link just slow? You can't tell from a missed response. Decide too quickly → false-positive, you kick a healthy node. Decide too slowly → real failures go unnoticed, requests time out for",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "leader-election",
+    "title": "Leader Election",
+    "difficulty": null,
+    "accent": {
+      "h": 252,
+      "s": 60,
+      "l": 52
+    },
+    "tags": [],
+    "category": "Distributed Systems",
+    "blurb": "Distributed systems are full of \"only one at a time\" jobs: one cron runner, one database primary, one billing reconciler, one job scheduler. Without coordination, every replica does the same work — duplicate emails, dupl",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "quorum",
+    "title": "Quorum",
+    "difficulty": null,
+    "accent": {
+      "h": 295,
+      "s": 55,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Distributed Systems",
+    "blurb": "In a replicated system, you have N copies of the data. Do you write to all N before returning? Just 1? Somewhere in between? Do you read from all N (slow), or 1 (possibly stale)? The answer is a quorum — a minimum number",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "read-repair-anti-entropy",
+    "title": "Read Repair & Anti-Entropy",
+    "difficulty": null,
+    "accent": {
+      "h": 145,
+      "s": 55,
+      "l": 38
+    },
+    "tags": [],
+    "category": "Distributed Systems",
+    "blurb": "You replicate data across 3 nodes for durability. A network blip causes node 2 to miss a write. Now node 1 + 3 have v2; node 2 has v1. Replicas have diverged. Without active repair, this divergence accumulates — the long",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "service-discovery",
+    "title": "Service Discovery",
+    "difficulty": null,
+    "accent": {
+      "h": 200,
+      "s": 65,
+      "l": 45
+    },
+    "tags": [],
+    "category": "Distributed Systems",
+    "blurb": "Service A calls Service B. Where is B? Hard-coding an IP breaks the moment B autoscales, moves to a new host, or deploys to a new region. Hard-coding a hostname helps, but still routes through DNS caches that are slow to",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "tunable-consistency-per-query",
+    "title": "Tunable Consistency per Query",
+    "difficulty": null,
+    "accent": {
+      "h": 285,
+      "s": 60,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Distributed Systems",
+    "blurb": "\"What consistency does our database give us?\" is the wrong question. Different queries need different guarantees. A user's password change must be strongly consistent (next login should see the new hash). A like-count di",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "two-generals-byzantine-problems",
+    "title": "Two Generals & Byzantine Problems",
+    "difficulty": null,
+    "accent": {
+      "h": 245,
+      "s": 60,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Distributed Systems",
+    "blurb": "The two foundational impossibility results in distributed systems. Knowing them isn't trivia — they tell you exactly what's possible to build and what's not. Every distributed protocol you'll ever design is constrained b",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "vector-clocks-lww",
+    "title": "Vector Clocks & LWW",
+    "difficulty": null,
+    "accent": {
+      "h": 290,
+      "s": 55,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Distributed Systems",
+    "blurb": "Two users edit the same document at (roughly) the same moment. Their clients both commit locally. Now the server has two versions. Which one wins?",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "availability-nines",
+    "title": "Availability — The Nines",
+    "difficulty": null,
+    "accent": {
+      "h": 145,
+      "s": 55,
+      "l": 42
+    },
+    "tags": [],
+    "category": "Foundations",
+    "blurb": "\"Four nines\" (99.99%) sounds marginally better than \"three nines\" (99.9%). The truth: four nines allows 52 minutes of downtime per year; three nines allows 8.8 hours. That's a 10× difference in how much engineering you p",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "back-of-envelope-estimation",
+    "title": "Back-of-Envelope Estimation",
+    "difficulty": null,
+    "accent": {
+      "h": 45,
+      "s": 88,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Foundations",
+    "blurb": "Every design decision hinges on numbers. Do we need sharding? Only if writes exceed ~10k/sec. Do we need a cache? Only if read latency is a bottleneck. Do we need a CDN? Only if users are geographically far from origin. ",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "concurrency-models",
+    "title": "Concurrency Models",
+    "difficulty": null,
+    "accent": {
+      "h": 220,
+      "s": 60,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Foundations",
+    "blurb": "\"Handle 50k concurrent connections\" is an easy requirement to write and a hard one to meet. Every language offers a concurrency model — threads, event loops, actors, coroutines, or some combo. Each has different costs: t",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "interview-framework",
+    "title": "Interview Framework",
+    "difficulty": null,
+    "accent": {
+      "h": 217,
+      "s": 91,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Foundations",
+    "blurb": "You get 45 minutes. The interviewer says \"design Twitter.\" There are a thousand things to say and you'll remember half of them. Without structure, you'll ramble about load balancers for 20 minutes, never estimate scale, ",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "latency-numbers",
+    "title": "Latency Numbers",
+    "difficulty": null,
+    "accent": {
+      "h": 217,
+      "s": 91,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Foundations",
+    "blurb": "Every architectural decision — \"do we need a cache?\", \"should this call be async?\", \"can we fit this in RAM?\" — collapses to the same question: how long does the operation actually take? Engineers who can't estimate this",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "multi-tenancy",
+    "title": "Multi-Tenancy",
+    "difficulty": null,
+    "accent": {
+      "h": 280,
+      "s": 55,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Foundations",
+    "blurb": "You're building B2B SaaS. 10,000 customer companies, each with their own users + data + settings. Should each customer get their own database, their own EC2 instances, their own Kubernetes namespace? Or do they all share",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "shared-nothing-architecture",
+    "title": "Shared-Nothing Architecture",
+    "difficulty": null,
+    "accent": {
+      "h": 195,
+      "s": 65,
+      "l": 45
+    },
+    "tags": [],
+    "category": "Foundations",
+    "blurb": "The single most important architectural principle for scalable systems: no resource is shared across nodes. No shared memory, no shared disk, no shared lock manager, no shared cache. Each node owns its slice of data and ",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "slos-slis-slas",
+    "title": "SLOs, SLIs, SLAs",
+    "difficulty": null,
+    "accent": {
+      "h": 160,
+      "s": 50,
+      "l": 40
+    },
+    "tags": [],
+    "category": "Foundations",
+    "blurb": "\"Our service is reliable\" is not a claim; it's marketing. \"Our service is reliable\" with numbers — \"99.9% of requests complete under 200ms, measured over a 30-day window\" — is an engineering target. Without SLOs/SLIs/SLA",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "time-sync-clocks",
+    "title": "Time Synchronization & Clocks",
+    "difficulty": null,
+    "accent": {
+      "h": 240,
+      "s": 55,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Foundations",
+    "blurb": "Two machines, separated by a network, disagree on the order of events. \"Event A at 12:00:00.500\" on server 1. \"Event B at 12:00:00.400\" on server 2. Did B come before A? Only if the clocks agree, and they never perfectly",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "image-video-pipeline",
+    "title": "Image & Video Processing Pipeline",
+    "difficulty": null,
+    "accent": {
+      "h": 38,
+      "s": 90,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Frontend & Mobile",
+    "blurb": "User uploads a 12 MP photo from their phone. Your app needs to display it as: thumbnail (200×200), card image (600×400), full view (1920×1080), maybe HEIC + WebP + JPEG variants for different browsers. Maybe with face cr",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "mobile-offline-first-sync",
+    "title": "Mobile Offline-First Sync",
+    "difficulty": null,
+    "accent": {
+      "h": 145,
+      "s": 55,
+      "l": 42
+    },
+    "tags": [],
+    "category": "Frontend & Mobile",
+    "blurb": "The user opens your app on the subway. No signal. They write a comment, mark a task done, edit a doc. The app should accept their work, not pop \"no internet\" errors. When connectivity returns, everything they did syncs t",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "push-notification-protocols",
+    "title": "Push Notification Protocols",
+    "difficulty": null,
+    "accent": {
+      "h": 25,
+      "s": 80,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Frontend & Mobile",
+    "blurb": "Sending a push notification to 10 million users sounds simple — until you confront that you're not actually delivering the notification. Apple is. Google is. The browser vendor is. Your server hands the message to APNs (",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "service-workers-pwa-offline",
+    "title": "Service Workers & PWA Offline",
+    "difficulty": null,
+    "accent": {
+      "h": 217,
+      "s": 70,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Frontend & Mobile",
+    "blurb": "Native mobile apps work offline. Web apps don't — refresh the page on a flight, you get the dinosaur. Service workers close that gap. A service worker is a JavaScript file the browser runs in the background, intercepting",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "interview-tactics-playbook",
+    "title": "Interview Tactics Playbook",
+    "difficulty": null,
+    "accent": {
+      "h": 217,
+      "s": 91,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Interview Tactics",
+    "blurb": "You know the technical material cold. You walk into the interview anyway — and ramble for 20 minutes about load balancers, never reach the deep dive, get flagged as \"unfocused\" in the debrief. Knowing system design is ha",
+    "problemNumber": null,
+    "readMinutes": 5
+  },
+  {
+    "slug": "ab-testing-platform",
+    "title": "A/B Testing Platform",
+    "difficulty": null,
+    "accent": {
+      "h": 217,
+      "s": 91,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Machine Learning Systems",
+    "blurb": "You ship a new homepage. Did it improve conversion or hurt it? Eyeballing the dashboard for a week proves nothing — traffic patterns shift hour to hour, day to day. A/B testing is the discipline of statistically comparin",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "embedding-generation-pipelines",
+    "title": "Embedding Generation Pipelines",
+    "difficulty": null,
+    "accent": {
+      "h": 305,
+      "s": 60,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Machine Learning Systems",
+    "blurb": "You have 100 million product descriptions, 50 million user-generated images, 1 billion documents. To use them with vector search, every one needs an embedding — a 384–1536-dim vector. Calling an embedding model API for e",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "feature-store",
+    "title": "Feature Store",
+    "difficulty": null,
+    "accent": {
+      "h": 30,
+      "s": 80,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Machine Learning Systems",
+    "blurb": "\"User's last 7-day click count\" is a feature. Your training pipeline computes it from click logs in Spark; your serving pipeline computes it from a Kafka stream. The two implementations drift — one bug here, one rounding",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "llm-serving-infrastructure",
+    "title": "LLM Serving Infrastructure",
+    "difficulty": null,
+    "accent": {
+      "h": 280,
+      "s": 65,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Machine Learning Systems",
+    "blurb": "Serving GPT-class LLMs is unlike serving any model that came before. A single inference can take 30 seconds, generates thousands of tokens, requires tens of GB of GPU memory, and costs $0.001-0.10 per request. Multiply b",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "model-serving-online-vs-batch",
+    "title": "Model Serving — Online vs Batch",
+    "difficulty": null,
+    "accent": {
+      "h": 195,
+      "s": 70,
+      "l": 45
+    },
+    "tags": [],
+    "category": "Machine Learning Systems",
+    "blurb": "You trained a recommendation model. Now what — does it predict in real time when the user opens the app, or do you precompute every user's recs nightly and read from a cache? Same model, completely different infrastructu",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "online-learning-vs-offline-training",
+    "title": "Online vs Offline Training",
+    "difficulty": null,
+    "accent": {
+      "h": 145,
+      "s": 55,
+      "l": 40
+    },
+    "tags": [],
+    "category": "Machine Learning Systems",
+    "blurb": "Your recommendation model was trained on last month's data. New trends emerged. New users appeared. The model is already stale — predictions degrade by the hour. Do you re-train nightly (offline), continuously update wei",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "vector-databases",
+    "title": "Vector Databases",
+    "difficulty": null,
+    "accent": {
+      "h": 280,
+      "s": 60,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Machine Learning Systems",
+    "blurb": "The query is \"movies like Inception.\" Postgres can't help — there's no SQL operator for \"semantically similar.\" With embeddings (vectors of 384-1536 floats representing meaning), the answer is: nearest neighbors of Incep",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "batch-vs-stream-processing",
+    "title": "Batch vs Stream Processing",
+    "difficulty": null,
+    "accent": {
+      "h": 50,
+      "s": 80,
+      "l": 45
+    },
+    "tags": [],
+    "category": "Messaging & Async",
+    "blurb": "\"Compute total revenue per day per product.\" Two answers exist:",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "delivery-guarantees",
+    "title": "Delivery Guarantees",
+    "difficulty": null,
+    "accent": {
+      "h": 25,
+      "s": 85,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Messaging & Async",
+    "blurb": "You send a message. The network is flaky. Did it arrive? If you retry, does the consumer see it twice? If you don't retry, did it get lost?",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "event-sourcing-cqrs",
+    "title": "Event Sourcing & CQRS",
+    "difficulty": null,
+    "accent": {
+      "h": 320,
+      "s": 55,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Messaging & Async",
+    "blurb": "A traditional DB stores the current state: user 42 has balance $150. How they got there is gone. Event sourcing inverts this: you store the stream of changes (deposits, withdrawals, transfers), and \"current balance\" is a",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "kafka-internals",
+    "title": "Kafka Internals",
+    "difficulty": null,
+    "accent": {
+      "h": 0,
+      "s": 0,
+      "l": 20
+    },
+    "tags": [],
+    "category": "Messaging & Async",
+    "blurb": "Kafka is the backbone of event streaming at every serious company. 500k+ messages/sec per broker, years of retention, replayable. In interviews, \"we'll use Kafka\" isn't an answer — how Kafka works is. Partitions, consume",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "message-queue-vs-pubsub",
+    "title": "Message Queue vs Pub/Sub",
+    "difficulty": null,
+    "accent": {
+      "h": 45,
+      "s": 88,
+      "l": 45
+    },
+    "tags": [],
+    "category": "Messaging & Async",
+    "blurb": "Two teams both say \"we use a queue.\" One means point-to-point work distribution (one message, one consumer takes it, runs a job). The other means broadcast (one event, N subscribers each process it). These have different",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "api-versioning",
+    "title": "API Versioning",
+    "difficulty": null,
+    "accent": {
+      "h": 215,
+      "s": 70,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Networking & Delivery",
+    "blurb": "You ship v1 of your API. Customers integrate. Six months later, you need to rename a field, change a response shape, drop a deprecated endpoint. Every existing customer integration will break. They didn't sign up for a m",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "cdn",
+    "title": "CDN",
+    "difficulty": null,
+    "accent": {
+      "h": 190,
+      "s": 70,
+      "l": 42
+    },
+    "tags": [],
+    "category": "Networking & Delivery",
+    "blurb": "Your origin server is in Virginia. Your user is in Singapore. A round-trip over the Pacific is ~180ms, minimum, without TLS handshake, TCP slow-start, or any actual work. Serve a page with 40 assets (images, scripts, fon",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "compression-encoding",
+    "title": "Compression & Encoding",
+    "difficulty": null,
+    "accent": {
+      "h": 175,
+      "s": 60,
+      "l": 40
+    },
+    "tags": [],
+    "category": "Networking & Delivery",
+    "blurb": "Sending 100 KB to a user costs 100ms over a 8 Mbps link. Compress it to 20 KB → 20ms. Compression is the cheapest performance win in your stack: zero infrastructure changes, ~80% of the bytes saved, milliseconds of CPU. ",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "dns",
+    "title": "DNS",
+    "difficulty": null,
+    "accent": {
+      "h": 210,
+      "s": 60,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Networking & Delivery",
+    "blurb": "Every request to your API starts with \"what IP is api.example.com?\" That's DNS. Get it wrong and users can't reach you. Configure TTLs wrong and users are stuck on a dead IP for hours after you change it. Pick the wrong ",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "edge-computing",
+    "title": "Edge Computing",
+    "difficulty": null,
+    "accent": {
+      "h": 38,
+      "s": 90,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Networking & Delivery",
+    "blurb": "Your origin server is in Virginia. A user in Singapore: 180ms round-trip just to reach you, before any work. CDNs solved this for static content. Edge computing extends the same idea to code — run your business logic at ",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "http-1-vs-2-vs-3",
+    "title": "HTTP/1 vs HTTP/2 vs HTTP/3",
+    "difficulty": null,
+    "accent": {
+      "h": 205,
+      "s": 70,
+      "l": 45
+    },
+    "tags": [],
+    "category": "Networking & Delivery",
+    "blurb": "Picking HTTP/2 over HTTP/1 gave an instant 2× speedup on a typical page load with no app code changes. HTTP/3 fixes the one failure mode HTTP/2 still had. In interviews: naming the specific wins of each version shows you",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "proxy-vs-reverse-proxy",
+    "title": "Proxy vs Reverse Proxy",
+    "difficulty": null,
+    "accent": {
+      "h": 250,
+      "s": 50,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Networking & Delivery",
+    "blurb": "Both types of proxy stand between a client and a server. Which one faces which way flips the use case entirely. Candidates mix them up all the time. Interviewers notice.",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "api-protocols-rest-graphql-grpc",
+    "title": "REST vs GraphQL vs gRPC",
+    "difficulty": null,
+    "accent": {
+      "h": 330,
+      "s": 60,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Networking & Delivery",
+    "blurb": "Picking an API protocol shapes your client experience, your throughput, your tooling, and your caching story for years. \"We'll use REST\" is the lazy default, often the wrong one. gRPC is 7× faster but kills browser usabi",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "service-mesh",
+    "title": "Service Mesh",
+    "difficulty": null,
+    "accent": {
+      "h": 215,
+      "s": 70,
+      "l": 45
+    },
+    "tags": [],
+    "category": "Networking & Delivery",
+    "blurb": "You have 50 microservices in production. Every service-to-service call needs: TLS encryption, mTLS auth, retries, timeouts, circuit breaking, observability, traffic routing. Implementing all of that in every service, in ",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "tcp-vs-udp",
+    "title": "TCP vs UDP",
+    "difficulty": null,
+    "accent": {
+      "h": 220,
+      "s": 55,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Networking & Delivery",
+    "blurb": "\"TCP is reliable, UDP is fast\" is the bumper sticker. True, but the interesting question is why you'd ever choose UDP. For decades the answer was niche (DNS, streaming). Now — with QUIC, WebRTC, and modern games — UDP is",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "tls-https",
+    "title": "TLS & HTTPS",
+    "difficulty": null,
+    "accent": {
+      "h": 155,
+      "s": 55,
+      "l": 40
+    },
+    "tags": [],
+    "category": "Networking & Delivery",
+    "blurb": "Every byte between a client and your server passes through routers you don't control. Without encryption, anyone on the path reads passwords, session tokens, the works. TLS encrypts it all — but also adds latency (the ha",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "webhooks",
+    "title": "Webhooks",
+    "difficulty": null,
+    "accent": {
+      "h": 165,
+      "s": 65,
+      "l": 42
+    },
+    "tags": [],
+    "category": "Networking & Delivery",
+    "blurb": "Stripe processes a payment. Your app needs to know when it succeeds. Two options:",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "websockets-sse-polling",
+    "title": "WebSockets vs SSE vs Polling",
+    "difficulty": null,
+    "accent": {
+      "h": 145,
+      "s": 63,
+      "l": 42
+    },
+    "tags": [],
+    "category": "Networking & Delivery",
+    "blurb": "Chat. Live scores. Notifications. Collaborative editing. Any feature where the server pushes data to the client the moment it's ready. HTTP was designed for the opposite: client asks, server answers. To make push happen,",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "auth-oauth-jwt",
+    "title": "Auth — OAuth & JWT",
+    "difficulty": null,
+    "accent": {
+      "h": 225,
+      "s": 65,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Observability & Security",
+    "blurb": "Every API needs to answer: who is this user, and what are they allowed to do? Roll your own auth and you'll have a CVE within months. OAuth 2.0 is how you delegate authentication to a trusted identity provider. JWTs are ",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "ddos-protection",
+    "title": "DDoS Protection",
+    "difficulty": null,
+    "accent": {
+      "h": 350,
+      "s": 70,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Observability & Security",
+    "blurb": "A botnet of 100,000 compromised devices each sends 10 requests/sec at your site. 1M RPS at your origin. Your LB handles 50k. Site is down. No users can reach you until the attack stops or you have defenses.",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "field-level-encryption",
+    "title": "Field-Level Encryption",
+    "difficulty": null,
+    "accent": {
+      "h": 195,
+      "s": 65,
+      "l": 42
+    },
+    "tags": [],
+    "category": "Observability & Security",
+    "blurb": "\"Our database is encrypted.\" Sounds great. Look closer: encrypted at rest with a single key controlled by the cloud provider. A DBA, a compromised app, an SRE running SELECT * sees plaintext. Encryption-at-rest only prot",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "gdpr-right-to-be-forgotten",
+    "title": "GDPR — Right to Be Forgotten",
+    "difficulty": null,
+    "accent": {
+      "h": 145,
+      "s": 55,
+      "l": 38
+    },
+    "tags": [],
+    "category": "Observability & Security",
+    "blurb": "EU GDPR Article 17: a user can request all of their personal data be deleted. You have 30 days. \"Delete a row\" sounds simple. The problem: that user's data is in the live DB, in 7 read replicas, in 30 days of database ba",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "observability-triad",
+    "title": "Observability Triad",
+    "difficulty": null,
+    "accent": {
+      "h": 280,
+      "s": 55,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Observability & Security",
+    "blurb": "3 AM. Your on-call phone rings. Something is broken. You have 15 minutes before users notice and executives notice after that. With good observability, you grep a log, check a metric, pull a trace, and see the problem in",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "secret-management",
+    "title": "Secret Management",
+    "difficulty": null,
+    "accent": {
+      "h": 350,
+      "s": 55,
+      "l": 45
+    },
+    "tags": [],
+    "category": "Observability & Security",
+    "blurb": "Your app needs a Postgres password, an AWS access key, a Stripe API key, a Twilio token, an OAuth client secret. Where do they live?",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "tokenization-pci",
+    "title": "Tokenization & PCI Compliance",
+    "difficulty": null,
+    "accent": {
+      "h": 217,
+      "s": 91,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Observability & Security",
+    "blurb": "Your e-commerce app needs to store credit card numbers so customers don't re-enter them every time. The moment you do, your entire stack — every server that touches that data, every database that stores it, every backup ",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "zero-trust-networking",
+    "title": "Zero Trust Networking",
+    "difficulty": null,
+    "accent": {
+      "h": 0,
+      "s": 0,
+      "l": 25
+    },
+    "tags": [],
+    "category": "Observability & Security",
+    "blurb": "The traditional security model: castle-and-moat. Strong perimeter (firewall + VPN); inside the perimeter, services trust each other implicitly. The flaw: one compromised laptop or one breached service inside the perimete",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "disaster-recovery-rto-rpo",
+    "title": "Disaster Recovery — RTO & RPO",
+    "difficulty": null,
+    "accent": {
+      "h": 0,
+      "s": 70,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Operations",
+    "blurb": "Your entire AWS region goes down. Power failure, fiber cut, malicious actor, hurricane. How long until your service is back? How much data did you lose? These two questions have formal names: RTO (Recovery Time Objective",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "multi-region-active-active-vs-active-passive",
+    "title": "Multi-Region — Active-Active vs Active-Passive",
+    "difficulty": null,
+    "accent": {
+      "h": 195,
+      "s": 65,
+      "l": 42
+    },
+    "tags": [],
+    "category": "Operations",
+    "blurb": "One AWS region fails — your service is down for 30 minutes. Multi-region deployment fixes this, but how? You can run the second region passively (cold or warm standby that takes traffic only on disaster) or actively (bot",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "database-migration-zero-downtime",
+    "title": "Zero-Downtime Database Migration",
+    "difficulty": null,
+    "accent": {
+      "h": 38,
+      "s": 90,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Operations",
+    "blurb": "You need to rename a column. Drop a table. Migrate from MySQL to Postgres. Add a NOT NULL field to a 1-billion-row table. Each of these can be a 30-minute outage if you do it naively — or zero downtime if you follow the ",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "backpressure-flow-control",
+    "title": "Backpressure & Flow Control",
+    "difficulty": null,
+    "accent": {
+      "h": 205,
+      "s": 70,
+      "l": 40
+    },
+    "tags": [],
+    "category": "Reliability",
+    "blurb": "A producer emits 100k events/sec. A consumer can process 10k/sec. With no coordination, the consumer's queue grows unboundedly — memory bloats, latency cliffs, eventually the process OOMs. Backpressure is the mechanism b",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "deployment-strategies-blue-green-canary",
+    "title": "Blue-Green & Canary Deployments",
+    "difficulty": null,
+    "accent": {
+      "h": 145,
+      "s": 60,
+      "l": 42
+    },
+    "tags": [],
+    "category": "Reliability",
+    "blurb": "You ship 100 deploys a week. Each one risks breaking production. The naive \"stop the old version, start the new version\" gives you 30 seconds of total outage and a rollback that takes longer than the original deploy. Dep",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "bulkhead-isolation",
+    "title": "Bulkhead Isolation",
+    "difficulty": null,
+    "accent": {
+      "h": 195,
+      "s": 50,
+      "l": 42
+    },
+    "tags": [],
+    "category": "Reliability",
+    "blurb": "Your service has 200 threads. It calls services A, B, C. Service C hangs. Requests to C accumulate; all 200 threads end up waiting on C. Requests to A and B can't get served because no thread is free — even though A and ",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "chaos-engineering",
+    "title": "Chaos Engineering",
+    "difficulty": null,
+    "accent": {
+      "h": 5,
+      "s": 78,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Reliability",
+    "blurb": "You think your system handles a database failover. The runbook says it does. The diagram says it does. But you've never actually tested it. The first time it happens for real — at 3am, with no warning — you discover the ",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "circuit-breaker",
+    "title": "Circuit Breaker",
+    "difficulty": null,
+    "accent": {
+      "h": 0,
+      "s": 72,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Reliability",
+    "blurb": "Service B is slow. Service A calls it on every request, each call hanging for 30 seconds before timing out. A's threads fill up waiting for B. A's latency spikes. A's LB marks A unhealthy. Now A is down because B is slow",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "feature-flags-rollouts",
+    "title": "Feature Flags & Rollouts",
+    "difficulty": null,
+    "accent": {
+      "h": 175,
+      "s": 60,
+      "l": 42
+    },
+    "tags": [],
+    "category": "Reliability",
+    "blurb": "\"Deploy a new feature to all 100M users at once\" is asking for a 3am incident. Feature flags let you separate code deploy from feature release: ship the code dark, then turn it on for 1% of users, watch metrics, ramp to ",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "graceful-degradation",
+    "title": "Graceful Degradation",
+    "difficulty": null,
+    "accent": {
+      "h": 170,
+      "s": 55,
+      "l": 40
+    },
+    "tags": [],
+    "category": "Reliability",
+    "blurb": "Your recommendation service is down. Does your homepage return a 500, or does it just skip the \"Recommended for you\" section and still render? The first is a hard failure; the second is graceful degradation. Same failure",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "idempotency",
+    "title": "Idempotency",
+    "difficulty": null,
+    "accent": {
+      "h": 35,
+      "s": 75,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Reliability",
+    "blurb": "A user clicks \"Pay.\" The request hits your server, charges their card, but the response packet is lost in the network. The user's app doesn't see success, retries. Now you've charged them twice. Classic distributed-syste",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "rate-limiting-algorithms",
+    "title": "Rate Limiting Algorithms",
+    "difficulty": null,
+    "accent": {
+      "h": 262,
+      "s": 72,
+      "l": 52
+    },
+    "tags": [],
+    "category": "Reliability",
+    "blurb": "\"Limit users to 100 requests/minute\" sounds simple. It is not. Which minute? The last 60 seconds? The current calendar minute? Count as they come, or enforce an even drip? Each answer is a different algorithm with differ",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "request-hedging",
+    "title": "Request Hedging",
+    "difficulty": null,
+    "accent": {
+      "h": 280,
+      "s": 60,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Reliability",
+    "blurb": "Your service makes 5 backend calls per user request. Each call has a P99 of 50ms — sounds great. But the combined P99 is much worse: even one slow call ruins the request. With 5 calls, the chance of at least one being a ",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "retry-backoff-jitter",
+    "title": "Retries, Backoff & Jitter",
+    "difficulty": null,
+    "accent": {
+      "h": 25,
+      "s": 85,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Reliability",
+    "blurb": "Network calls fail. Retry solves 90% of transient failures for free. But naive retries cause retry storms — every client retrying the failing service simultaneously, which is exactly what the failing service can least ha",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "api-gateway",
+    "title": "API Gateway",
+    "difficulty": null,
+    "accent": {
+      "h": 195,
+      "s": 70,
+      "l": 45
+    },
+    "tags": [],
+    "category": "Scaling",
+    "blurb": "You have 40 microservices behind the scenes. A mobile client wanting to render a home screen shouldn't call 20 different hostnames, each with different auth, rate limits, and retry policies. An API gateway is the single ",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "autoscaling",
+    "title": "Autoscaling",
+    "difficulty": null,
+    "accent": {
+      "h": 140,
+      "s": 60,
+      "l": 42
+    },
+    "tags": [],
+    "category": "Scaling",
+    "blurb": "Traffic is spiky. Your e-commerce site does 1000 RPS on a Tuesday afternoon and 15,000 RPS during Black Friday. Static provisioning is wasteful (pay for peak capacity 24/7) or risky (provision for average, die during spi",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "horizontal-vs-vertical-scaling",
+    "title": "Horizontal vs Vertical Scaling",
+    "difficulty": null,
+    "accent": {
+      "h": 262,
+      "s": 72,
+      "l": 52
+    },
+    "tags": [],
+    "category": "Scaling",
+    "blurb": "You launch with 1000 users on one server. Six months later you have 1M users. The server's CPU sits at 99%. You have exactly two knobs: make that one server bigger (vertical / \"scale up\") or add more servers alongside it",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "load-balancer",
+    "title": "Load Balancer",
+    "difficulty": null,
+    "accent": {
+      "h": 190,
+      "s": 70,
+      "l": 42
+    },
+    "tags": [],
+    "category": "Scaling",
+    "blurb": "A single server can serve maybe a few thousand requests per second before CPU, memory, or connection limits pin it. The moment your traffic crosses that ceiling, you have two options: buy a much bigger server (vertical s",
+    "problemNumber": null,
+    "readMinutes": 8
+  },
+  {
+    "slug": "stateless-services",
+    "title": "Stateless Services",
+    "difficulty": null,
+    "accent": {
+      "h": 215,
+      "s": 70,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Scaling",
+    "blurb": "You want to scale horizontally. Your load balancer spreads traffic across N servers. User Alice's session is in memory on server 3. The LB routes Alice's next request to server 7. Server 7 doesn't know Alice — login lost",
+    "problemNumber": null,
+    "readMinutes": 3
+  }
+]

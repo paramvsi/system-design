@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Amazon S3 — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+
+    :root { --accent-h: 28; --accent-s: 88%; --accent-l: 48%;
+      --accent: hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light: hsl(var(--accent-h), 80%, 94%);
+      --accent-mid: hsl(var(--accent-h), 70%, 88%);
+      --accent-text: hsl(var(--accent-h), var(--accent-s), 35%);
+      --accent-border: hsl(var(--accent-h), 60%, 78%);
+      --hl-yellow:#fff0a0; --hl-yellow-dark:#a07a00;
+      --hl-accent: hsl(var(--accent-h), 90%, 88%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 30%);
+      --bg:#fff; --bg-subtle:#f7f7f5; --bg-raised:#f0eeeb; --bg-code:#f4f3f0;
+      --border:#e4e2de; --border-strong:#ccc9c4;
+      --text-primary:#111110; --text-secondary:#4a4845; --text-muted:#878480;
+      --font-serif:'Instrument Serif',Georgia,serif;
+      --font-sans:'Geist',system-ui,sans-serif;
+      --font-mono:'JetBrains Mono','Fira Code',monospace;
+      --radius-sm:4px; --radius-md:8px; --radius-lg:12px;
+    }
+    .req-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px; }
+    .req-box { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 20px; }
+    .req-box-head { display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size: 12px; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent-text); margin-bottom:10px; font-weight:500; }
+    .req-box-head.nonfunc { color:hsl(38,80%,30%); }
+    .req-list { padding-left:20px; font-size: 15px; color:var(--text-secondary); }
+    .req-list li { margin-bottom:6px; }
+    .endpoint { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px 18px; margin-bottom:10px; }
+    .endpoint-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+    .method { font-family:var(--font-mono); font-size: 11px; font-weight:600; padding:2px 8px; border-radius:3px; letter-spacing:0.05em; }
+    .method.get { background:hsl(190,70%,90%); color:hsl(190,70%,28%); }
+    .method.post { background:hsl(145,55%,90%); color:hsl(145,55%,28%); }
+    .method.put { background:hsl(38,70%,90%); color:hsl(38,70%,30%); }
+    .method.delete { background:hsl(0,70%,92%); color:hsl(0,70%,38%); }
+    .ep-path { font-family:var(--font-mono); font-size: 15px; color:var(--text-primary); font-weight:500; }
+    .ep-desc { font-size: 15px; color:var(--text-secondary); margin:6px 0 0; }
+    .failure { display:flex; gap:14px; padding:14px 18px; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); margin-bottom:10px; }
+    .failure-icon { font-size:18px; flex-shrink:0; margin-top:2px; }
+    .failure-title { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .failure-desc { font-size: 15px; color:var(--text-secondary); margin-bottom:4px; }
+    .mitigation { font-family:var(--font-mono); font-size: 12px; color:hsl(145,55%,28%); }
+    .similar-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+    .similar-card { display:block; text-decoration:none; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 18px; transition:all 0.15s; }
+    .similar-card:hover { border-color:var(--accent-border); background:var(--accent-light); }
+    .similar-card h4 { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .similar-card p { font-size: 13.5px; color:var(--text-muted); margin:0; }
+    .evolution-step { display:flex; gap:14px; margin-bottom:18px; }
+    .evolution-marker { width:32px; height:32px; border-radius:50%; background:var(--accent-light); border:2px solid var(--accent-border); display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size: 12px; font-weight:600; color:var(--accent-text); flex-shrink:0; }
+    .evolution-content h4 { font-size: 16px; font-weight:600; margin-bottom:4px; }
+    .evolution-content p { font-size: 15px; color:var(--text-secondary); margin:0; }
+  </style>
+</head>
+<body>
+
+<main>
+
+  <div class="hero" id="problem">
+    <div class="hero-kicker">System Design — Distributed Object Storage</div>
+    <h1 class="hero-title">Design <em>Amazon S3</em></h1>
+    <p class="hero-desc">
+      A bucket-and-key object store with read-your-writes consistency, ~<strong>11 nines of durability</strong>, and exabyte-scale capacity. The hard parts:
+      a <span class="hl">key → bytes</span> service that doesn't fall over at millions of requests per second;
+      <span class="hl-accent">erasure-coded durability</span> cheaper than 3× replication but rebuilds gracefully;
+      and a <span class="hl-accent">partition-key-hot-spot</span> story — what happens when everyone writes to keys starting with <code>2026-04-12/</code>.
+      S3 stores hundreds of trillions of objects and serves tens of millions of requests per second.
+    </p>
+    <div class="hero-tags">
+      <span class="tag accent">⚡ Core: Durability + Hot-Partition Handling</span>
+      <span class="tag">11 nines durability</span>
+      <span class="tag">100T+ objects</span>
+      <span class="tag">~100M req/sec peak</span>
+      <span class="tag">Exabyte storage</span>
+    </div>
+  </div>
+
+  <section class="section" id="requirements">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Requirements</h2></div>
+    <div class="req-grid">
+      <div class="req-box">
+        <div class="req-box-head">Functional</div>
+        <ul class="req-list">
+          <li><code>PUT</code> / <code>GET</code> / <code>DELETE</code> on <span class="hl-accent">(bucket, key)</span> tuples; opaque byte contents</li>
+          <li>Object size from 0 bytes to <span class="hl-accent">5 TB</span>; multipart upload for large ones</li>
+          <li>Bucket ACLs + per-object ACLs; IAM integration; pre-signed URLs</li>
+          <li>Versioning per bucket (opt-in): preserve old object versions on overwrite</li>
+          <li>List objects by prefix (for file-system-like browse)</li>
+          <li>Lifecycle: transition to Glacier after N days; auto-delete after M</li>
+          <li>Events: emit notifications (SNS/SQS/Lambda) on put/delete</li>
+        </ul>
+      </div>
+      <div class="req-box">
+        <div class="req-box-head nonfunc">Non-Functional</div>
+        <ul class="req-list">
+          <li><span class="hl">11 nines durability</span> (99.999999999%) — one object in 10 billion lost per year</li>
+          <li>Read-after-write consistency for new objects (strong, since Dec 2020)</li>
+          <li>Scale individual buckets to ~5,500 PUT / 3,500 GET per partition per second; horizontally unbounded aggregate</li>
+          <li>Available across an AWS region with AZ redundancy (3 AZs minimum)</li>
+          <li>Integrity verified via MD5/SHA on every byte</li>
+          <li>Pay-for-what-you-store: cold tiers 10× cheaper than hot</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="scale">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Scale Estimation</h2></div>
+    <div class="kv-grid">
+      <div class="kv-card">
+        <div class="kv-k">Objects stored</div>
+        <div class="kv-v">~280T</div>
+        <div class="kv-sub">AWS disclosed: 280 trillion objects as of 2023; growing double-digit % YoY</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Request peak</div>
+        <div class="kv-v">~100M req/sec</div>
+        <div class="kv-sub">aggregate across all customers; individual buckets throttle at ~5500 PUT/sec per prefix</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Durability target</div>
+        <div class="kv-v">11 nines</div>
+        <div class="kv-sub">achieved via Reed-Solomon erasure coding + cross-AZ placement</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Storage overhead</div>
+        <div class="kv-v">~1.4×</div>
+        <div class="kv-sub">RS(10,4) stores 14 shards for every 10 data shards — cheaper than 3× replication</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Partition key space</div>
+        <div class="kv-v">1024</div>
+        <div class="kv-sub">bucket split into ~1024 index partitions; auto-splits on load</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Disk rebuild time</div>
+        <div class="kv-v">~hours</div>
+        <div class="kv-sub">failed disk rebuild = read surviving shards, XOR to recover; bandwidth-bounded</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="api">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">API Design</h2></div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method put">PUT</span><span class="ep-path">/{bucket}/{key}</span></div>
+      <p class="ep-desc">Upload an object. Body = bytes. Headers: Content-MD5 (for verification), Storage-Class (STANDARD / IA / GLACIER). Returns ETag (MD5 of object). Idempotent on identical bytes.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoke-head endpoint-head"><span class="method get">GET</span><span class="ep-path">/{bucket}/{key}</span></div>
+      <p class="ep-desc">Fetch object. Supports Range headers for partial reads (<code>Range: bytes=0-1048575</code>). Returns object bytes + metadata headers (x-amz-meta-*).</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/{bucket}/{key}?uploads</span></div>
+      <p class="ep-desc">Initiate multipart upload. Returns UploadId. For objects &gt; 100 MB or resumable uploads. Client then uploads parts in parallel.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method put">PUT</span><span class="ep-path">/{bucket}/{key}?partNumber=N&amp;uploadId=ID</span></div>
+      <p class="ep-desc">Upload part (minimum 5 MB except last). Returns ETag for that part. Parts can be uploaded in parallel; max 10,000 parts per object.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/{bucket}/{key}?uploadId=ID</span></div>
+      <p class="ep-desc">Complete multipart. Body = ordered list of (partNumber, ETag). Server validates all parts exist; stitches into single object; returns final object ETag.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/{bucket}?prefix=folder/&amp;delimiter=/&amp;max-keys=1000</span></div>
+      <p class="ep-desc">List objects. Cursor-based pagination. Heavy use case — dominates hot-partition problems.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method delete">DELETE</span><span class="ep-path">/{bucket}/{key}</span></div>
+      <p class="ep-desc">Delete object. With versioning enabled, creates a delete marker; actual bytes retained until version is explicitly deleted.</p>
+    </div>
+  </section>
+
+  <section class="section" id="architecture">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Architecture</h2></div>
+    <div class="prose">
+      <p>Two distinct planes. The <strong>index plane</strong> (metadata: (bucket, key) → physical locations) is a sharded, highly-available KV service. The <strong>data plane</strong> (actual bytes, erasure-coded across disks and AZs) is the storage fleet. A request front-end authenticates + routes; a background garbage collector reclaims deleted bytes after safe intervals.</p>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">S3 Request Flow + Storage Layout</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 840 500" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="S3 architecture">
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="hsl(28,30%,40%)"/>
+            </marker>
+          </defs>
+          <style>
+/* ux-v2-bumped */
+
+            .lbl { font-family:'Geist',sans-serif; font-size: 12px; fill:#111; }
+            .sub { font-family:'JetBrains Mono',monospace; font-size: 10.5px; fill:#555; }
+            .box { fill:#fff; stroke:hsl(28,40%,72%); stroke-width:1.2; rx:6; }
+            .box-accent { fill:hsl(28,80%,94%); stroke:hsl(28,88%,48%); stroke-width:1.5; rx:6; }
+            .box-data { fill:hsl(38,70%,94%); stroke:hsl(38,60%,60%); stroke-width:1.2; rx:6; }
+            .box-storage { fill:hsl(215,70%,94%); stroke:hsl(215,60%,52%); stroke-width:1.2; rx:6; }
+            .group-label { font-family:'JetBrains Mono',monospace; font-size: 11px; letter-spacing:0.08em; fill:hsl(28,75%,38%); text-transform:uppercase; }
+            .group-box { fill:none; stroke:hsl(28,40%,80%); stroke-dasharray:4 3; rx:8; }
+            .edge { stroke:hsl(28,30%,40%); stroke-width:1.2; fill:none; }
+          </style>
+
+          <rect x="20" y="30" width="110" height="50" class="box"/>
+          <text x="75" y="52" text-anchor="middle" class="lbl">Client / SDK</text>
+          <text x="75" y="67" text-anchor="middle" class="sub">PUT / GET</text>
+
+          <rect data-tooltip="Authenticates, routes, computes shard-affinity. No persistent state; horizontally scales." data-concept-link="/concepts/stateless-services" x="160" y="30" width="110" height="50" class="box-accent"/>
+          <text x="215" y="52" text-anchor="middle" class="lbl">Front-end fleet</text>
+          <text x="215" y="67" text-anchor="middle" class="sub">auth + route</text>
+
+          <rect x="300" y="20" width="260" height="160" class="group-box"/>
+          <text x="310" y="14" class="group-label">Index plane (metadata)</text>
+
+          <rect data-tooltip="Metadata service: (bucket, key) → object_id + shard locations. Auto-splits hot partitions." data-concept-link="/concepts/sharding" x="320" y="40" width="110" height="50" class="box-accent"/>
+          <text x="375" y="62" text-anchor="middle" class="lbl">Index svc</text>
+          <text x="375" y="77" text-anchor="middle" class="sub">(bucket,key) lookup</text>
+
+          <rect x="440" y="40" width="110" height="50" class="box-accent"/>
+          <text x="495" y="62" text-anchor="middle" class="lbl">Auth / ACL</text>
+          <text x="495" y="77" text-anchor="middle" class="sub">IAM policy eval</text>
+
+          <rect x="320" y="110" width="230" height="60" class="box-data"/>
+          <text x="435" y="132" text-anchor="middle" class="lbl">Metadata partitions (~1024 per bucket)</text>
+          <text x="435" y="148" text-anchor="middle" class="sub">sharded KV; auto-split on hot prefix</text>
+
+          <rect x="600" y="30" width="220" height="190" class="group-box"/>
+          <text x="610" y="24" class="group-label">Data plane (bytes)</text>
+
+          <rect x="620" y="50" width="90" height="40" class="box-storage"/>
+          <text x="665" y="68" text-anchor="middle" class="lbl">AZ-a</text>
+          <text x="665" y="82" text-anchor="middle" class="sub">shards</text>
+
+          <rect x="720" y="50" width="90" height="40" class="box-storage"/>
+          <text x="765" y="68" text-anchor="middle" class="lbl">AZ-b</text>
+          <text x="765" y="82" text-anchor="middle" class="sub">shards</text>
+
+          <rect x="620" y="100" width="90" height="40" class="box-storage"/>
+          <text x="665" y="118" text-anchor="middle" class="lbl">AZ-c</text>
+          <text x="665" y="132" text-anchor="middle" class="sub">shards</text>
+
+          <rect x="720" y="100" width="90" height="40" class="box-storage"/>
+          <text x="765" y="118" text-anchor="middle" class="lbl">AZ-d</text>
+          <text x="765" y="132" text-anchor="middle" class="sub">shards</text>
+
+          <rect x="620" y="150" width="190" height="55" class="box-data"/>
+          <text x="715" y="172" text-anchor="middle" class="lbl">RS(10, 4)</text>
+          <text x="715" y="187" text-anchor="middle" class="sub">14 shards / object</text>
+
+          <rect x="300" y="240" width="520" height="100" class="group-box"/>
+          <text x="310" y="234" class="group-label">Background control plane</text>
+
+          <rect x="320" y="260" width="110" height="50" class="box"/>
+          <text x="375" y="282" text-anchor="middle" class="lbl">GC / repair</text>
+          <text x="375" y="297" text-anchor="middle" class="sub">scrub + rebuild</text>
+
+          <rect x="440" y="260" width="110" height="50" class="box"/>
+          <text x="495" y="282" text-anchor="middle" class="lbl">Lifecycle</text>
+          <text x="495" y="297" text-anchor="middle" class="sub">tier / expire</text>
+
+          <rect x="560" y="260" width="110" height="50" class="box"/>
+          <text x="615" y="282" text-anchor="middle" class="lbl">Event svc</text>
+          <text x="615" y="297" text-anchor="middle" class="sub">SNS / SQS fan-out</text>
+
+          <rect x="680" y="260" width="110" height="50" class="box"/>
+          <text x="735" y="282" text-anchor="middle" class="lbl">Replication</text>
+          <text x="735" y="297" text-anchor="middle" class="sub">cross-region</text>
+
+          <rect x="320" y="360" width="500" height="50" class="box-data"/>
+          <text x="570" y="382" text-anchor="middle" class="lbl">Storage nodes — thousands of disks / each runs local placement service</text>
+          <text x="570" y="397" text-anchor="middle" class="sub">Reed-Solomon encoder / decoder embedded in write + read path</text>
+
+          <path class="edge" d="M130,55 L160,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M270,55 L320,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M270,75 L440,60" marker-end="url(#arr)"/>
+          <path class="edge" d="M375,90 L375,110" marker-end="url(#arr)"/>
+          <path class="edge" d="M550,55 L600,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M550,135 L620,155" marker-end="url(#arr)"/>
+          <path class="edge" d="M715,205 L715,240" marker-end="url(#arr)"/>
+          <path class="edge" d="M375,310 L375,360" marker-end="url(#arr)"/>
+          <path class="edge" d="M495,310 L495,360" marker-end="url(#arr)"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Deep Dive — Durability via Erasure Coding + Hot Partitions</h2></div>
+    <div class="prose">
+      <p>S3 promises "eleven nines" of durability. That's not a marketing line — it's a budget. 99.999999999% means if you store 10B objects you expect to lose ~1 per year. Achieving this cheaply is the central engineering challenge.</p>
+
+      <p><strong>Triple replication is too expensive.</strong> Storing 3 copies gives ~6 nines and costs 3× storage. For exabyte scale, that's billions of dollars of overhead.</p>
+
+      <p><strong>Reed-Solomon erasure coding.</strong> Split each object into 10 data shards; compute 4 parity shards. Any 10 of 14 can reconstruct the whole object. Losing 4 independent disks simultaneously (astronomically unlikely if spread across AZs) is required to lose data. Storage overhead: 1.4× instead of 3×. Durability: ~11 nines when placed across multiple AZs.</p>
+
+      <div class="diagram-wrap">
+        <div class="diagram-head">
+          <span class="diagram-label">Write Path — Erasure-coded placement</span>
+          <span class="diagram-type">Mermaid</span>
+        </div>
+        <div class="diagram-body">
+          <div class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant FE as Front-end
+    participant IX as Index svc
+    participant ENC as RS Encoder
+    participant S as Storage fleet
+
+    C->>FE: PUT /bucket/key (bytes)
+    FE->>IX: allocate object_id
+    IX-->>FE: object_id + partition hint
+    FE->>ENC: split + encode bytes
+    ENC->>ENC: produce 10 data + 4 parity shards
+    par write across AZs
+        ENC->>S: shard 1→10 (AZ a/b/c/d)
+        ENC->>S: parity 1→4
+    end
+    S-->>FE: all 14 acked
+    FE->>IX: commit {object_id, shard_locations, etag}
+    IX-->>FE: committed
+    FE-->>C: 200 OK + ETag
+          </div>
+        </div>
+      </div>
+
+      <p><strong>Hot partition problem.</strong> The metadata index is sharded. Historically S3 sharded by a hash of the full key, but ALSO used the key prefix for list performance. A naming pattern like <code>2026/04/12/log-XXX.json</code> meant all today's writes hit the same few metadata partitions. Throughput caps at ~5500 PUT/sec per prefix; worst-case customers saw throttling.</p>
+
+      <p>S3 solved this in two steps:</p>
+      <ol>
+        <li><strong>Hot partition auto-split.</strong> Metadata service detects rising QPS on a partition and automatically splits it into two, rebalancing keys. Background process; live traffic largely unaffected.</li>
+        <li><strong>Auto-partitioning (2018 launch).</strong> The service learned to auto-shard by key prefix entropy. Today's customers don't need to add random hash prefixes to their key names — S3 handles it. But for extreme rates, the old advice still helps: <code>${random_hex}/2026/04/12/log.json</code> spreads load evenly.</li>
+      </ol>
+
+      <p><strong>Rebuild storm.</strong> When a disk fails, the system re-reads 10 of the 13 surviving shards per affected object to rebuild the lost shard onto a new disk. That's 10× traffic spike on the surviving disks during rebuild. Mitigations: prioritize low-redundancy objects, throttle rebuild bandwidth to prevent starving live traffic, and keep spare capacity so even a major failure doesn't push the system into the red zone.</p>
+
+      <p><strong>Multipart upload for big objects.</strong> A 5 TB object can't reasonably be one PUT. Multipart lets you:</p>
+      <ul>
+        <li>Upload parts in parallel (higher throughput).</li>
+        <li>Resume on failure (only re-upload the failed part).</li>
+        <li>Abort to reclaim space (lifecycle policies clean stale uploads).</li>
+      </ul>
+      <p>Each part is stored as its own erasure-coded blob; the final <code>CompleteMultipartUpload</code> just writes a manifest. No byte-level stitching required.</p>
+
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"Two planes — index (metadata) and data (bytes). Data plane uses Reed-Solomon (10, 4) erasure coding spread across 3+ AZs: 14 shards, any 10 rebuild the object, 1.4× storage overhead, 11 nines durability. Index plane is sharded by bucket key; auto-splits hot partitions. Front-end fleet authenticates + routes. Multipart upload splits big objects into parallel, resumable parts. Background control plane handles GC, lifecycle tiering, event emission, and cross-region replication. The hard parts are durability math and hot-partition auto-handling — not the API surface."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Tradeoffs &amp; Design Choices</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Erasure coding vs replication.</strong> EC saves storage but costs more CPU (encode/decode on every read/write) and higher recovery bandwidth. Worth it only at large scale. Small-scale systems stick with replication.</li>
+        <li><strong>Strong vs eventual consistency.</strong> S3 became strong read-after-write in 2020. Before: writes could take minutes to propagate to all index replicas, leading to "missing object" errors right after upload. Now: linearizable on new objects, eventual only on list operations. Users pay nothing extra — AWS absorbed the engineering cost.</li>
+        <li><strong>Storage tiering.</strong> Hot (SSD), warm (HDD), cold (Glacier = tape / slow disk). 10× cost difference between tiers. Lifecycle policies auto-migrate; reads from cold tiers take minutes-to-hours. Important to expose as an explicit product rather than hiding.</li>
+        <li><strong>Per-object metadata overhead.</strong> Every object has a few KB of metadata (ACL, storage class, lifecycle markers). At 280T objects, that's ~1+ PB of metadata alone — not ignorable.</li>
+        <li><strong>Eventual consistency on list.</strong> List operations scan metadata partitions and may miss just-written objects for seconds. Users who need "list includes everything I wrote" either wait a few seconds or call GetObject directly.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="failures">
+    <div class="section-head"><span class="section-n">08</span><h2 class="section-title">Failure Modes</h2></div>
+    <div class="failure">
+      <div class="failure-icon">💾</div>
+      <div>
+        <div class="failure-title">Concurrent disk failures during rebuild</div>
+        <div class="failure-desc">One disk fails; during rebuild a 2nd in the same stripe fails; then a 3rd. With RS(10,4) we can tolerate 4 losses; beyond that → data loss.</div>
+        <div class="mitigation">→ Mitigation: (a) spread shards across AZs so correlated power/network failures don't take out multiple shards; (b) prioritize rebuilds for stripes with fewer surviving shards; (c) cap disk fleet utilization so rebuild has headroom.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🔥</div>
+      <div>
+        <div class="failure-title">Hot prefix throttling</div>
+        <div class="failure-desc">Customer logs keyed <code>2026/04/12/evt-000001.json</code> all hit the same metadata partition; 5500 PUT/sec ceiling hit; customer sees 503s.</div>
+        <div class="mitigation">→ Mitigation: auto-split triggered by sustained high QPS; split takes a few minutes. Customer guidance: prefix with a hash <code>ff23/2026/04/12/evt-...</code> for immediate workaround.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🕯️</div>
+      <div>
+        <div class="failure-title">Silent data corruption (bit rot)</div>
+        <div class="failure-desc">Disk returns wrong bytes, hash mismatches. If undetected, corruption propagates through rebuilds.</div>
+        <div class="mitigation">→ Mitigation: continuous background scrubber reads every shard, verifies hash, repairs from parity. Every object has end-to-end MD5/SHA that client + server verify on write and read.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🚨</div>
+      <div>
+        <div class="failure-title">Accidental public-bucket disaster</div>
+        <div class="failure-desc">Customer misconfigures bucket policy; data leaks. This has caused major breaches (Verizon, Dow Jones, countless others).</div>
+        <div class="mitigation">→ Mitigation: "Block Public Access" account-level default since 2018; UI flags public buckets prominently; new buckets private-by-default. It's a product + UX mitigation, not just engineering.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🔁</div>
+      <div>
+        <div class="failure-title">Orphaned multipart uploads</div>
+        <div class="failure-desc">Customer initiates multipart upload, uploads 50 parts, never calls Complete or Abort. Parts sit in storage indefinitely, billing the customer.</div>
+        <div class="mitigation">→ Mitigation: lifecycle rule auto-abort incomplete multipart uploads after N days. Bucket storage analytics surfaces orphaned uploads to customers.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🌍</div>
+      <div>
+        <div class="failure-title">Region-wide outage</div>
+        <div class="failure-desc">us-east-1 goes down; customers with data only in that region are offline for hours.</div>
+        <div class="mitigation">→ Mitigation: cross-region replication (CRR) feature; customer opts in, metadata + bytes replicated asynchronously to another region. Not free — doubles storage cost for replicated buckets.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="interview-tips">
+    <div class="section-head"><span class="section-n">09</span><h2 class="section-title">Interview Tips</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>Durability math is the core.</strong> 11 nines is a number. Work backward from it: what does that imply about replication factor, geographic spread, verification?</li>
+        <li><strong>Name erasure coding by type.</strong> "Reed-Solomon (10, 4)" or "(12, 4)" is much more credible than "we use erasure coding." Know the storage-vs-durability tradeoff by heart.</li>
+        <li><strong>Split the two planes.</strong> Index service (metadata) vs data fleet (bytes). Don't muddle them. The index is transactional; bytes are immutable blobs.</li>
+        <li><strong>Hot partitions are the classic follow-up.</strong> Interviewer will ask "what if everyone's key starts with today's date?" Have the auto-split + hash-prefix answer ready.</li>
+        <li><strong>Multipart upload is more than chunking.</strong> It's resumable, parallelizable, and lets you abort partial work. Describe each of those benefits distinctly.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="similar">
+    <div class="section-head"><span class="section-n">10</span><h2 class="section-title">Similar Problems</h2></div>
+    <div class="similar-grid">
+      <a href="../003-google-drive/index.html" class="similar-card"><h4>Google Drive</h4><p>File semantics on top of object storage</p></a>
+      <a href="../dropbox-sync/index.html" class="similar-card"><h4>Dropbox Sync</h4><p>Block-level dedup; Magic Pocket is a sibling design</p></a>
+      <a href="../distributed-logging/index.html" class="similar-card"><h4>Distributed Logging</h4><p>Append-only blobs at comparable scale</p></a>
+      <a href="../005-youtube-netflix/index.html" class="similar-card"><h4>YouTube / Netflix</h4><p>Erasure-coded video asset storage</p></a>
+      <a href="../count-active-users/index.html" class="similar-card"><h4>Count Active Users</h4><p>Large-state partitioning pattern</p></a>
+    </div>
+  </section>
+
+  <section class="section" id="evolution">
+    <div class="section-head"><span class="section-n">11</span><h2 class="section-title">Evolution</h2></div>
+    <div class="evolution-step">
+      <div class="evolution-marker">1</div>
+      <div class="evolution-content">
+        <h4>MVP — replicated blobs + flat namespace</h4>
+        <p>3× replication. Single KV for metadata. No prefix optimization. Works to ~100 TB. S3 launched in 2006 roughly here.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">2</div>
+      <div class="evolution-content">
+        <h4>Erasure-coded storage + prefix sharding</h4>
+        <p>RS(10,4) replaces 3× replication → 2× storage savings. Metadata sharded by key prefix. Hot partitions manual-mitigated (customer must randomize prefix).</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">3</div>
+      <div class="evolution-content">
+        <h4>Storage tiering + lifecycle policies</h4>
+        <p>Standard / Infrequent Access / Glacier. Automatic transition based on access patterns. Customers pay 10× less for cold data.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">4</div>
+      <div class="evolution-content">
+        <h4>Auto-partitioning + strong consistency</h4>
+        <p>Hot prefixes auto-split without customer action (2018). Read-after-write strong consistency globally (2020). Huge operational improvements for end users.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">5</div>
+      <div class="evolution-content">
+        <h4>Intelligent-Tiering + Object Lambda</h4>
+        <p>Service learns access patterns per object, auto-tiers. Lambda functions can transform data on GET (rewrite response bytes). The storage primitive extends into a compute fabric.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const FLOW_NODES = [
+  { label: 'Client',        sub: 'PUT /bucket/key' },
+  { label: 'Front-end',     sub: 'auth + route' },
+  { label: 'Index alloc',   sub: 'object_id + partition' },
+  { label: 'RS encoder',    sub: '10 data + 4 parity' },
+  { label: 'AZ placement',  sub: 'cross 3+ AZs' },
+  { label: 'Durability ack',sub: 'all 14 shards' },
+  { label: 'Commit + ETag', sub: 'metadata committed' },
+];
+const FLOW_DESCS = [
+  'Client sends PUT with MD5 header; body streams to nearest front-end',
+  'Front-end authenticates (IAM), routes to home metadata partition',
+  'Index service allocates object_id + picks placement group',
+  'Reed-Solomon encoder produces 10 data + 4 parity shards from bytes',
+  'Shards distributed across 3+ AZs to tolerate AZ-level failures',
+  'Once all 14 shards ack durable write, front-end proceeds to commit',
+  'Metadata commit writes (bucket, key) → object_id + locations; returns ETag',
+];
+</script>
+
+</body>
+</html>

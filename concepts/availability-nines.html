@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Availability — The Nines — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 145; --accent-s: 55%; --accent-l: 42%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>"Four nines" (99.99%) sounds marginally better than "three nines" (99.9%). The truth: <span class="hl">four nines allows 52 minutes of downtime per year; three nines allows 8.8 hours</span>. That's a 10× difference in how much engineering you put into redundancy, failover, and testing. Getting this wrong in a design discussion means either wildly overspending or promising something you can't deliver.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The downtime table</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>SLO</th><th>% uptime</th><th>Downtime / year</th><th>Downtime / month</th><th>Downtime / week</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">99%</td><td>Two nines</td><td>3.65 days</td><td>7.3 hours</td><td>1.7 hours</td></tr>
+        <tr><td class="algo-name">99.9%</td><td>Three nines</td><td>8.77 hours</td><td>43.8 min</td><td>10.1 min</td></tr>
+        <tr><td class="algo-name">99.95%</td><td>Three-and-a-half</td><td>4.38 hours</td><td>21.9 min</td><td>5 min</td></tr>
+        <tr><td class="algo-name">99.99%</td><td>Four nines</td><td>52.6 min</td><td>4.4 min</td><td>1 min</td></tr>
+        <tr><td class="algo-name">99.999%</td><td>Five nines</td><td>5.26 min</td><td>26.3 sec</td><td>6.05 sec</td></tr>
+        <tr><td class="algo-name">99.9999%</td><td>Six nines</td><td>31.5 sec</td><td>2.6 sec</td><td>0.6 sec</td></tr>
+      </tbody>
+    </table>
+    <div class="prose">
+      <p>Each extra nine is <strong>10× harder</strong>. Five nines means your maintenance window is 5 minutes a year — you can't reboot anything. You have to design for zero-downtime deploys, automatic failover, and the system has to stay up through any single-component failure.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">How availability actually composes</h2></div>
+    <div class="prose">
+      <p><strong>Serial dependencies multiply.</strong> If your API calls a database (99.9%) and a cache (99.9%), the API's ceiling is 99.8% — you can only be as good as the product of all dependencies in the hot path.</p>
+      <p><strong>Parallel redundancy adds nines.</strong> Two servers each at 99% uptime, independent failures, both required to fail → combined uptime = 1 − (0.01)² = 99.99%. Three independent 99% components in parallel → 99.9999%. This is why redundancy works.</p>
+      <p><strong>The dependency rule:</strong> if you depend on a service, your SLO ≤ their SLO. AWS S3 offers 99.99% durability SLO but only 99.9% availability SLO — if your app calls S3 on every request, you cannot claim 99.99% availability no matter what you do.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">SLO vs SLA vs SLI</h2></div>
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">SLI — indicator</div>
+        <h4>What you measure</h4>
+        <p>A metric: "% of requests returning 2xx within 200ms." Measured continuously. Raw data.</p>
+      </div>
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">SLO — objective</div>
+        <h4>What you aim for internally</h4>
+        <p>A target on an SLI: "99.9% of requests &lt; 200ms over any 30-day window." Drives engineering priority. Breaking it is the signal to stop shipping features and fix reliability.</p>
+      </div>
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">SLA — agreement</div>
+        <h4>What you promise customers in writing</h4>
+        <p>A contract with monetary consequences if you miss it: "99.95% monthly uptime or 10% credit." Always set looser than SLO so you have headroom before penalties kick in.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — error budgets</h2></div>
+    <div class="prose">
+      <p>Google SRE's key insight: <span class="hl-accent">100% availability is the wrong target</span>. It forbids change — you can't ship new code if any deploy risks downtime. Instead, your SLO implies an <strong>error budget</strong> — the amount of downtime you're allowed.</p>
+      <p>If your SLO is 99.9% monthly, your error budget is 43.8 minutes/month. If you burn through it in week 1 (major outage), you freeze feature work for the next 3 weeks and focus entirely on reliability. If week 4 ends with 20 minutes unused, you <em>should</em> ship a risky change just to use the budget — excess uptime means you're moving too slowly.</p>
+      <p>This flips the usual dev vs ops fight. Dev wants to ship; ops wants stability. Error budget turns it into math: have budget → ship away. Out of budget → stop shipping, fix stability. Both sides have an aligned incentive.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"We target 99.9% availability. Error budget is 43 minutes/month. We track request-level SLIs and expose a burn-rate dashboard. When we've burned 50% of the budget in 10% of the window, we freeze non-safety deploys."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">What each tier costs</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Three nines</div><h4>Single region, multi-AZ</h4><p>Standard managed services (RDS, EKS) with multi-AZ failover. Achievable with moderate engineering. Most startups.</p></div>
+      <div class="rw-card"><div class="rw-name">Four nines</div><h4>Multi-region active-passive</h4><p>Automated failover to another region. Full data replication. Chaos testing. Runbooks for every failure. Medium-sized companies aiming for SaaS enterprise deals.</p></div>
+      <div class="rw-card"><div class="rw-name">Five nines</div><h4>Multi-region active-active</h4><p>Traffic served from ≥2 regions simultaneously. Conflict resolution for writes. Typically N+2 redundancy at every layer. Payment networks, stock exchanges, emergency services.</p></div>
+      <div class="rw-card"><div class="rw-name">Six+ nines</div><h4>Specialized hardware</h4><p>Not achievable with commodity servers. Think Stratus fault-tolerant boxes, aerospace. Irrelevant for most interview discussions.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Payment gateway and stock exchange problems target four or five nines — the rest typically aim for three. WhatsApp's voice/video must stay above 99.99% regionally.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

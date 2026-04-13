@@ -1,0 +1,64 @@
+{
+  "slug": "crowdstrike-2024-kernel-driver",
+  "title": "Kernel Driver",
+  "problemNumber": "07",
+  "difficulty": null,
+  "heroDescription": "A content update to CrowdStrike's Falcon kernel driver caused an out-of-bounds read that crashed Windows at boot. 8.5 million Windows hosts globally went into boot loops. Airlines grounded, hospitals diverted ambulances, banks and retailers shut down. Each affected machine required manual physical recovery in safe mode.",
+  "tags": [
+    "Kernel driver",
+    "8.5M hosts",
+    "Global",
+    "Manual recovery"
+  ],
+  "accent": {
+    "h": 15,
+    "s": 85,
+    "l": 48
+  },
+  "category": "Deploy / operator error",
+  "blurb": "A content update to CrowdStrike's Falcon kernel driver caused an out-of-bounds read that crashed Windows at boot. 8.5 million Windows hosts globally went into boot loops. Airlines grounded, hospitals diverted ambulances,",
+  "sections": [
+    {
+      "id": "tldr",
+      "label": "TL;DR",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">TL;DR</h2></div>\n    <div class=\"prose\">\n      <p>CrowdStrike Falcon ships a kernel-mode driver on every managed Windows host. On July 19, 2024, a routine \"channel file\" content update — NOT a full driver release, but a signature-file update pushed hourly — contained a malformed template that caused the driver to read past a buffer, crashing the Windows kernel on boot. Because the driver loaded early in boot, rebooting didn't help. Every affected machine needed manual intervention: boot to safe mode, delete the specific file, reboot. Estimated damages: $10B+.</p>\n    </div>"
+    },
+    {
+      "id": "timeline",
+      "label": "Timeline",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Timeline</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>04:09 UTC</strong> — CrowdStrike deploys channel file 291 (a routine update) to all customers.</li>\n        <li><strong>04:09–05:30 UTC</strong> — Millions of Windows hosts worldwide begin bluescreening at boot. Global services dependent on those hosts — airline check-in, hospital EHRs, TV stations, banks — go offline.</li>\n        <li><strong>05:27 UTC</strong> — CrowdStrike pushes a corrected channel file, but hosts that already crashed cannot receive it (they're not booting).</li>\n        <li><strong>07:00 UTC</strong> — CrowdStrike publishes workaround: boot into safe mode, delete <code>C:\\Windows\\System32\\drivers\\CrowdStrike\\C-00000291*.sys</code>, reboot.</li>\n        <li><strong>Jul 19–25</strong> — Individual hosts recovered manually by IT teams worldwide. Many were BitLocker-encrypted, requiring recovery keys per machine.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "rootcause",
+      "label": "Root cause",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Root cause</h2></div>\n    <div class=\"prose\">\n      <p>The channel file format uses 21 input fields. Falcon's parser handled 20; the file contained 21. An indexing bug reading the 21st field dereferenced memory out of bounds. In kernel mode, this crashes the OS instantly.</p>\n      <p>Deeper causes:</p>\n      <ol>\n        <li><strong>No canary for content updates.</strong> Full driver binaries went through staged rollouts. But \"channel files\" were considered data, not code, and deployed to 100% of customers simultaneously. (Channel files are clearly code — they drive executable parsing.)</li>\n        <li><strong>No in-process content validator.</strong> The driver assumed channel files were well-formed.</li>\n        <li><strong>Kernel mode with no recovery path.</strong> A user-mode component can crash, restart, and skip a bad update. A kernel driver cannot.</li>\n      </ol>\n    </div>"
+    },
+    {
+      "id": "impact",
+      "label": "Blast radius",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Blast radius</h2></div>\n    <div class=\"prose\">\n      <p>~8.5 million Windows hosts. Delta Airlines alone: 7,000 cancelled flights, $500M loss. Healthcare: surgeries postponed; ambulances diverted. Payments: Stripe + others saw partial disruption. Media: Sky News offline; US local TV stations unable to broadcast. Estimated global economic impact $10B+, claimed by insurers. One of the largest tech-induced outages in history, behind only telco-network failures by count of affected users.</p>\n    </div>"
+    },
+    {
+      "id": "lessons",
+      "label": "Lessons",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Lessons</h2></div>\n    <div class=\"prose\">\n      <ol>\n        <li><strong>\"Content\" and \"code\" distinction is invalid if content drives execution.</strong> Anything that changes runtime behavior needs the rigor of code — tests, canaries, rollback plans.</li>\n        <li><strong>Kernel modules are the last place for risky deploys.</strong> Every kernel-mode component needs a dual-mode recovery: boot into a safe mode that skips the module, and a user-mode equivalent where possible.</li>\n        <li><strong>Progressive rollouts, always.</strong> 1% → 10% → 100% with bake time and metrics gates. Even \"small\" updates. CrowdStrike has since adopted staged deploys for all channel files.</li>\n        <li><strong>Don't design out of remote recovery.</strong> BitLocker + no-boot + physical access requirement meant recovery couldn't be automated centrally. A simple \"safe-mode boot + pull latest config\" recovery path would have been hours instead of days.</li>\n      </ol>\n    </div>"
+    },
+    {
+      "id": "concepts-used",
+      "label": "Concepts in play",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Concepts in play</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><a href=\"/concepts/feature-flags-rollouts\">Feature flags + rollouts</a> — \"content\" updates are code; deploy like code.</li>\n        <li><a href=\"/concepts/deployment-strategies-blue-green-canary\">Canary deploys</a> — the missing ingredient.</li>\n        <li><a href=\"/concepts/disaster-recovery\">Disaster recovery</a> — every system needs a no-boot recovery path.</li>\n        <li><a href=\"/concepts/blast-radius-minimization\">Blast radius</a> — simultaneous global deploy = unbounded blast radius.</li>\n        <li><a href=\"/concepts/monitoring-alerting\">Monitoring</a> — customer metrics should feedback into deploy decisions.</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

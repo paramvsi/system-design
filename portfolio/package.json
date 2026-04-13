@@ -1,0 +1,32 @@
+{
+  "name": "system-design-portfolio",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "extract": "node scripts/extract.mjs --kind=problems && node scripts/extract.mjs --kind=concepts && node scripts/extract.mjs --kind=postmortems && node scripts/extract.mjs --kind=exercises",
+    "extract:problems": "node scripts/extract.mjs --kind=problems",
+    "extract:concepts": "node scripts/extract.mjs --kind=concepts",
+    "extract:postmortems": "node scripts/extract.mjs --kind=postmortems",
+    "extract:exercises": "node scripts/extract.mjs --kind=exercises",
+    "dev": "next dev",
+    "build": "next build",
+    "index": "pagefind --site out --output-subdir pagefind",
+    "postbuild": "npm run index",
+    "start": "npx serve out",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "mermaid": "^10.9.0",
+    "next": "^15.0.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "jsdom": "^25.0.1",
+    "pagefind": "^1.1.1",
+    "typescript": "^5.6.3"
+  }
+}

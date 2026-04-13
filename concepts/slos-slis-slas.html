@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>SLOs, SLIs, SLAs — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 160; --accent-s: 50%; --accent-l: 40%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>"Our service is reliable" is not a claim; it's marketing. "Our service is reliable" <em>with numbers</em> — "99.9% of requests complete under 200ms, measured over a 30-day window" — is an engineering target. Without SLOs/SLIs/SLAs, nobody knows if the service is healthy. With them, you have objective thresholds, budgets, and escalation triggers.</p>
+      <p>Every interview about reliability or on-call goes here. Mix up the three acronyms and you've lost credibility.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The three acronyms, unambiguously</h2></div>
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">SLI — Service Level Indicator</div>
+        <h4>What you measure</h4>
+        <p>A quantitative metric: "% of requests returning 2xx within 200ms." Measured continuously. Raw data. No target, no threshold — just the number.</p>
+      </div>
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">SLO — Service Level Objective</div>
+        <h4>What you aim for internally</h4>
+        <p>A target on an SLI: "99.9% of requests under 200ms over any 30-day window." Drives engineering priority. Breaking it means freeze features and fix reliability.</p>
+      </div>
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">SLA — Service Level Agreement</div>
+        <h4>What you promise customers (legally)</h4>
+        <p>A contract with monetary consequences: "99.95% monthly uptime or 10% credit." Always set looser than SLO so you have headroom before penalties. SLA violations = refunds.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Picking good SLIs</h2></div>
+    <div class="prose">
+      <p>An SLI should be <strong>user-visible</strong> — it correlates with what users actually experience. CPU usage is not an SLI; it's a technical metric that may or may not affect users. Latency and error rate are SLIs because a user feels them.</p>
+      <p>The four SLIs every service should track, from Google's SRE book:</p>
+      <ul>
+        <li><strong>Availability.</strong> Requests that succeeded (2xx, 3xx, 4xx-that-are-expected) / total. Don't lump 4xx with 5xx — a user sending bad input isn't a service failure.</li>
+        <li><strong>Latency.</strong> P50, P95, P99 of successful requests. P99 matters because tail latency is user-visible frustration.</li>
+        <li><strong>Throughput.</strong> Requests/sec. Often a target, not a threshold — capacity planning.</li>
+        <li><strong>Correctness.</strong> Harder to quantify. "% of orders processed without manual intervention" — domain-specific.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Setting realistic SLOs</h2></div>
+    <div class="prose">
+      <p>The mistake: picking an SLO number that sounds good ("99.99%!") without understanding what it requires. See <a href="/concepts/availability-nines">availability nines</a> — 99.99% means 52 minutes of total downtime per year. Every extra nine is 10× harder to achieve.</p>
+      <p>The recipe:</p>
+      <ol>
+        <li>Measure current behavior for 30 days → you probably get something like 99.87%.</li>
+        <li>Set SLO at current level or slightly better (99.9%). Gives engineering credit for where they already are.</li>
+        <li>Set SLA at 99.5% — comfortably looser than SLO. If SLO breaches, you have time before contractual penalties.</li>
+        <li>Review SLOs quarterly. If always met, tighten. If always breached, fix reliability or loosen — match reality.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — error budgets</h2></div>
+    <div class="prose">
+      <p>Google SRE's key insight: <span class="hl-accent">100% reliability is the wrong target.</span> It forbids change — every deploy risks downtime. Instead, derive an <strong>error budget</strong> from your SLO.</p>
+      <p>SLO = 99.9% over 30 days → allowed downtime = 0.1% × 30 × 24 × 60 = <strong>43.2 minutes/month</strong>. That's your budget. Spend it on deploys, experiments, infrastructure changes. If you've burned 30 minutes by week 2, you have 13 minutes left for the rest of the month — slow down deploys.</p>
+      <p><strong>Error budget policy:</strong></p>
+      <ul>
+        <li>Budget &gt; 50% remaining → ship freely.</li>
+        <li>Budget &lt; 25% remaining → review risky changes more carefully.</li>
+        <li>Budget exhausted → freeze feature work, focus on reliability until next window.</li>
+        <li>Budget consistently under-used (say, only 10% burned most months) → you're over-engineering reliability at the expense of velocity. Loosen SLO or ship faster.</li>
+      </ul>
+      <p>This turns reliability into a math conversation between dev and ops, not a personality conflict. "Have we met the SLO? Yes → ship. No → fix."</p>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Google SRE model</div><h4>Invented error budgets</h4><p>Every service has a defined SLO; every team has a budget. The SRE book is the canonical reference.</p></div>
+      <div class="rw-card"><div class="rw-name">AWS S3 SLA</div><h4>99.9% monthly uptime</h4><p>Below 99.9% → 10% service credit. Below 99% → 25% credit. Standard template.</p></div>
+      <div class="rw-card"><div class="rw-name">Stripe SLA</div><h4>Enterprise tier: 99.99%</h4><p>Higher tiers buy higher SLAs. Underlying system still runs the same, but the penalty scheme scales with customer commitment.</p></div>
+      <div class="rw-card"><div class="rw-name">Nobl9 / Honeycomb / Datadog</div><h4>SLO tooling</h4><p>Platforms that compute SLIs from your metrics, track error budgets, and alert on burn rate. Much better than hand-rolling dashboards.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Distributed logging platform has strict availability SLOs (people depend on it when everything else is broken). Payment gateway publishes SLAs for enterprise tiers. Rate limiter's SLI is % of correct limit decisions (false positives and false negatives both count).</p></div>
+  </section>
+
+</main>
+</body>
+</html>

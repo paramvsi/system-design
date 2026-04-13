@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Connection Pooling — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 25; --accent-s: 80%; --accent-l: 48%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Opening a TCP connection takes 1 round-trip. Adding TLS adds another. Adding Postgres handshake adds 2-3 more. Each connection: <span class="hl-red">~5-10ms of pure overhead before any query runs</span>. If your app opens a new connection per request, that overhead kills you. Worse, every connection consumes ~10MB on the Postgres server — 1000 idle connections = 10GB of wasted RAM, and Postgres dies somewhere around 500-1000 connections regardless.</p>
+      <p><strong>Connection pooling</strong> reuses a small set of long-lived connections for many requests. Saves the handshake overhead AND keeps the database alive. The most common production performance bug is not having one — or having one configured wrong.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">How a pool works</h2></div>
+    <div class="prose">
+      <p>The pool maintains N pre-opened connections. When code wants a connection: borrow from pool, use, return. If pool is empty, wait briefly; if still empty, create new (up to max), or fail.</p>
+      <p>Two key parameters:</p>
+      <ul>
+        <li><strong>Min size</strong> — connections always kept warm. Pay startup cost once. Typical: 5-10.</li>
+        <li><strong>Max size</strong> — upper limit on connections. Caps memory + DB load. Typical: 20-100 per app instance.</li>
+      </ul>
+      <p>Critical: <strong>connections × instances must stay below DB ceiling</strong>. 100 app instances × 50 max = 5000 connections. Postgres dies at maybe 800. You shipped a bug.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Pool sizing — the surprising answer</h2></div>
+    <div class="prose">
+      <p>Common assumption: "More connections = more parallelism = faster." Wrong. Past a point, more connections make everything slower.</p>
+      <p>The math (from <code>Little's Law</code>): for a CPU with N cores serving queries that average M ms each, optimal connection count ≈ <strong>N × (1 + wait_time / service_time)</strong>. For a 16-core Postgres serving CPU-heavy queries (no I/O wait): ~16 connections. For I/O-bound queries: maybe 32-64.</p>
+      <p>HikariCP (the standard Java pool) recommends "small pool, queue requests." A pool of 10 often outperforms a pool of 100 because contention drops. Counterintuitive but correct.</p>
+      <div class="callout">
+        <div class="callout-label">Practical heuristic</div>
+        <p>Start with pool_size = (CPU_cores × 2) + spindle_count. Measure under load. Adjust. Almost never bigger than 50 per app instance.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Where pools live</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Layer</th><th>Example</th><th>Pros</th><th>Cons</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">In-process pool</td><td>HikariCP (Java), pgxpool (Go), psycopg pool (Python)</td><td>Simple; per-instance control</td><td>connections × instances quickly overshoots DB limits</td></tr>
+        <tr><td class="algo-name">Sidecar pool</td><td>pgbouncer per node</td><td>Isolated per node; bounded</td><td>Extra hop; needs deployment</td></tr>
+        <tr><td class="algo-name">External pool</td><td>pgbouncer / Odyssey cluster, RDS Proxy</td><td>One central limit on DB; fits 10k clients into 100 DB conns</td><td>Single point of failure; transactional limitations</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — pgbouncer transaction-pooling mode</h2></div>
+    <div class="prose">
+      <p>The classic Postgres scaling story. App has 1000 instances × 20 conn = 20,000 connections. Postgres caps at ~500. Without intervention, you crash.</p>
+      <p>pgbouncer in <strong>transaction mode</strong> sits between apps and Postgres. Apps connect to pgbouncer (cheap; pgbouncer holds them all in memory). pgbouncer maintains a small pool to Postgres (say, 100). When a client begins a transaction, pgbouncer allocates a Postgres connection for the duration; when the transaction commits, that connection returns to the pool — usable by any other client.</p>
+      <p>Magic: 10,000 concurrent app clients share 100 actual Postgres connections, because each client only holds one for the milliseconds it's mid-transaction. Throughput improves dramatically because Postgres isn't context-switching across thousands of connections.</p>
+      <p><strong>Catch</strong>: transaction mode breaks anything stateful across statements — prepared statements, session variables, advisory locks (unless within one transaction). Most apps are fine; some need <code>session</code> mode (one connection per client for whole session) which loses much of the benefit.</p>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">pgbouncer / Odyssey</div><h4>Postgres standard</h4><p>Sits between app + DB. Transaction-mode pooling lets thousands of clients share dozens of DB connections.</p></div>
+      <div class="rw-card"><div class="rw-name">RDS Proxy / Aurora Proxy</div><h4>Managed pooling</h4><p>AWS-managed pgbouncer-equivalent. Auto-scales; handles failover. Default for serverless apps hitting RDS.</p></div>
+      <div class="rw-card"><div class="rw-name">HikariCP</div><h4>JVM gold standard</h4><p>Small, fast, opinionated. Documents the "small pool" wisdom in detail. Spring Boot's default since 2.0.</p></div>
+      <div class="rw-card"><div class="rw-name">HTTP keep-alive</div><h4>Connection pooling for HTTP</h4><p>Same idea, different protocol. Reuse TCP+TLS sockets across requests. Default in every modern HTTP client.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>URL shortener uses pgbouncer in front of Postgres for the redirect-write path. E-commerce uses connection pooling at every tier — DB, Redis, payment-provider HTTP. Payment gateway pools every external API call to keep latency tight.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

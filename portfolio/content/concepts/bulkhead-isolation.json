@@ -1,0 +1,71 @@
+{
+  "slug": "bulkhead-isolation",
+  "title": "Bulkhead Isolation",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 195,
+    "s": 50,
+    "l": 42
+  },
+  "category": "Reliability",
+  "blurb": "Your service has 200 threads. It calls services A, B, C. Service C hangs. Requests to C accumulate; all 200 threads end up waiting on C. Requests to A and B can't get served because no thread is free — even though A and ",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>Your service has 200 threads. It calls services A, B, C. Service C hangs. Requests to C accumulate; all 200 threads end up waiting on C. Requests to A and B <span class=\"hl-red\">can't get served</span> because no thread is free — even though A and B are perfectly healthy.</p>\n      <p>Bulkheads — borrowed from shipbuilding, where watertight compartments prevent one leak from sinking the whole ship — <strong>separate resource pools per dependency</strong>. Thread pool for A, thread pool for B, thread pool for C. C going bad can saturate its own pool, but A and B keep serving.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The failure it prevents",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The failure it prevents</h2></div>\n    <div class=\"prose\">\n      <p>Without bulkheads, a slow dependency can cause <strong>resource exhaustion</strong> in the caller — connections, threads, or memory all tied up waiting. The caller can no longer serve <em>any</em> request, even ones that don't touch the slow dependency. This is how a single slow service kills an entire platform.</p>\n      <p>With bulkheads, each dependency has its own pool. When dependency C saturates, only calls to C start queuing/rejecting. Everything else is untouched.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "Two main forms",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Two main forms</h2></div>\n    <div class=\"tradeoff-grid\">\n      <div class=\"tradeoff-option chosen\">\n        <div class=\"tradeoff-label\">Thread pool isolation</div>\n        <h4>One pool per downstream</h4>\n        <p>Service has thread pools: 50 threads for DB, 30 for service A, 20 for service B, 10 for payment provider. Calls go through their dedicated pool. Payment provider hangs → 10 threads stuck → other 90 keep working.</p>\n      </div>\n      <div class=\"tradeoff-option\">\n        <div class=\"tradeoff-label\">Semaphore isolation</div>\n        <h4>Counting semaphore per downstream</h4>\n        <p>Shared thread pool, but each dependency limited to N concurrent calls (via semaphore). Lighter weight than separate thread pools. No context-switch overhead. Can't handle truly blocking calls (which pin the thread anyway) — suited for fast-nonblocking calls.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Bulkheads at every level",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Bulkheads at every level</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>Service level.</strong> Separate connection pools per downstream.</li>\n        <li><strong>Container level.</strong> Run two copies of a service in separate pods for tenant isolation. \"Tenant A's bug doesn't affect tenant B.\"</li>\n        <li><strong>Process level.</strong> Noisy-neighbor isolation on a host by running each tenant in its own container with CPU/memory limits.</li>\n        <li><strong>Database level.</strong> Separate DB replicas per service or tenant. One team's bad query doesn't lock the shared DB.</li>\n        <li><strong>Regional level.</strong> One region failing doesn't affect others. The biggest bulkhead of all.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "Tradeoffs",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Tradeoffs</h2></div>\n    <div class=\"prose\">\n      <p><strong>Cost:</strong> reserved capacity per bulkhead = unused capacity during normal operation. If your DB pool has 50 threads but only 10 are busy, those 40 idle threads are \"wasted\" compared to a shared 200-thread pool where everyone competes.</p>\n      <p><strong>Tuning:</strong> pool size per dependency must match its normal + peak load. Too small and you throttle healthy traffic. Too large and you don't actually bulkhead. Usually: size = normal_concurrency × 1.5.</p>\n      <p><strong>Complexity:</strong> each pool is a separate thing to monitor, tune, and alert on. Worth it only for dependencies whose failure you can survive — for critical-path synchronous dependencies, bulkheads just surface failure faster (which is still better than cascading).</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — the cell architecture",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Deep dive — the cell architecture</h2></div>\n    <div class=\"prose\">\n      <p>AWS's internal answer to the \"one failure takes down everything\" problem is <strong>cell-based architecture</strong>. Each cell is a complete, self-contained stack serving a shard of users. Cell 1 serves 10% of customers; cell 2 serves the next 10%; and so on. A bug or corruption in cell 3 affects only 10% of traffic.</p>\n      <p>Cells are the mother of all bulkheads: entire vertical slices isolated from each other. The tradeoff: 10 cells means 10× the infra management. AWS does this because at their scale, \"small outage\" = millions of users, and 10% small is better than 100% small.</p>\n      <p>For most systems, this is overkill. But the principle — isolate failure domains at the largest practical boundary — applies at every scale. Run separate Kubernetes namespaces per team. Separate Redis clusters per tenant. Separate databases per region. The pattern repeats.</p>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">The guiding principle</div>\n        <p>Fault is local. Fault is bounded. Fault does not spread.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Netflix Hystrix</div><h4>Thread pools per dependency</h4><p>Default bulkhead was 10 threads per downstream command. Popularized the pattern in the microservice era.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">resilience4j / Polly</div><h4>Bulkhead operators</h4><p>Declarative: wrap a call in a bulkhead decorator; specify max concurrency. Failure isolation by composition.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Kubernetes resource quotas</div><h4>Namespace isolation</h4><p>Per-namespace CPU/memory limits. One team's runaway pod can't consume cluster resources meant for others.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">AWS cells</div><h4>DynamoDB, S3 internal architecture</h4><p>Dynamic sharding into cells with blast-radius limits. Not user-visible; the reason these services almost never go fully down.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "08",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">08</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>E-commerce uses bulkheads around payment provider, tax service, shipping API. Payment gateway isolates per-provider thread pools. Notification system bulkheads per delivery channel (SMS, email, push).</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

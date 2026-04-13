@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Distributed Transactions — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 0; --accent-s: 70%; --accent-l: 48%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>User clicks "Buy." You must: <strong>charge card</strong> (payments service) <strong>+ decrement inventory</strong> (warehouse service) <strong>+ create order</strong> (orders DB). All three or none — partial is catastrophic (card charged, no order). In one database, <a href="/concepts/acid-vs-base">ACID</a> gives this for free. Across services, it doesn't exist.</p>
+      <p>The sobering fact: <span class="hl-red">true distributed ACID is effectively impossible without paying huge latency and availability costs</span>. Modern systems use three pragmatic alternatives: 2PC (avoid), Saga (use), and the Outbox pattern (the unsung hero).</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Three approaches</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Approach</th><th>How</th><th>Verdict</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">2PC (two-phase commit)</td><td>Coordinator asks all services "can you commit?", then either "commit" or "abort"</td><td>Blocking protocol. One slow service stalls everything. Coordinator crash = indeterminate state. <span class="hl-red">Avoid.</span></td></tr>
+        <tr><td class="algo-name">Saga</td><td>Sequence of local transactions, each with a compensating action if a later step fails</td><td>Eventually consistent. Compensations must be idempotent. <span class="hl-green">Industry standard.</span></td></tr>
+        <tr><td class="algo-name">Outbox pattern</td><td>Write business change + pending event to one local DB atomically; separate process publishes event</td><td>Guarantees at-least-once event delivery without 2PC. Pair with sagas. <span class="hl-green">Essential.</span></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Saga — the checkout example</h2></div>
+    <div class="prose">
+      <p>Model the checkout as a sequence. Each step can fail; each step has a <em>compensation</em> that undoes it.</p>
+    
+      <div class="code-caption" data-code-snippet="1">2PC coordinator pseudo-code</div>
+      <pre><code class="lang-python"># 2PC (expensive, blocks on coordinator failure — prefer sagas where possible)
+
+class Coordinator:
+    def commit(self, txn_id, participants):
+        # Phase 1: PREPARE
+        votes = []
+        for p in participants:
+            try:
+                votes.append(p.prepare(txn_id))  # writes UNDO + REDO log
+            except Exception:
+                votes.append(False)
+        if not all(votes):
+            for p in participants: p.rollback(txn_id)
+            return "aborted"
+
+        # Phase 2: COMMIT
+        self.log.write(f"COMMIT {txn_id}")  # durable decision point
+        for p in participants:
+            while True:
+                try: p.commit(txn_id); break
+                except Exception: continue   # infinitely retry
+        return "committed"
+
+# Problem: coordinator crash between phase 1 and phase 2 blocks every
+# participant holding prepared locks. This is why sagas + idempotency
+# wins for most distributed-transaction use cases.</code></pre>
+  </div>
+    <div class="diagram-wrap">
+      <div class="diagram-head"><span class="diagram-label">Saga Flow</span><span class="diagram-type">Mermaid</span></div>
+      <div class="diagram-body">
+        <div class="mermaid">
+sequenceDiagram
+    participant O as Orders
+    participant P as Payments
+    participant I as Inventory
+    participant S as Shipping
+
+    O->>P: charge($50)
+    P-->>O: charge-id=c42
+    O->>I: reserve(item-7)
+    I-->>O: reserved
+    O->>S: ship(order-99)
+    S-->>O: shipping failed!
+
+    Note over O: Compensating chain
+    O->>I: unreserve(item-7)
+    I-->>O: ok
+    O->>P: refund(c42)
+    P-->>O: refunded
+    Note over O: Order rolled back, eventually consistent
+        </div>
+      </div>
+    </div>
+    <div class="prose">
+      <p>Two orchestration styles:</p>
+      <ul>
+        <li><strong>Orchestrated saga</strong> — central orchestrator (e.g., state machine) tells each service what to do. Clear, debuggable, introduces a new service to own.</li>
+        <li><strong>Choreographed saga</strong> — each service listens to events and decides what to do. No central orchestrator. Simpler infra, harder to reason about.</li>
+      </ul>
+      <p>Orchestrated wins for complex workflows (5+ steps). Choreographed wins for simple 2–3 step flows.</p>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Why 2PC is bad, in detail</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>Blocking.</strong> All participants lock their resources until the coordinator says go/abort. One slow participant stalls the entire transaction. Under load, lock queues explode.</li>
+        <li><strong>Coordinator SPOF.</strong> If the coordinator crashes after "commit" is sent to one participant but not others, the remaining participants don't know the outcome. They sit holding locks — indefinitely.</li>
+        <li><strong>Unavailable during partitions.</strong> Network partition → coordinator or participant unreachable → entire transaction blocked. <a href="/concepts/cap-theorem">CAP</a> CP behavior, but applied to every transaction across every service.</li>
+      </ol>
+      <p>Message brokers (Kafka) and some DBs (Spanner via Paxos) offer transactional guarantees that feel like 2PC but with much better availability via consensus. Outside those narrow cases, don't roll your own 2PC.</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — the Outbox pattern</h2></div>
+    <div class="prose">
+      <p>The core problem with saga: when service A commits its local DB and needs to notify service B, if the notification fails, saga breaks. You cannot atomically "commit DB + send message" across systems (that's 2PC, which we're avoiding).</p>
+      <p><strong>Outbox pattern:</strong> service A writes its DB change AND an "outbox" row in the same local transaction. A separate process polls outbox rows and publishes them to Kafka / a message bus. After successful publish, outbox row is marked sent (or deleted).</p>
+      <ol>
+        <li>DB commit happens: both business data + outbox row are written atomically (one-DB transaction — free).</li>
+        <li>Poller sees new outbox rows, publishes to Kafka.</li>
+        <li>If poller crashes after publishing but before marking sent → republishes on restart → <strong>at-least-once delivery</strong>. Consumers must be idempotent.</li>
+        <li>If poller crashes before publishing → retries on restart → still at-least-once.</li>
+      </ol>
+      <p>Net effect: atomicity between "change the DB" and "emit the event," without a distributed transaction. Every serious microservices system uses this (Debezium makes it turnkey via DB change-data-capture). Pair with idempotent consumers and sagas — this is the modern distributed transaction stack.</p>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Stripe</div><h4>Sagas + idempotency keys</h4><p>Every payment flow is a saga with compensating refunds. Client sends <code>Idempotency-Key</code> header on every request — retries don't double-charge.</p></div>
+      <div class="rw-card"><div class="rw-name">Uber Cadence / Temporal</div><h4>Workflow-as-code</h4><p>Orchestrated sagas written as normal code with durable state. Retry, compensate, timeout handled by the platform. What you want when sagas get complex.</p></div>
+      <div class="rw-card"><div class="rw-name">Debezium</div><h4>CDC-based outbox</h4><p>Streams DB changes (Postgres WAL, MySQL binlog) to Kafka. Turns any DB write into an event automatically.</p></div>
+      <div class="rw-card"><div class="rw-name">AWS Step Functions</div><h4>Managed orchestration</h4><p>State-machine definition; each step invokes a Lambda or service. Retries, timeouts, compensations all declarative.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>E-commerce checkout is a saga (payment + inventory + order + notification). Payment gateway uses outbox for webhook delivery. Ticketmaster uses saga + distributed locks to prevent double-booking. Bidding platform uses orchestrated sagas for auction settlement.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

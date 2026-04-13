@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Geospatial Indexes — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 38; --accent-s: 92%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>"Find all drivers within 2km of (37.77°N, 122.42°W)." A standard index on (lat, lng) doesn't help — you'd scan every row checking distance. Geospatial indexes let you answer proximity queries in milliseconds over millions of moving points. Without them, Uber, Yelp, Google Maps, and ride-sharing wouldn't exist.</p>
+      <p>Interview-critical if the problem involves "near me" or "within X distance."</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Why lat/lng indexes don't work</h2></div>
+    <div class="prose">
+      <p>Naive approach: index <code>(lat, lng)</code>. Query: <code>WHERE lat BETWEEN 37.76 AND 37.78 AND lng BETWEEN -122.43 AND -122.41</code>. The DB uses the lat portion of the index to narrow down candidates, then filters by lng. For a small radius this works — for a complex region or curved distance, it's wrong (Euclidean ≠ Earth-surface distance).</p>
+      <p>Also: <strong>range queries on two dimensions don't compose well in a B-tree</strong>. You need a spatial data structure that understands proximity.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Four approaches</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Index</th><th>Idea</th><th>Strength</th><th>Weakness</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Geohash</td><td>Encode lat/lng as a Base32 string via recursive rectangle subdivision</td><td>String prefixes = nearby cells. Works with any KV store or B-tree.</td><td>Edge cells — points near cell boundaries may be stored "far" by prefix even if geographically close</td></tr>
+        <tr><td class="algo-name">Quadtree</td><td>Recursive 2D subdivision into 4 quadrants until each leaf has ≤ k points</td><td>Adapts to density. Dense areas subdivided more.</td><td>More complex to implement; mutation-heavy as points move</td></tr>
+        <tr><td class="algo-name">R-tree</td><td>Spatial analog of B-tree. Each node covers a bounding box; children are sub-boxes.</td><td>Handles regions (not just points). Good for "which polygons contain this point?"</td><td>Overlap between sibling boxes complicates queries</td></tr>
+        <tr><td class="algo-name">S2 (Google)</td><td>Project Earth onto 6 cube faces; each face subdivided via Hilbert curve</td><td>Precise spherical math. Fast neighbor queries. Globally consistent cells.</td><td>Library-heavy; harder to understand than geohash</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Geohash — simplest and most common</h2></div>
+    <div class="prose">
+      <p>Encode (lat, lng) as an interleaved bit sequence, then Base32. "dr5ru" maps to a ~4km cell; "dr5ruj" to a ~600m cell inside it; "dr5ruj4" to a ~80m cell; and so on — each extra character cuts the cell size ~4×.</p>
+      <p><strong>Prefix property:</strong> two points in the same cell share a prefix. Query: <code>WHERE geohash LIKE 'dr5ru%'</code> finds everything in that 4km region. Drop one character → search the 16km parent region. This turns 2D proximity into 1D string prefix — works with any B-tree or sorted KV store.</p>
+      <p><strong>Edge problem:</strong> two points could be 100m apart but in different parent cells (one is in dr5ruj, the other dr5rum just across the boundary). Fix: query the point's cell <em>plus 8 neighbor cells</em>. Union the results. You never miss a nearby point.</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — the Uber driver lookup</h2></div>
+    <div class="prose">
+      <p>Uber's real-time "drivers near this rider" query at 1M+ writes/sec is the archetypal geospatial problem. The design:</p>
+      <ol>
+        <li><strong>Each driver has a cell key.</strong> Compute geohash-6 (~600m cell) from driver's current lat/lng. Update every 4 seconds as they move.</li>
+        <li><strong>Drivers indexed by cell.</strong> Redis sorted set per cell: <code>cell:dr5ruj → {driver_42, driver_58, ...}</code>. Score = last-update timestamp.</li>
+        <li><strong>When a rider requests,</strong> compute rider's cell + 8 neighbors. SUNION those 9 sets. Filter by driver availability. Sort by Euclidean distance to rider.</li>
+        <li><strong>Stale drivers aged out.</strong> Any driver whose score (last-update) &lt; now − 30s is removed from their cell. They've gone offline or their app is stuck.</li>
+      </ol>
+      <p>Query latency: &lt; 20ms for a city-sized density. Cell writes sharded across Redis instances by cell hash. The cell hierarchy keeps dense cities from becoming hotspots — you can shard sub-cells when density exceeds a threshold.</p>
+      <p>Uber uses a variant called <strong>H3</strong> (hexagonal cells they open-sourced) instead of geohash, because hexagons have better neighbor-equidistance properties than squares. Same core idea.</p>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">9-Cell Neighbor Query — Rider in Center, Driver Across Boundary</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg">
+          <g font-family="Geist, system-ui, sans-serif" font-size="11">
+            <text x="360" y="22" text-anchor="middle" font-weight="500">Without 9-cell query: nearby driver in adjacent cell is missed</text>
+            <!-- 3x3 grid centered -->
+            <g>
+              <rect x="220" y="50"  width="80" height="80" fill="#fff" stroke="#ccc9c4"/>
+              <rect x="300" y="50"  width="80" height="80" fill="#fff" stroke="#ccc9c4"/>
+              <rect x="380" y="50"  width="80" height="80" fill="#fff" stroke="#ccc9c4"/>
+              <rect x="220" y="130" width="80" height="80" fill="#fff" stroke="#ccc9c4"/>
+              <rect x="300" y="130" width="80" height="80" fill="hsl(38,90%,90%)" stroke="hsl(38,90%,50%)" stroke-width="2"/>
+              <rect x="380" y="130" width="80" height="80" fill="#fff" stroke="#ccc9c4"/>
+              <rect x="220" y="210" width="80" height="80" fill="#fff" stroke="#ccc9c4"/>
+              <rect x="300" y="210" width="80" height="80" fill="#fff" stroke="#ccc9c4"/>
+              <rect x="380" y="210" width="80" height="80" fill="#fff" stroke="#ccc9c4"/>
+            </g>
+            <!-- Cell labels -->
+            <text x="260" y="68" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">dr5rui</text>
+            <text x="340" y="68" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">dr5ruk</text>
+            <text x="420" y="68" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">dr5rum</text>
+            <text x="260" y="148" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">dr5ru7</text>
+            <text x="340" y="148" font-size="9" fill="hsl(38,90%,30%)" font-family="JetBrains Mono, monospace" font-weight="500">dr5ruj (rider)</text>
+            <text x="420" y="148" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">dr5run</text>
+            <text x="260" y="228" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">dr5ru5</text>
+            <text x="340" y="228" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">dr5ruh</text>
+            <text x="420" y="228" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">dr5rup</text>
+
+            <!-- Rider -->
+            <circle cx="350" cy="180" r="7" fill="hsl(217,91%,50%)"/>
+            <text x="350" y="200" text-anchor="middle" font-size="10" fill="hsl(217,91%,30%)" font-weight="500">rider</text>
+
+            <!-- Driver across cell boundary -->
+            <circle cx="395" cy="175" r="6" fill="hsl(145,55%,42%)"/>
+            <text x="395" y="170" text-anchor="middle" font-size="10" fill="hsl(145,55%,28%)" font-weight="500">driver</text>
+            <text x="500" y="178" font-size="10" fill="#878480">~50 m apart but in cell <tspan font-weight="500">dr5run</tspan></text>
+
+            <!-- Annotation -->
+            <text x="40" y="250" font-size="11" fill="hsl(0,70%,40%)" font-weight="500">❌ Query only "dr5ruj" → misses driver</text>
+            <text x="40" y="270" font-size="11" fill="hsl(145,55%,28%)" font-weight="500">✓ Query 9 cells (dr5ruj + 8 neighbors) → finds driver</text>
+            <text x="40" y="295" font-size="10" fill="#878480">Trade: 9 SUNION ops vs 1, &lt;20ms total at city density</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-val">9</div><div class="kv-lbl">cells per neighbor query</div></div>
+      <div class="kv-card"><div class="kv-val">~600 m</div><div class="kv-lbl">geohash-6 cell width</div></div>
+      <div class="kv-card"><div class="kv-val">~150 m</div><div class="kv-lbl">geohash-7 cell width</div></div>
+      <div class="kv-card"><div class="kv-val">&lt; 20 ms</div><div class="kv-lbl">9-SUNION at city density</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Redis GEO commands</div><h4>Geohash under the hood</h4><p><code>GEOADD</code>, <code>GEOSEARCH</code>. Built-in to Redis. Fast, practical. Used by many "near me" features.</p></div>
+      <div class="rw-card"><div class="rw-name">PostGIS</div><h4>R-tree on Postgres</h4><p>Industrial-strength geospatial. Complex queries (polygon containment, spatial joins). Most mapping backends use it.</p></div>
+      <div class="rw-card"><div class="rw-name">Google S2</div><h4>The library</h4><p>Open-source, cubic-projection geospatial cells. Used by Google Maps, Pokemon GO. More accurate than geohash at high latitudes.</p></div>
+      <div class="rw-card"><div class="rw-name">Uber H3</div><h4>Hexagonal cells</h4><p>Open-sourced from Uber. Preferred for uniform-radius neighbor queries. Hex cells eliminate the "corner" problem of square grids.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Uber uses H3 + Redis for driver matching. Yelp/Google Places uses geohash for business proximity. Google Maps uses S2 for tile indexing and route computation. Any "near me" feature is backed by one of these.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

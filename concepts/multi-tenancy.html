@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Multi-Tenancy — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 280; --accent-s: 55%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>You're building B2B SaaS. 10,000 customer companies, each with their own users + data + settings. Should each customer get their own database, their own EC2 instances, their own Kubernetes namespace? Or do they all share one stack with logical isolation?</p>
+      <p>This is the <strong>multi-tenancy</strong> question. The answer drives infrastructure cost (10,000× difference), security model, performance isolation, and onboarding speed (minutes vs days). Every SaaS company answers this; getting it wrong is hard to undo.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The three tenancy models</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Model</th><th>Isolation</th><th>Cost per tenant</th><th>Onboarding</th><th>Best for</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Pool (shared everything)</td><td>Logical only (tenant_id filter)</td><td>Pennies</td><td>Instant</td><td>Small tenants, freemium SaaS</td></tr>
+        <tr><td class="algo-name">Bridge (shared compute, dedicated DB)</td><td>Compute pooled, data isolated</td><td>$10s/mo</td><td>Minutes</td><td>Mid-market with data residency needs</td></tr>
+        <tr><td class="algo-name">Silo (dedicated everything)</td><td>Full stack per tenant</td><td>$100s-1000s/mo</td><td>Hours-days</td><td>Enterprise with strict isolation requirements</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Pool model — the default</h2></div>
+    <div class="prose">
+      <p>One database, one app fleet. Every table has a <code>tenant_id</code> column. Every query filters by it. Every cache key includes it. The app fleet is shared — tenant 5's traffic and tenant 8000's traffic land on the same servers.</p>
+      <p>Wins: dirt cheap — even free tenants have near-zero marginal cost. Onboarding is just <code>INSERT INTO tenants</code>. Single deploy serves everyone.</p>
+      <p>Pains:</p>
+      <ul>
+        <li><strong>Noisy neighbor.</strong> One huge tenant (or one slow query) affects everyone. Need <a href="/concepts/rate-limiting-algorithms">per-tenant rate limits</a> and query timeouts.</li>
+        <li><strong>Data leak risk.</strong> Forget a <code>WHERE tenant_id =</code> in one query → tenant 5 sees tenant 8000's data. Catastrophic. Mitigate with row-level security in Postgres, or repository-pattern wrappers that always inject the filter.</li>
+        <li><strong>Cross-tenant queries hard.</strong> Backups, exports, deletes for one tenant scan the whole DB.</li>
+        <li><strong>Compliance friction.</strong> "We need our data in EU" → can't deliver without rebuilding for silo.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Bridge model — the practical compromise</h2></div>
+    <div class="prose">
+      <p>Shared application tier; one database (or schema) per tenant. Best of both?</p>
+      <ul>
+        <li>Each tenant's data physically separate → easier compliance, instant per-tenant backup/restore, no risk of cross-tenant leak from a missing WHERE.</li>
+        <li>App tier still shared — one deploy, one fleet, one ops burden.</li>
+        <li>Database connections multiply — 10k tenants × 5 connections = 50k. Need <a href="/concepts/connection-pooling">aggressive pooling</a> (pgbouncer with per-tenant DBs, or shared schemas).</li>
+        <li>Schema migrations harder — migrate 10k DBs sequentially? Migration framework needs to handle this.</li>
+      </ul>
+      <p>Common variant: shared DB, one <strong>schema</strong> per tenant (Postgres). Schemas are cheap; migrations apply to all schemas. Used by Heroku, GitHub Actions runners, many B2B SaaS.</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — the noisy neighbor problem</h2></div>
+    <div class="prose">
+      <p>The pool model's #1 failure: one tenant's behavior wrecks others' experience. Mitigations form a hierarchy:</p>
+      <ol>
+        <li><strong>Rate limit per tenant.</strong> Hard cap on RPS; 429 if exceeded. <a href="/concepts/rate-limiting-algorithms">Token bucket per tenant_id</a>. Prevents accidental DOS by one tenant's bug.</li>
+        <li><strong>Query timeouts per tenant.</strong> Tenant's SQL exceeds 5 seconds → kill it. Without this, a bad query holds DB resources indefinitely.</li>
+        <li><strong>Resource quotas.</strong> Tenant's storage, API call quota, worker minutes capped. Bills auto-throttle past quota.</li>
+        <li><strong>Bulkhead per tenant.</strong> Big tenants get dedicated thread pools or worker queues. Smaller tenants share one pool.</li>
+        <li><strong>Promote big tenants to silo.</strong> When a tenant becomes ≥1% of total traffic, move them to dedicated infrastructure (sometimes with a price increase). Best of both worlds.</li>
+      </ol>
+      <p>Shopify's "pods" architecture is the textbook example: every shop is in a pod (a complete app + DB stack); pods serve N shops; large shops get their own pod. Combines pool scalability with silo-level isolation per high-value tenant.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"Default to pool tenancy with strict per-tenant rate limits, query timeouts, and row-level security. Promote large tenants to dedicated stacks (silo) once they exceed 1% of total traffic. Avoids over-provisioning while keeping noisy-neighbor risk bounded."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Slack</div><h4>Pool with workspace sharding</h4><p>Workspaces sharded across many DB clusters. Single huge clients (large enterprises) get dedicated clusters.</p></div>
+      <div class="rw-card"><div class="rw-name">Shopify</div><h4>Pods</h4><p>Each pod is a full stack serving N shops. Large shops get their own pod. Pool + silo hybrid.</p></div>
+      <div class="rw-card"><div class="rw-name">Stripe</div><h4>Pool with row-level filters</h4><p>One big Postgres + Redis. Account-id filtering everywhere. Per-account rate limits + quotas. Strong row-level security audit.</p></div>
+      <div class="rw-card"><div class="rw-name">AWS GovCloud</div><h4>Silo for compliance</h4><p>Entirely separate AWS region for US gov customers. Most extreme silo — separate availability, separate accounts.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>E-commerce platforms (like Shopify) are inherently multi-tenant. Notification system tenants its quotas + delivery channels. Google Docs treats each user/org as a tenant for sharing + access control.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,1654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Top-K Leaderboard — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+
+    /* ============================================================
+       DESIGN SYSTEM — DO NOT MODIFY VARIABLE NAMES
+       Only change --accent-h, --accent-s, --accent-l per problem
+       ============================================================ */
+    :root {
+      /* ── Accent — Gold / Trophy ── */
+      --accent-h:       45;
+      --accent-s:       88%;
+      --accent-l:       48%;
+      --accent:         hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light:   hsl(var(--accent-h), 80%, 94%);
+      --accent-mid:     hsl(var(--accent-h), 70%, 88%);
+      --accent-text:    hsl(var(--accent-h), var(--accent-s), 32%);
+      --accent-border:  hsl(var(--accent-h), 60%, 80%);
+
+      /* ── Highlights ── */
+      --hl-yellow:      #fff0a0;
+      --hl-yellow-dark: #a07a00;
+      --hl-accent:      hsl(var(--accent-h), 90%, 88%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 30%);
+
+      /* ── Surfaces ── */
+      --bg:             #ffffff;
+      --bg-subtle:      #f7f7f5;
+      --bg-raised:      #f0eeeb;
+      --bg-code:        #f4f3f0;
+      --border:         #e4e2de;
+      --border-strong:  #ccc9c4;
+
+      /* ── Text ── */
+      --text-primary:   #111110;
+      --text-secondary: #4a4845;
+      --text-muted:     #878480;
+      --text-code:      #2d2c2b;
+
+      /* ── Typography ── */
+      --font-serif:     'Instrument Serif', Georgia, serif;
+      --font-sans:      'Geist', system-ui, sans-serif;
+      --font-mono:      'JetBrains Mono', 'Fira Code', monospace;
+
+      /* ── Radii ── */
+      --radius-sm:      4px;
+      --radius-md:      8px;
+      --radius-lg:      12px;
+    }
+
+    /* ── Reset ── */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+    body {
+      font-family: var(--font-sans);
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--text-primary);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Layout Shell ── */
+    .layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      grid-template-rows: auto 1fr;
+      min-height: 100vh;
+    }
+
+    /* ── Topbar ── */
+    .topbar {
+      grid-column: 1 / -1;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 52px;
+      padding: 0 24px;
+      background: rgba(255,255,255,0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .topbar-left a {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .topbar-left a:hover { color: var(--accent); }
+    .topbar-sep { color: var(--border-strong); user-select: none; }
+    .topbar-problem { color: var(--accent-text); font-weight: 500; }
+    .topbar-right { display: flex; align-items: center; gap: 16px; }
+    .topbar-tag {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      background: var(--accent-light);
+      color: var(--accent-text);
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      position: sticky;
+      top: 52px;
+      height: calc(100vh - 52px);
+      overflow-y: auto;
+      padding: 28px 20px 40px;
+      border-right: 1px solid var(--border);
+      background: var(--bg-subtle);
+    }
+    .sidebar::-webkit-scrollbar { width: 3px; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+    .sidebar-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+    .sidebar-nav { list-style: none; margin-bottom: 32px; }
+    .sidebar-nav li { margin-bottom: 2px; }
+    .sidebar-nav a {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 15px;
+      font-weight: 400;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: all 0.15s ease;
+      position: relative;
+    }
+    .sidebar-nav a::before {
+      content: '';
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--border-strong);
+      flex-shrink: 0;
+      transition: all 0.2s ease;
+    }
+    .sidebar-nav a:hover {
+      background: var(--bg-raised);
+      color: var(--text-primary);
+    }
+    .sidebar-nav a.active {
+      background: var(--accent-light);
+      color: var(--accent-text);
+      font-weight: 500;
+    }
+    .sidebar-nav a.active::before {
+      background: var(--accent);
+      width: 6px;
+      height: 6px;
+    }
+    .sidebar-related { list-style: none; margin-top: 8px; }
+    .sidebar-related li { margin-bottom: 4px; }
+    .sidebar-related a {
+      font-size: 14.5px;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .sidebar-related a:hover { color: var(--accent); }
+
+    /* ── Main Content ── */
+    .main {
+      padding: 0 48px 120px;
+      max-width: 860px;
+      min-width: 0;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      padding: 56px 0 40px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 48px;
+    }
+    .hero-number {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+    .hero h1 {
+      font-family: var(--font-serif);
+      font-size: 48px;
+      font-weight: 400;
+      line-height: 1.1;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+      letter-spacing: -0.02em;
+    }
+    .hero-desc {
+      font-size: 17px;
+      line-height: 1.65;
+      color: var(--text-secondary);
+      max-width: 600px;
+      margin-bottom: 20px;
+    }
+    .hero-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+    .hero-tag {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 400;
+      letter-spacing: 0.04em;
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-raised);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+
+    /* ── Sections ── */
+    .section {
+      margin-bottom: 56px;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeUp 0.5s ease forwards;
+    }
+    .section:nth-child(1)  { animation-delay: 0.05s; }
+    .section:nth-child(2)  { animation-delay: 0.10s; }
+    .section:nth-child(3)  { animation-delay: 0.15s; }
+    .section:nth-child(4)  { animation-delay: 0.20s; }
+    .section:nth-child(5)  { animation-delay: 0.25s; }
+    .section:nth-child(6)  { animation-delay: 0.30s; }
+    .section:nth-child(7)  { animation-delay: 0.35s; }
+    .section:nth-child(8)  { animation-delay: 0.40s; }
+    .section:nth-child(9)  { animation-delay: 0.45s; }
+    .section:nth-child(10) { animation-delay: 0.50s; }
+    .section:nth-child(11) { animation-delay: 0.55s; }
+    @keyframes fadeUp {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .section-number {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    .section h2 {
+      font-family: var(--font-serif);
+      font-size: 30px;
+      font-weight: 400;
+      color: var(--text-primary);
+      margin-bottom: 20px;
+      letter-spacing: -0.01em;
+    }
+    .section h3 {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin: 28px 0 10px;
+    }
+    .section p {
+      color: var(--text-secondary);
+      margin-bottom: 14px;
+      max-width: 680px;
+    }
+    .section ul, .section ol {
+      padding-left: 20px;
+      margin-bottom: 16px;
+      color: var(--text-secondary);
+    }
+    .section li { margin-bottom: 6px; }
+
+    /* ── Highlight Spans ── */
+    .hl {
+      background: var(--hl-yellow);
+      color: var(--hl-yellow-dark);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+    .hl-accent {
+      background: var(--hl-accent);
+      color: var(--hl-accent-dark);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+    .hl-red {
+      background: hsl(0, 85%, 93%);
+      color: hsl(0, 70%, 35%);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+    .hl-green {
+      background: hsl(145, 60%, 90%);
+      color: hsl(145, 55%, 28%);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+
+    /* ── Cards / Boxes ── */
+    .card {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+    .card-accent {
+      background: var(--accent-light);
+      border-color: var(--accent-border);
+    }
+    .card h4 {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+    .card p {
+      font-size: 16px;
+      color: var(--text-secondary);
+      margin-bottom: 0;
+    }
+    .card-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    /* ── Code Blocks ── */
+    .code-block {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      overflow-x: auto;
+    }
+    .code-block code {
+      font-family: var(--font-mono);
+      font-size: 14.5px;
+      font-weight: 400;
+      color: var(--text-code);
+      line-height: 1.7;
+    }
+    .code-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .inline-code {
+      font-family: var(--font-mono);
+      font-size: 15px;
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      padding: 1px 6px;
+      border-radius: var(--radius-sm);
+      color: var(--text-code);
+    }
+
+    /* ── Tables ── */
+    .table-wrap {
+      overflow-x: auto;
+      margin-bottom: 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+    }
+    .table-wrap table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 15.5px;
+    }
+    .table-wrap th {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      text-align: left;
+      padding: 10px 16px;
+      background: var(--bg-subtle);
+      border-bottom: 1px solid var(--border);
+    }
+    .table-wrap td {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+    .table-wrap tr:last-child td { border-bottom: none; }
+
+    /* ── Scale Estimation Grid ── */
+    .scale-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .scale-card {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      text-align: center;
+    }
+    .scale-card .number {
+      font-family: var(--font-mono);
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--accent-text);
+      margin-bottom: 2px;
+    }
+    .scale-card .label {
+      font-size: 13.5px;
+      color: var(--text-muted);
+    }
+
+    /* ── Architecture SVG ── */
+    .arch-diagram {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+    }
+    .arch-diagram svg { display: block; margin: 0 auto; }
+    .arch-diagram .node { cursor: pointer; transition: filter 0.2s; }
+    .arch-diagram .node:hover { filter: brightness(0.95); }
+    .arch-diagram .node rect, .arch-diagram .node-rect { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arch-diagram .node-label {
+      font-family: 'Geist', system-ui, sans-serif;
+      font-size: 13.5px;
+      font-weight: 500;
+      fill: var(--text-primary);
+      text-anchor: middle;
+      dominant-baseline: central;
+      pointer-events: none;
+    }
+    .arch-diagram .node-sublabel {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      fill: var(--text-muted);
+      text-anchor: middle;
+      dominant-baseline: central;
+      pointer-events: none;
+    }
+    .arch-diagram .edge {
+      stroke: var(--border-strong);
+      stroke-width: 1.5;
+      fill: none;
+      marker-end: url(#arrowhead);
+    }
+    .arch-diagram .edge-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      fill: var(--text-muted);
+      text-anchor: middle;
+    }
+    .node-highlight rect { stroke: var(--accent) !important; stroke-width: 2.5 !important; }
+    .node-highlight .node-label { fill: var(--accent-text) !important; }
+
+    /* ── Flow Stepper Widget ── */
+    .flow-stepper {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .flow-stepper-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .flow-stepper-title {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .flow-stepper-controls { display: flex; gap: 8px; }
+    .flow-btn {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 5px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .flow-btn:hover {
+      background: var(--accent-light);
+      border-color: var(--accent-border);
+      color: var(--accent-text);
+    }
+    .flow-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .flow-btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+    .flow-btn-primary:hover { opacity: 0.9; background: var(--accent); color: white; }
+    .flow-steps {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      margin-bottom: 16px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .flow-node {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      white-space: nowrap;
+      transition: all 0.3s ease;
+    }
+    .flow-node.active {
+      background: var(--accent-light);
+      border-color: var(--accent);
+      color: var(--accent-text);
+      box-shadow: 0 0 0 3px var(--accent-mid);
+    }
+    .flow-node.done {
+      background: var(--accent-light);
+      border-color: var(--accent-border);
+      color: var(--accent-text);
+    }
+    .flow-arrow { color: var(--border-strong); font-size: 16px; flex-shrink: 0; }
+    .flow-desc {
+      font-size: 16px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      padding: 14px 16px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      min-height: 52px;
+    }
+    .flow-counter {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 10px;
+      text-align: right;
+    }
+
+    /* ── Mermaid ── */
+    .mermaid-wrap {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+    }
+    .mermaid { text-align: center; }
+
+    /* ── Tradeoff Cards ── */
+    .tradeoff {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .tradeoff-option {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+    }
+    .tradeoff-option.chosen {
+      border-color: var(--accent-border);
+      background: var(--accent-light);
+    }
+    .tradeoff-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .tradeoff-label.yes { color: hsl(145, 55%, 32%); }
+    .tradeoff-label.no  { color: var(--text-muted); }
+    .tradeoff-option h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+    .tradeoff-option p {
+      font-size: 15px;
+      color: var(--text-secondary);
+      margin-bottom: 0;
+    }
+
+    /* ── Callout ── */
+    .callout {
+      border-left: 3px solid var(--accent);
+      padding: 14px 18px;
+      background: var(--accent-light);
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+      margin-bottom: 16px;
+    }
+    .callout p { font-size: 16px; color: var(--accent-text); margin-bottom: 0; }
+    .callout-warn { border-left-color: hsl(38, 92%, 50%); background: hsl(38, 80%, 94%); }
+    .callout-warn p { color: hsl(38, 70%, 28%); }
+    .callout-danger { border-left-color: hsl(0, 72%, 52%); background: hsl(0, 80%, 95%); }
+    .callout-danger p { color: hsl(0, 65%, 32%); }
+
+    /* ── Interview Tip Cards ── */
+    .tip-card {
+      display: flex;
+      gap: 14px;
+      padding: 16px 20px;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      margin-bottom: 10px;
+    }
+    .tip-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+    .tip-content { font-size: 16px; color: var(--text-secondary); line-height: 1.6; }
+    .tip-content strong { color: var(--text-primary); font-weight: 600; }
+
+    /* ── Similar Problems ── */
+    .similar-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .similar-card {
+      display: block;
+      text-decoration: none;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 18px 20px;
+      transition: all 0.2s ease;
+    }
+    .similar-card:hover {
+      border-color: var(--accent-border);
+      background: var(--accent-light);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    }
+    .similar-card h4 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+    .similar-card p { font-size: 13.5px; color: var(--text-muted); margin-bottom: 0; }
+
+    /* ── Evolution / Timeline ── */
+    .evolution-step {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+      position: relative;
+    }
+    .evolution-step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      left: 15px;
+      top: 36px;
+      bottom: -20px;
+      width: 2px;
+      background: var(--border);
+    }
+    .evolution-marker {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--accent-light);
+      border: 2px solid var(--accent-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--accent-text);
+      flex-shrink: 0;
+    }
+    .evolution-content h4 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+    .evolution-content p { font-size: 15.5px; color: var(--text-secondary); margin-bottom: 0; }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .main { padding: 0 20px 80px; }
+      .hero h1 { font-size: 34px; }
+      .tradeoff { grid-template-columns: 1fr; }
+      .card-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- ═══════════════════ TOPBAR ═══════════════════ -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <a href="../index.html">System Design</a>
+      <span class="topbar-sep">/</span>
+      <span class="topbar-problem">Top-K Leaderboard</span>
+    </div>
+    <div class="topbar-right">
+      <span class="topbar-tag">Hard</span>
+    </div>
+  </header>
+
+  <!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-label">Sections</div>
+    <ul class="sidebar-nav" id="sidebar-nav">
+      <li><a href="#problem">Problem Statement</a></li>
+      <li><a href="#requirements">Requirements</a></li>
+      <li><a href="#scale">Scale Estimation</a></li>
+      <li><a href="#api">API Design</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#deep-dive">Deep Dive</a></li>
+      <li><a href="#tradeoffs">Tradeoffs</a></li>
+      <li><a href="#failures">Failure Scenarios</a></li>
+      <li><a href="#interview-tips">Interview Tips</a></li>
+      <li><a href="#similar">Similar Problems</a></li>
+      <li><a href="#evolution">Evolution</a></li>
+    </ul>
+
+    <div class="sidebar-label">Related</div>
+    <ul class="sidebar-related">
+      <li><a href="../rate-limiter/index.html">Rate Limiter</a></li>
+      <li><a href="../twitter-feed/index.html">Twitter Feed</a></li>
+      <li><a href="../redis-cache/index.html">Design a Cache</a></li>
+      <li><a href="../search-autocomplete/index.html">Search Autocomplete</a></li>
+    </ul>
+  </aside>
+
+  <!-- ═══════════════════ MAIN ═══════════════════ -->
+  <main class="main">
+
+    <!-- ── Hero ── -->
+    <div class="hero">
+      <div class="hero-number">System Design — 016</div>
+      <h1>Top-K Leaderboard</h1>
+      <p class="hero-desc">
+        Design a real-time ranking system that maintains sorted standings of millions of users, serving both "who's on top?" and "what's my rank?" with sub-50ms latency.
+      </p>
+      <div class="hero-tags">
+        <span class="hero-tag">Redis ZSET</span>
+        <span class="hero-tag">Skip List</span>
+        <span class="hero-tag">Real-Time Ranking</span>
+        <span class="hero-tag">Score Packing</span>
+        <span class="hero-tag">CQRS</span>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 01 · PROBLEM STATEMENT ═══════════════ -->
+    <div class="section" id="problem">
+      <div class="section-number">01</div>
+      <h2>Problem Statement</h2>
+      <p>
+        Design a system that maintains and serves real-time leaderboards — think gaming leaderboards (Fortnite, PUBG), competitive platforms (LeetCode, Kaggle), or engagement rankings (Spotify Wrapped). Users perform actions that update their scores, and the system must efficiently answer <span class="hl">"who are the top K?"</span> and <span class="hl">"what's my rank?"</span> at any point.
+      </p>
+      <p>
+        The naive approach — <span class="inline-code">SELECT * ORDER BY score DESC</span> — works for 1,000 users. At <span class="hl">100 million users</span>, re-sorting on every update is a non-starter. This is a <span class="hl-accent">data structure problem</span> disguised as a system design problem. The choice of data structure determines your latency, memory footprint, and sharding strategy.
+      </p>
+
+      <div class="callout">
+        <p><strong>Core question:</strong> How do you maintain a globally sorted ranking of millions of entities that updates in real-time, while serving both top-K queries and individual rank lookups with low latency?</p>
+      </div>
+
+      <h3>The Two Queries That Drive the Design</h3>
+      <p>
+        <strong>Top-K:</strong> "Give me the top 100 players." A range query on the head of a sorted set — relatively easy. Most sorted data structures answer this efficiently.
+      </p>
+      <p>
+        <strong>My Rank:</strong> "What rank am I?" This is the hard one. It asks "how many entities have a score higher than mine?" — a full table scan in a flat database. <span class="hl-red">This single query</span> is what separates a toy solution from a real one, and it pushes the entire design toward a skip list (Redis ZSET).
+      </p>
+    </div>
+
+    <!-- ═══════════════ 02 · REQUIREMENTS ═══════════════ -->
+    <div class="section" id="requirements">
+      <div class="section-number">02</div>
+      <h2>Requirements</h2>
+
+      <h3>Functional Requirements</h3>
+      <div class="card">
+        <ul>
+          <li><strong>Update a user's score</strong> — supports three modes: <span class="hl-accent">increment</span> (add to current), <span class="hl-accent">replace</span> (overwrite), and <span class="hl-accent">max</span> (keep highest). Increment is the hardest — needs atomic read-modify-write.</li>
+          <li><strong>Get Top-K users</strong> — return the K highest-scoring users with scores, real-time, with <span class="hl">timestamp-based tiebreaking</span> (earliest = higher rank for same score).</li>
+          <li><strong>Get a user's rank</strong> — O(log N) rank lookup with optional surrounding window (show 5 users above and below).</li>
+          <li><strong>Scoped leaderboards</strong> — support global, daily, weekly, monthly, regional, and tournament-specific leaderboards as independent sorted sets.</li>
+          <li><strong>Profile enrichment</strong> — leaderboard engine stores (user_id, score) only. API layer enriches with display names, avatars, tier badges from a separate Profile Service.</li>
+        </ul>
+      </div>
+
+      <h3>Non-Functional Requirements</h3>
+      <div class="card">
+        <ul>
+          <li><strong>Low read latency</strong> — <span class="hl">p99 &lt; 50ms</span> for top-K and rank queries. Data structure must live in memory.</li>
+          <li><strong>High write throughput</strong> — tens of thousands of score updates/sec. Increment must be atomic (Redis <span class="inline-code">ZINCRBY</span>).</li>
+          <li><strong>Eventual consistency on ranks</strong> — target lag &lt; 5 seconds. Strong consistency on score accuracy — <span class="hl-red">no lost updates</span>.</li>
+          <li><strong>High availability (99.9%+)</strong> — Redis Sentinel for failover. PostgreSQL as durable backing store for rebuild.</li>
+          <li><strong>Scalability to 100M+ users</strong> — single ZSET fits on one shard (~11 GB). Redis Cluster for total memory capacity.</li>
+          <li><strong>Idempotent writes</strong> — every score update carries a unique event ID. Duplicates are detected and skipped.</li>
+        </ul>
+      </div>
+
+      <div class="callout-warn callout">
+        <p><strong>Key tension:</strong> Low read latency (in-memory) conflicts with score durability (disk-based). Resolution: Redis as the fast path, PostgreSQL as the safety net. Both are written on every update.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 03 · SCALE ESTIMATION ═══════════════ -->
+    <div class="section" id="scale">
+      <div class="section-number">03</div>
+      <h2>Scale Estimation</h2>
+      <p>Anchored on a competitive gaming platform at Fortnite/PUBG scale. Every number is derived from the previous one.</p>
+
+      <div class="scale-grid">
+        <div class="scale-card">
+          <div class="number">100M</div>
+          <div class="label">Registered Users</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">20M</div>
+          <div class="label">DAU (20%)</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">5,600/s</div>
+          <div class="label">Peak Writes</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">8,400/s</div>
+          <div class="label">Peak Reads</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">1.5 : 1</div>
+          <div class="label">Read:Write Ratio</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~60 GB</div>
+          <div class="label">Total Redis Memory</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~1,100</div>
+          <div class="label">Active Leaderboards</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">4 shards</div>
+          <div class="label">Redis Cluster Size</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>Write Path Derivation</h4>
+        <p>20M DAU × 6 matches/day ÷ 86,400 sec = <span class="hl">1,400 writes/sec</span> average. Peak (4×) = <span class="hl">5,600/sec</span>. Event spikes (10×) = ~14,000/sec. A single Redis instance handles 150K+ ops/sec — throughput is not our bottleneck.</p>
+      </div>
+      <div class="card">
+        <h4>Memory Derivation</h4>
+        <p>Each ZSET entry ≈ <span class="hl">110 bytes</span> (skip list node + hash table entry + 16-byte UUID member). Global leaderboard: 100M × 110B = <span class="hl">11 GB</span>. All scopes combined: ~60 GB. Doesn't fit on one node → Redis Cluster with 4 shards × 32 GB = 128 GB total, using ~47%.</p>
+      </div>
+      <div class="card">
+        <h4>Critical Insight</h4>
+        <p>The <span class="hl">read:write ratio is nearly balanced (1.5:1)</span> — unusual for most systems. This means write optimization matters as much as read. We can't just "cache everything and forget about writes." However, top-K is highly cacheable (same for all users), while rank lookups must hit Redis directly.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 04 · API DESIGN ═══════════════ -->
+    <div class="section" id="api">
+      <div class="section-number">04</div>
+      <h2>API Design</h2>
+
+      <div class="code-label">Update Score</div>
+      <div class="code-block">
+        <code><pre>POST /v1/leaderboards/{leaderboard_id}/scores
+Headers: Idempotency-Key: &lt;unique_event_id&gt;      // REQUIRED
+
+{
+  "user_id":  "usr_a1b2c3d4",
+  "score":    150,
+  "mode":     "increment"     // "increment" | "replace" | "max"
+}
+
+→ 200 { "new_score": 2450, "previous_score": 2300,
+        "idempotent_replay": false }</pre></code>
+      </div>
+      <p>
+        <span class="hl-accent">mode</span> maps to Redis commands: increment → <span class="inline-code">ZINCRBY</span>, replace → <span class="inline-code">ZADD</span>, max → <span class="inline-code">ZADD GT</span>. The response does <span class="hl-red">not</span> include rank — computing rank is a separate O(log N) operation that would slow the write path.
+      </p>
+
+      <div class="code-label">Get Top-K</div>
+      <div class="code-block">
+        <code><pre>GET /v1/leaderboards/{leaderboard_id}/top?limit=100&cursor=null
+
+→ 200 {
+  "entries": [
+    { "rank": 1, "user_id": "usr_x9y8z7", "score": 98750,
+      "user_profile": { "display_name": "ShadowKnight", ... } },
+    ...
+  ],
+  "next_cursor": "eyJvZmZzZXQiOjEwMH0=",
+  "total_users": 43829104
+}</pre></code>
+      </div>
+      <p>
+        Uses <span class="hl-accent">cursor-based pagination</span>, not offset. Offset on a live sorted set causes skips/duplicates between pages. The cursor encodes the last score+user_id seen. <span class="hl-green">Highly cacheable</span> — CDN with 5-second TTL absorbs 99.99% of top-K traffic.
+      </p>
+
+      <div class="code-label">Get User Rank</div>
+      <div class="code-block">
+        <code><pre>GET /v1/leaderboards/{leaderboard_id}/users/{user_id}/rank?window=5
+
+→ 200 {
+  "rank": 48231, "score": 2450, "percentile": 99.89,
+  "window": {
+    "above": [ { "rank": 48229, "score": 2455 }, ... ],
+    "below": [ { "rank": 48232, "score": 2448 }, ... ]
+  }
+}</pre></code>
+      </div>
+      <p>
+        Internally: <span class="inline-code">ZREVRANK</span> (O(log N)) + <span class="inline-code">ZREVRANGE</span> for the window. Percentile is derived: <span class="inline-code">(total - rank) / total × 100</span>. <span class="hl-red">Not cacheable</span> — per-user, must hit Redis directly.
+      </p>
+
+      <div class="code-label">Batch Score Update (Server-to-Server)</div>
+      <div class="code-block">
+        <code><pre>POST /v1/leaderboards/{leaderboard_id}/scores/batch
+{ "updates": [
+    { "user_id": "usr_a1b2", "score": 150, "mode": "increment" },
+    { "user_id": "usr_e5f6", "score": 200, "mode": "increment" },
+    ...   // up to 1000 per batch
+] }
+
+→ 200 { "processed": 100, "results": [...] }</pre></code>
+      </div>
+      <p>
+        A single match produces 100 score updates. Redis <span class="hl-accent">pipeline</span> sends all <span class="inline-code">ZINCRBY</span> commands in one round trip — sub-millisecond on Redis side.
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Endpoint</th><th>Redis Op</th><th>Latency</th><th>Cacheable</th></tr></thead>
+          <tbody>
+            <tr><td>Update Score</td><td>ZINCRBY / ZADD</td><td>&lt; 5ms</td><td>No</td></tr>
+            <tr><td>Get Top-K</td><td>ZREVRANGE</td><td>&lt; 10ms</td><td>Yes (5s TTL)</td></tr>
+            <tr><td>Get User Rank</td><td>ZREVRANK + ZREVRANGE</td><td>&lt; 10ms</td><td>No</td></tr>
+            <tr><td>Batch Update</td><td>Pipeline ZINCRBY</td><td>&lt; 20ms</td><td>No</td></tr>
+            <tr><td>Remove User</td><td>ZREM</td><td>&lt; 5ms</td><td>No</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 05 · HIGH-LEVEL ARCHITECTURE ═══════════════ -->
+    <div class="section" id="architecture">
+      <div class="section-number">05</div>
+      <h2>High-Level Architecture</h2>
+      <p>Built on <span class="hl-accent">CQRS-lite</span>: separate Read and Write services, Redis as the fast ranking engine, PostgreSQL as the durable source of truth. Each leaderboard is one ZSET on one shard — no cross-shard queries.</p>
+
+      <!-- ── Inline SVG Diagram ── -->
+      <div class="arch-diagram">
+        <svg viewBox="0 0 860 520" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="#ccc9c4"/>
+            </marker>
+          </defs>
+
+          <!-- Row 1: Clients -->
+          <g class="node" id="node-client" onclick="hlNode('node-client')">
+            <rect class="node-rect" x="350" y="15" width="140" height="55" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="420" y="37">Clients</text>
+            <text class="node-sublabel" x="420" y="53">Game Server / Web / Mobile</text>
+          </g>
+
+          <!-- Row 2: CDN + API Gateway -->
+          <g class="node" id="node-cdn" onclick="hlNode('node-cdn')">
+            <rect class="node-rect" x="130" y="110" width="120" height="55" fill="hsl(45,80%,94%)" stroke="hsl(45,60%,80%)"/>
+            <text class="node-label" x="190" y="132">CDN Cache</text>
+            <text class="node-sublabel" x="190" y="148">Top-K · 5s TTL</text>
+          </g>
+          <g class="node" id="node-gw" onclick="hlNode('node-gw')">
+            <rect class="node-rect" x="590" y="110" width="130" height="55" fill="hsl(45,80%,94%)" stroke="hsl(45,60%,80%)"/>
+            <text class="node-label" x="655" y="132">API Gateway</text>
+            <text class="node-sublabel" x="655" y="148">Auth · Rate Limit</text>
+          </g>
+
+          <!-- Row 3: Read Service + Write Service -->
+          <g class="node" id="node-read" onclick="hlNode('node-read')">
+            <rect class="node-rect" x="80" y="210" width="130" height="55" fill="hsl(45,80%,94%)" stroke="hsl(45,60%,80%)"/>
+            <text class="node-label" x="145" y="232">Read Service</text>
+            <text class="node-sublabel" x="145" y="248">Ranking Queries</text>
+          </g>
+          <g class="node" id="node-write" onclick="hlNode('node-write')">
+            <rect class="node-rect" x="560" y="210" width="140" height="55" fill="hsl(45,80%,94%)" stroke="hsl(45,60%,80%)"/>
+            <text class="node-label" x="630" y="232">Write Service</text>
+            <text class="node-sublabel" x="630" y="248">Score Ingestion</text>
+          </g>
+          <g class="node" id="node-profile" onclick="hlNode('node-profile')">
+            <rect class="node-rect" x="260" y="210" width="130" height="55" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="325" y="232">Profile Service</text>
+            <text class="node-sublabel" x="325" y="248">Name · Avatar · Tier</text>
+          </g>
+
+          <!-- Row 4: Redis Cluster + Kafka -->
+          <g class="node" id="node-redis" onclick="hlNode('node-redis')">
+            <rect class="node-rect" x="240" y="320" width="220" height="60" fill="hsl(45,80%,94%)" stroke="hsl(45,60%,80%)"/>
+            <text class="node-label" x="350" y="342">Redis Cluster</text>
+            <text class="node-sublabel" x="350" y="358">4 Shards · ZSET per LB · ~60 GB</text>
+          </g>
+          <g class="node" id="node-kafka" onclick="hlNode('node-kafka')">
+            <rect class="node-rect" x="600" y="320" width="130" height="60" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="665" y="342">Kafka</text>
+            <text class="node-sublabel" x="665" y="358">score.updated events</text>
+          </g>
+
+          <!-- Row 5: PostgreSQL + Consumers + Reconciliation -->
+          <g class="node" id="node-pg" onclick="hlNode('node-pg')">
+            <rect class="node-rect" x="240" y="440" width="180" height="55" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="330" y="462">PostgreSQL</text>
+            <text class="node-sublabel" x="330" y="478">Source of Truth · Events + Scores</text>
+          </g>
+          <g class="node" id="node-consumer" onclick="hlNode('node-consumer')">
+            <rect class="node-rect" x="580" y="440" width="150" height="55" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="655" y="462">Consumer Workers</text>
+            <text class="node-sublabel" x="655" y="478">Fan-out · Notifications</text>
+          </g>
+          <g class="node" id="node-recon" onclick="hlNode('node-recon')">
+            <rect class="node-rect" x="50" y="440" width="150" height="55" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="125" y="462">Reconciliation</text>
+            <text class="node-sublabel" x="125" y="478">Drift fix · Every 15 min</text>
+          </g>
+
+          <!-- Edges -->
+          <!-- Client to CDN -->
+          <line class="edge" x1="380" y1="70" x2="210" y2="110"/>
+          <text class="edge-label" x="280" y="85">reads</text>
+          <!-- Client to Gateway -->
+          <line class="edge" x1="460" y1="70" x2="635" y2="110"/>
+          <text class="edge-label" x="565" y="85">writes</text>
+          <!-- CDN to Read Service -->
+          <line class="edge" x1="185" y1="165" x2="155" y2="210"/>
+          <text class="edge-label" x="155" y="190">miss</text>
+          <!-- Gateway to Write Service -->
+          <line class="edge" x1="655" y1="165" x2="640" y2="210"/>
+          <!-- Read to Redis -->
+          <line class="edge" x1="150" y1="265" x2="280" y2="320"/>
+          <text class="edge-label" x="200" y="290">ZREVRANK</text>
+          <!-- Read to Profile -->
+          <line class="edge" x1="210" y1="238" x2="260" y2="238"/>
+          <text class="edge-label" x="235" y="230">enrich</text>
+          <!-- Write to Redis -->
+          <line class="edge" x1="600" y1="265" x2="430" y2="325"/>
+          <text class="edge-label" x="530" y="288">ZINCRBY</text>
+          <!-- Write to PG -->
+          <line class="edge" x1="610" y1="265" x2="380" y2="440"/>
+          <text class="edge-label" x="510" y="360">INSERT</text>
+          <!-- Write to Kafka -->
+          <line class="edge" x1="670" y1="265" x2="668" y2="320"/>
+          <text class="edge-label" x="690" y="295">event</text>
+          <!-- Kafka to Consumer -->
+          <line class="edge" x1="665" y1="380" x2="660" y2="440"/>
+          <!-- Consumer to Redis -->
+          <line class="edge" x1="580" y1="468" x2="460" y2="368"/>
+          <text class="edge-label" x="530" y="415">fan-out</text>
+          <!-- Recon to Redis -->
+          <line class="edge" x1="145" y1="440" x2="270" y2="380"/>
+          <text class="edge-label" x="185" y="405">compare</text>
+          <!-- Recon to PG -->
+          <line class="edge" x1="170" y1="468" x2="240" y2="468"/>
+        </svg>
+      </div>
+
+      <!-- ── Flow Stepper ── -->
+      <div class="flow-stepper">
+        <div class="flow-stepper-header">
+          <span class="flow-stepper-title">Score Update Flow — Step Through</span>
+          <div class="flow-stepper-controls">
+            <button class="flow-btn" onclick="resetFlow()" id="flow-reset" disabled>Reset</button>
+            <button class="flow-btn flow-btn-primary" onclick="runFlow()" id="flow-next">Next Step →</button>
+          </div>
+        </div>
+        <div class="flow-steps" id="flow-steps"></div>
+        <div class="flow-desc" id="flow-desc">Click <strong>Next Step</strong> to walk through the score update flow.</div>
+        <div class="flow-counter" id="flow-counter"></div>
+      </div>
+
+      <div class="card">
+        <h4>Key Architectural Principles</h4>
+        <p><strong>1. Redis is the fast path, PostgreSQL is the safety net.</strong> If Redis dies, we rebuild from PostgreSQL in minutes. If PostgreSQL dies, rankings keep working from Redis.</p>
+        <p style="margin-top:8px"><strong>2. One leaderboard = one ZSET = one shard.</strong> No cross-shard queries. Every ranking operation is a single-node operation.</p>
+        <p style="margin-top:8px"><strong>3. Cache the head, query the tail.</strong> Top-K is identical for everyone — cache aggressively. Rank lookups are per-user — serve live from Redis.</p>
+        <p style="margin-top:8px"><strong>4. Async fan-out for secondary leaderboards.</strong> Primary leaderboard updated synchronously. Daily/weekly/regional updated via Kafka consumers.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 06 · DEEP DIVE ═══════════════ -->
+    <div class="section" id="deep-dive">
+      <div class="section-number">06</div>
+      <h2>Deep Dive — Real-Time Ranking at Scale</h2>
+
+      <p>The entire leaderboard design rests on one data structure: the <span class="hl-accent">skip list</span> inside Redis ZSET. Let's understand exactly why it's perfect for ranking, how it achieves O(log N) on all operations, and what happens when it's not enough.</p>
+
+      <h3>Why Ranking Is a Data Structure Problem</h3>
+      <p>You have 100M scores. You need two queries: top-K and "what's my rank?" A flat array needs O(n log n) sort for top-K and O(n) scan for rank. A B-Tree (database index) can do top-K efficiently but rank still requires a range scan — the B-Tree doesn't store subtree sizes. The answer: a data structure that maintains sorted order incrementally with <span class="hl">position tracking</span>.</p>
+
+      <h3>The Skip List — How Redis ZSET Works</h3>
+      <p>A skip list is a layered linked list. Level 0 is a sorted linked list of all elements. Higher levels are "express lanes" that skip over multiple elements. Think of it like a subway — local train (level 0), express (level 1), super-express (level 2). Search starts at the highest level and drops down.</p>
+
+      <!-- Mermaid: Skip List visualization -->
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+sequenceDiagram
+    participant C as Game Client
+    participant GW as API Gateway
+    participant WS as Write Service
+    participant R as Redis ZSET
+    participant PG as PostgreSQL
+    participant K as Kafka
+    participant CW as Consumer Worker
+
+    C->>GW: POST /scores (score=150)
+    GW->>WS: Route (authenticated)
+    WS->>WS: Check idempotency key
+    WS->>PG: INSERT score_event
+    PG-->>WS: OK (durable)
+    WS->>R: ZINCRBY lb:global 150 user_a
+    R-->>WS: new_score = 2450
+    WS->>K: Publish score.updated
+    WS-->>C: 200 { new_score: 2450 }
+    K->>CW: Consume event
+    CW->>R: ZINCRBY lb:weekly 150 user_a
+    CW->>R: ZINCRBY lb:daily 150 user_a
+        </div>
+      </div>
+
+      <h3>The Key Augmentation — Span Tracking</h3>
+      <p>Each forward pointer in the skip list stores a <span class="hl">span</span> — the number of elements it skips over. To find rank, traverse from HEAD at the highest level, accumulating spans as you go. For 100M elements with 32 levels, that's ~27 hops. <span class="hl">Sub-microsecond</span> on modern hardware.</p>
+
+      <div class="card card-accent">
+        <h4>ZSET = Skip List + Hash Table</h4>
+        <p>The skip list gives O(log N) sorted operations. The hash table maps member → (score, node pointer) for O(1) score lookup. Together: <strong>ZADD</strong> O(log N), <strong>ZSCORE</strong> O(1), <strong>ZREVRANK</strong> O(log N), <strong>ZREVRANGE</strong> O(log N + K).</p>
+      </div>
+
+      <h3>The Tiebreaker Trick — Score Packing</h3>
+      <p>Redis sorts by one dimension. For tiebreaking, pack score + inverted timestamp into one float64:</p>
+      <div class="code-block">
+        <code><pre>composite = score × 10⁷ + (MAX_TIMESTAMP − actual_timestamp)
+
+// Alice scores 2450 at t=1712345600 → 24502390099200
+// Bob   scores 2450 at t=1712345700 → 24502390099100
+// Alice's composite is higher → Alice ranks above Bob ✓
+
+// Extract raw score: floor(composite / 10⁷) = 2450</pre></code>
+      </div>
+      <p>IEEE 754 doubles have 52 bits of mantissa — integer precision up to <span class="hl">9 × 10¹⁵</span>. Our composite uses at most 15 digits. Safely within range.</p>
+
+      <h3>When One ZSET Isn't Enough — Sharding Strategies</h3>
+
+      <div class="card-grid">
+        <div class="card">
+          <h4>A. Score-Range Sharding</h4>
+          <p>Shard by score range. Rank = ZCARD of higher shards + rank within own shard. <span class="hl-green">Fast rank queries.</span> <span class="hl-red">Uneven distribution, cross-shard migration on score change.</span></p>
+        </div>
+        <div class="card">
+          <h4>B. Hash-Based Sharding</h4>
+          <p>Hash users across shards. Top-K = query all shards, merge. Rank = ZCOUNT on all shards. <span class="hl-green">Even distribution.</span> <span class="hl-red">Every rank query fans out to all shards.</span></p>
+        </div>
+      </div>
+
+      <div class="card card-accent">
+        <h4>C. Tiered Approach (Production Answer)</h4>
+        <p><strong>Tier 1:</strong> ZSET of top 1M users (~110 MB). Exact ranking, fast, unsharded.<br/>
+        <strong>Tier 2:</strong> Score histogram (Fenwick tree) for all users. "How many users have score > X?" as a prefix sum in O(log B).<br/>
+        Result: exact rank for top players, approximate percentile for the rest. This is how Xbox Live and Steam work at scale.</p>
+      </div>
+
+      <h3>The Decision Tree</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Users</th><th>Ranking Engine</th><th>Precision</th></tr></thead>
+          <tbody>
+            <tr><td>&lt; 1M</td><td>PostgreSQL with B-Tree index</td><td>Exact (COUNT query fast enough)</td></tr>
+            <tr><td>1M – 100M</td><td>Single Redis ZSET</td><td>Exact for all users</td></tr>
+            <tr><td>100M – 1B</td><td>Tiered: ZSET + histogram</td><td>Exact top-1M, percentile rest</td></tr>
+            <tr><td>1B+</td><td>Streaming top-K (Space-Saving)</td><td>Exact top-1K, approximate rest</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 07 · TRADEOFFS ═══════════════ -->
+    <div class="section" id="tradeoffs">
+      <div class="section-number">07</div>
+      <h2>Key Design Decisions &amp; Tradeoffs</h2>
+
+      <h3>Ranking Engine</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Redis ZSET (Skip List)</h4>
+          <p>O(log N) rank + update. In-memory, sub-millisecond. All operations map to native Redis commands. No custom code needed.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>PostgreSQL B-Tree</h4>
+          <p>COUNT(*) range scan for rank — O(N) at 100M rows ≈ 200ms. Fine under 1M users. Beyond that, exceeds latency budget.</p>
+        </div>
+      </div>
+
+      <h3>Write Path</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Synchronous Dual-Write</h4>
+          <p>PostgreSQL first, then Redis. Response returns after both succeed. User immediately sees updated rank. Simple, predictable.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Event-Driven (Kafka Buffer)</h4>
+          <p>Write to Kafka, consume into both stores. Better burst handling. But 50-200ms lag before rank updates — user sees stale rank.</p>
+        </div>
+      </div>
+
+      <h3>Leaderboard Scoping</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Independent ZSET per Scope</h4>
+          <p>Each time scope (daily, weekly) is a separate ZSET. O(log N) reads per scope. Memory cost: ~60 GB total for score duplication.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Computed Scoped Rankings</h4>
+          <p>Store once, filter at query time. No duplication, but O(N) filter + sort per scoped query. Impractical at 100M entries.</p>
+        </div>
+      </div>
+
+      <h3>Rank Precision</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Exact Rank for All Users</h4>
+          <p>100M-entry ZSET fits on one shard (11 GB). ZREVRANK is O(log N) regardless of rank position. Better UX — exact numbers motivate.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Tiered (Exact Top + Percentile)</h4>
+          <p>Needed at 500M+ users when ZSET exceeds shard capacity. Our API already returns percentile — backward-compatible migration path.</p>
+        </div>
+      </div>
+
+      <h3>Friends Leaderboard</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Computed On Demand</h4>
+          <p>Fetch friend list, pipeline ZSCORE for each friend (~200 O(1) calls), sort in-memory. Total: ~5ms. No write amplification.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Pre-Computed Per-User ZSET</h4>
+          <p>Each score update fans out to 200 friends' ZSETs = 200× write amplification. At 5,600 writes/sec → 1.12M ZSET writes/sec. Absurd.</p>
+        </div>
+      </div>
+
+      <h3>Tiebreaking</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Composite Score Packing</h4>
+          <p>Pack score + inverted timestamp into float64. Redis sorts natively. No extra queries. Tiebreaker is invisible to API consumer.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Application-Level Secondary Sort</h4>
+          <p>Store raw score. Fetch tied users' timestamps from PostgreSQL at query time. Adds latency, complexity, and a DB dependency on the read path.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 08 · FAILURE SCENARIOS ═══════════════ -->
+    <div class="section" id="failures">
+      <div class="section-number">08</div>
+      <h2>What Can Go Wrong</h2>
+
+      <div class="card">
+        <h4>Redis Master Crashes</h4>
+        <p><span class="hl">Downtime: 5-10 seconds.</span> Redis Sentinel promotes the replica. Async replication means 0-100ms of writes may be lost — but PostgreSQL has them. Reconciliation worker fixes drift within 15 minutes. Mitigation: use <span class="inline-code">WAIT 1 100</span> for semi-sync replication to eliminate the data loss window.</p>
+      </div>
+
+      <div class="card">
+        <h4>Score Drift Between Redis and PostgreSQL</h4>
+        <p>Caused by partial write failures, replication lag during failover, or consumer bugs. Reconciliation worker samples 10,000 users every 15 minutes, overwrites Redis with PostgreSQL values on mismatch. For high-stakes queries (user checking own rank), the Read Service can do an <span class="hl-accent">inline validation</span> — compare Redis score with PostgreSQL, trigger immediate correction if they differ (+5ms).</p>
+      </div>
+
+      <div class="card">
+        <h4>Hot Partition — Viral Leaderboard Spike</h4>
+        <p>A streamer with 5M followers says "check the leaderboard!" — 500K rank queries in 10 seconds. CDN absorbs top-K reads. Redis handles 50K ZREVRANK ops/sec (within capacity). Read Service auto-scales. Profile Service circuit breaker opens — serve ranks without profile enrichment if needed. <span class="hl-green">Graceful degradation, not failure.</span></p>
+      </div>
+
+      <div class="card">
+        <h4>Idempotency Store Loss</h4>
+        <p>If the Redis SET holding idempotency keys is lost, duplicate score updates get applied. <span class="hl">Fallback:</span> Write Service checks PostgreSQL <span class="inline-code">score_events</span> table for the event_id before applying. Slower (~5ms vs 0.1ms) but correct. Rebuild idempotency keys from recent events via bulk SADD.</p>
+      </div>
+
+      <div class="card">
+        <h4>Cheater Injection at Scale</h4>
+        <p>Fraudulent scores from compromised game servers. Defense layers: IP-restricted service tokens, per-account anomaly detection (score velocity, geographic impossibility), and <span class="hl-accent">surgical rollback</span> — reverse exactly the fraudulent events from the event log without affecting legitimate players.</p>
+      </div>
+
+      <div class="card">
+        <h4>Full Redis Cluster Loss (Disaster Recovery)</h4>
+        <p><span class="hl">Recovery: 15-45 minutes.</span> Serve stale CDN cache for top-K. Provision new cluster. Rebuild ZSETs from PostgreSQL <span class="inline-code">user_scores</span> (bulk ZADD ~1M entries/sec). Replay recent events from <span class="inline-code">score_events</span>. Faster path: restore from hourly RDB snapshot in S3 → recovery in 5-10 minutes.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Failure</th><th>Detection</th><th>Recovery</th><th>Data Risk</th></tr></thead>
+          <tbody>
+            <tr><td>Redis master crash</td><td>5 sec</td><td>5-10 sec</td><td>0-100ms writes</td></tr>
+            <tr><td>Score drift</td><td>15 min</td><td>Auto-fix</td><td>None (PG is truth)</td></tr>
+            <tr><td>Hot partition</td><td>Seconds</td><td>30-60 sec autoscale</td><td>None</td></tr>
+            <tr><td>Idempotency loss</td><td>Minutes</td><td>Seconds (fallback)</td><td>Possible duplicates</td></tr>
+            <tr><td>Cheater injection</td><td>Min-hours</td><td>Minutes (rollback)</td><td>Integrity corruption</td></tr>
+            <tr><td>Full cluster loss</td><td>Immediate</td><td>15-45 min</td><td>Last seconds</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 09 · INTERVIEW TIPS ═══════════════ -->
+    <div class="section" id="interview-tips">
+      <div class="section-number">09</div>
+      <h2>Interview Tips</h2>
+
+      <div class="tip-card">
+        <span class="tip-icon">💡</span>
+        <div class="tip-content">
+          <strong>Start with the two queries, not the architecture.</strong><br/>
+          Clarify first: does the system need top-K only, or top-K plus arbitrary rank lookup? Top-K alone can use a min-heap or periodic sort. Rank lookup is what forces you toward skip lists. Frame Redis ZSET as a <em>consequence</em> of the problem, not a starting assumption.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">⚡</span>
+        <div class="tip-content">
+          <strong>Derive scale, don't declare it.</strong><br/>
+          Bad: "Let's say 10K writes/sec." Good: "20M DAU × 6 matches × 20-min avg = 120M updates/day = 1,400/sec avg, 5,600/sec peak." Every number connects to the previous through a chain of defensible assumptions.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🎯</span>
+        <div class="tip-content">
+          <strong>Explain why PostgreSQL alone doesn't work before introducing Redis.</strong><br/>
+          Walk through: "COUNT(*) WHERE score > X on 100M rows with a B-Tree index ≈ 200ms. Budget is 50ms. That gap is what pushes us to an in-memory skip list." Then add: "Under 1M users, PostgreSQL is absolutely fine — Redis is only necessary at scale."
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🏆</span>
+        <div class="tip-content">
+          <strong>The tiebreaker question is your chance to shine.</strong><br/>
+          Crisp answer: "Pack score × 10⁷ + (MAX_TS − actual_ts) into one float64. Earliest timestamp = higher composite for equal scores. Redis sorts natively. IEEE 754 gives 52 bits of mantissa — safely within precision for scores up to 10⁸."
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">📐</span>
+        <div class="tip-content">
+          <strong>Know your sharding boundary and be honest.</strong><br/>
+          "This works for 100M users. Beyond that, the ZSET can't fit on one shard. I'd move to tiered ranking — exact for top 1M, percentile for the rest. The API already returns percentile, so it's backward-compatible." Knowing where your design breaks is a sign of maturity.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🛡️</span>
+        <div class="tip-content">
+          <strong>Don't forget anti-cheat — it separates senior from mid-level.</strong><br/>
+          Scores from game servers only (never client-direct). Anomaly detection on event stream. Surgical rollback via event log. Rate limiting on score submission endpoints. This shifts the conversation from infrastructure to product thinking.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">⚠️</span>
+        <div class="tip-content">
+          <strong>Common mistakes to avoid.</strong><br/>
+          • Saying "Redis handles everything" without proving it with throughput/memory numbers.<br/>
+          • Not addressing what happens when Redis goes down (always mention PostgreSQL backing store).<br/>
+          • Pre-computing friends leaderboards (walk through the 200× write amplification math).<br/>
+          • Over-engineering consistency — eventual is genuinely fine for leaderboards.
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 10 · SIMILAR PROBLEMS ═══════════════ -->
+    <div class="section" id="similar">
+      <div class="section-number">10</div>
+      <h2>Similar Problems</h2>
+
+      <div class="similar-grid">
+        <a href="../rate-limiter/index.html" class="similar-card">
+          <h4>Rate Limiter</h4>
+          <p>Same ZSET data structure, same atomicity concerns. Counts over time instead of counts over score. Sliding window = ZCOUNT.</p>
+        </a>
+        <a href="../twitter-feed/index.html" class="similar-card">
+          <h4>Trending Topics / Top-K Streams</h4>
+          <p>Same top-K query. Score = event count over sliding window. At extreme scale, same transition to approximate algorithms (Count-Min Sketch).</p>
+        </a>
+        <a href="../twitter-feed/index.html" class="similar-card">
+          <h4>News Feed Ranking</h4>
+          <p>Personalized top-K. Same fan-out tradeoff (pre-compute vs on-demand). Same caching strategy (head cacheable, tail not).</p>
+        </a>
+        <a href="../search-autocomplete/index.html" class="similar-card">
+          <h4>Search Autocomplete</h4>
+          <p>Top-K by popularity within a prefix. Same tiered caching (popular prefixes cached, rare ones computed live).</p>
+        </a>
+        <a href="../redis-cache/index.html" class="similar-card">
+          <h4>Design a Cache (Redis)</h4>
+          <p>Same persistence (AOF/RDB), replication, failover, and memory sizing discussions. Leaderboard Redis is a specialized cache.</p>
+        </a>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 11 · EVOLUTION ═══════════════ -->
+    <div class="section" id="evolution">
+      <div class="section-number">11</div>
+      <h2>Evolution</h2>
+      <p>How this design grows from MVP to planet-scale. Each stage is triggered by a specific, measurable constraint — not by ambition.</p>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">1</div>
+        <div class="evolution-content">
+          <h4>MVP — Single Server, Single Redis</h4>
+          <p><span class="hl">&lt; 1M users, &lt; 500 writes/sec.</span> One API server, one Redis instance (2 GB), one PostgreSQL. Can even skip Redis and use PostgreSQL COUNT(*) directly — returns in 5-10ms at this scale. One engineer, one week to build.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">2</div>
+        <div class="evolution-content">
+          <h4>Production — Read/Write Split, Replication, CDN</h4>
+          <p><span class="hl">&lt; 50M users, &lt; 5K writes/sec.</span> Separate Read and Write services. Redis master-replica for failover. CDN caches top-K (5s TTL). Kafka for async fan-out to secondary leaderboards. Idempotency layer + reconciliation worker. This is where most companies stop — it's enough.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">3</div>
+        <div class="evolution-content">
+          <h4>Scale — Redis Cluster, Batch Ingestion</h4>
+          <p><span class="hl">&lt; 100M users, ~60 GB Redis.</span> 4-shard Redis Cluster for memory capacity (not throughput). Batch score endpoint with Redis pipelines. Profile enrichment as a separate service. Composite score packing for tiebreaking. Admin moderation endpoints. <span class="hl-accent">This is our target architecture.</span></p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">4</div>
+        <div class="evolution-content">
+          <h4>Large Scale — Tiered Ranking, Multi-Region</h4>
+          <p><span class="hl">&lt; 1B users, &lt; 50K writes/sec.</span> Top-1M in a small ZSET (exact rank), rest via score histogram (percentile). Multi-region deployment: writes to primary region, cross-region Kafka replication, local reads. Kafka as write buffer (202 Accepted, ~100-500ms rank lag).</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">5</div>
+        <div class="evolution-content">
+          <h4>Planet Scale — Streaming Top-K, OLAP</h4>
+          <p><span class="hl">1B+ users, 100K+ writes/sec.</span> Space-Saving algorithm for approximate top-K with O(1) updates. OLAP engine (Druid, ClickHouse) for multi-dimensional filtered rankings. Exact rank only for top 1K. Everyone else gets percentile. This is Spotify Wrapped / Xbox Live territory.</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SCRIPTS
+     ═══════════════════════════════════════════════════════ -->
+<script>
+  // ── Mermaid Init ──
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: 'hsl(45, 80%, 94%)',
+      primaryTextColor: '#111110',
+      primaryBorderColor: 'hsl(45, 60%, 80%)',
+      lineColor: '#ccc9c4',
+      secondaryColor: '#f7f7f5',
+      tertiaryColor: '#f0eeeb',
+      fontFamily: 'Geist, system-ui, sans-serif',
+      fontSize: '13px'
+    }
+  });
+
+  // ── Sidebar Scroll Observer ──
+  (function() {
+    const sections = document.querySelectorAll('.section[id]');
+    const navLinks = document.querySelectorAll('#sidebar-nav a');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+          navLinks.forEach(link => {
+            link.classList.toggle('active', link.getAttribute('href') === '#' + id);
+          });
+        }
+      });
+    }, { rootMargin: '-80px 0px -60% 0px', threshold: 0 });
+    sections.forEach(s => observer.observe(s));
+  })();
+
+  // ── Architecture Node Highlight ──
+  let highlightedNode = null;
+  function hlNode(id) {
+    if (highlightedNode) {
+      document.getElementById(highlightedNode).classList.remove('node-highlight');
+    }
+    if (highlightedNode === id) { highlightedNode = null; return; }
+    document.getElementById(id).classList.add('node-highlight');
+    highlightedNode = id;
+  }
+
+  // ── Flow Stepper ──
+  const FLOW_NODES = [
+    'Game Client',
+    'API Gateway',
+    'Write Service',
+    'Idempotency Check',
+    'PostgreSQL',
+    'Redis ZSET',
+    'Kafka',
+    'Consumer Workers'
+  ];
+
+  const FLOW_DESCS = [
+    'A match ends. The game server sends POST /v1/leaderboards/lb_global/scores with the player\'s score delta and an idempotency key (unique event ID).',
+    'The API Gateway validates the service token, applies rate limiting, and routes the request to a healthy Write Service instance.',
+    'The Write Service picks up the request. It will orchestrate writes to PostgreSQL (durability), Redis (live ranking), and Kafka (fan-out).',
+    'The service checks the Redis idempotency SET for the event ID. If found → return cached response (duplicate). If not → proceed with the update.',
+    'INSERT the score event into PostgreSQL score_events table. This is the durable source of truth. If everything else fails, we can replay from here.',
+    'Execute ZINCRBY leaderboard:lb_global <score> <user_id> on Redis. The skip list updates in O(log N) — the user\'s rank changes immediately. Return new_score to the client.',
+    'Publish a score.updated event to Kafka. The Write Service\'s job is done. Response already sent to the client.',
+    'Kafka consumers pick up the event and fan out to secondary leaderboards: ZINCRBY on lb_weekly, lb_daily, lb_regional. Also triggers rank milestone notifications ("You entered the top 1000!").'
+  ];
+
+  let flowStep = -1;
+  const flowStepsEl = document.getElementById('flow-steps');
+  const flowDescEl  = document.getElementById('flow-desc');
+  const flowCounter = document.getElementById('flow-counter');
+  const flowNextBtn = document.getElementById('flow-next');
+  const flowResetBtn = document.getElementById('flow-reset');
+
+  FLOW_NODES.forEach((name, i) => {
+    if (i > 0) {
+      const arrow = document.createElement('span');
+      arrow.className = 'flow-arrow';
+      arrow.textContent = '→';
+      flowStepsEl.appendChild(arrow);
+    }
+    const node = document.createElement('span');
+    node.className = 'flow-node';
+    node.id = 'fnode-' + i;
+    node.textContent = name;
+    flowStepsEl.appendChild(node);
+  });
+
+  function runFlow() {
+    flowStep++;
+    if (flowStep >= FLOW_NODES.length) {
+      flowNextBtn.disabled = true;
+      flowDescEl.innerHTML = '<strong>✓ Flow complete.</strong> The score is durable (PostgreSQL), live on the global leaderboard (Redis), and fanning out to secondary leaderboards (Kafka → Consumers). Click Reset to start over.';
+      return;
+    }
+    flowResetBtn.disabled = false;
+    for (let i = 0; i < flowStep; i++) {
+      document.getElementById('fnode-' + i).classList.remove('active');
+      document.getElementById('fnode-' + i).classList.add('done');
+    }
+    document.getElementById('fnode-' + flowStep).classList.add('active');
+    document.getElementById('fnode-' + flowStep).scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    flowDescEl.innerHTML = FLOW_DESCS[flowStep];
+    flowCounter.textContent = `Step ${flowStep + 1} of ${FLOW_NODES.length}`;
+    if (flowStep === FLOW_NODES.length - 1) {
+      flowNextBtn.textContent = 'Finish ✓';
+    }
+  }
+
+  function resetFlow() {
+    flowStep = -1;
+    FLOW_NODES.forEach((_, i) => {
+      const el = document.getElementById('fnode-' + i);
+      el.classList.remove('active', 'done');
+    });
+    flowDescEl.innerHTML = 'Click <strong>Next Step</strong> to walk through the score update flow.';
+    flowCounter.textContent = '';
+    flowNextBtn.disabled = false;
+    flowNextBtn.textContent = 'Next Step →';
+    flowResetBtn.disabled = true;
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,71 @@
+{
+  "slug": "online-learning-vs-offline-training",
+  "title": "Online vs Offline Training",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 145,
+    "s": 55,
+    "l": 40
+  },
+  "category": "Machine Learning Systems",
+  "blurb": "Your recommendation model was trained on last month's data. New trends emerged. New users appeared. The model is already stale — predictions degrade by the hour. Do you re-train nightly (offline), continuously update wei",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>Your recommendation model was trained on last month's data. New trends emerged. New users appeared. The model is already stale — predictions degrade by the hour. Do you re-train nightly (offline), continuously update weights as events stream in (online), or something in between? Different answers cost orders of magnitude in infrastructure and produce dramatically different freshness/correctness tradeoffs.</p>\n      <p>Most production ML systems are <strong>offline-trained, online-served</strong>. A small but important class genuinely needs online learning. Knowing which is which is the interview-grade insight.</p>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "The training cadence ladder",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The training cadence ladder</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Mode</th><th>Update cadence</th><th>Where trained</th><th>Best for</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Static (one-shot)</td><td>Once</td><td>Notebook → deploy</td><td>Stable patterns: spam classifier, language detection</td></tr>\n        <tr><td class=\"algo-name\">Periodic offline</td><td>Daily / weekly</td><td>Spark / GPU cluster</td><td>Most production ML — recs, ranking, fraud baseline</td></tr>\n        <tr><td class=\"algo-name\">Continual / incremental</td><td>Hours</td><td>GPU cluster, warm-start from previous</td><td>Evolving distributions (news, trends)</td></tr>\n        <tr><td class=\"algo-name\">Online learning</td><td>Per event</td><td>Streaming SGD updates</td><td>Personalization with rapidly-shifting tastes; bandit problems</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "Why offline dominates",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Why offline dominates</h2></div>\n    <div class=\"prose\">\n      <p>Despite all the hype, <strong>~95% of production ML is periodic offline training</strong>. Reasons:</p>\n      <ul>\n        <li><strong>Reproducibility.</strong> Re-train on a fixed snapshot → identical weights. Online updates make every model state ephemeral, hard to debug.</li>\n        <li><strong>Hyperparameter stability.</strong> Tuning a model is an offline experiment. Online updates with the wrong learning rate destroy what you trained.</li>\n        <li><strong>Feature monitoring.</strong> Offline pipelines run validation, distribution-shift alerts, A/B comparisons. Online updates skip all that.</li>\n        <li><strong>Rollback.</strong> Offline = checkpoint per training run. Roll back instantly. Online = \"we lost the state from 3 hours ago\" might be impossible.</li>\n        <li><strong>Sufficient freshness.</strong> Daily-trained model + real-time features (via <a href=\"/concepts/feature-store\">feature store</a>) is often as good as continuous training and dramatically simpler.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "When online learning genuinely wins",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">When online learning genuinely wins</h2></div>\n    <div class=\"prose\">\n      <p>Online learning earns its complexity in three scenarios:</p>\n      <p><strong>1. Multi-armed bandits (recommendation exploration).</strong> Show ad A or ad B? Don't wait a day to learn — every impression provides signal. Thompson sampling or UCB updates per click.</p>\n      <p><strong>2. Drift-heavy problems.</strong> Twitter trending — what was hot 2 hours ago is dead. Fashion recs in fast-fashion ecommerce. News recommendation.</p>\n      <p><strong>3. Cold-start personalization.</strong> A new user arrives. Static model has no signal. Bandit-style online updates from their first 5 actions converge fast.</p>\n      <p>Architecture: keep a base model trained offline (the \"warm prior\"). Apply online deltas on top — usually as a simple linear model or shallow correction layer. If online state is lost, fall back to base model. The two layers compose.</p>\n    </div>\n\n    <div class=\"diagram-wrap\">\n      <div class=\"diagram-head\">\n        <span class=\"diagram-label\">Offline + Online — The Hybrid Pattern</span>\n        <span class=\"diagram-type\">Mermaid</span>\n      </div>\n      <div class=\"diagram-body\">\n        <div class=\"mermaid\">\nflowchart LR\n    H[Historical data warehouse] --&gt;|nightly job| OT[Offline trainer]\n    OT --&gt;|model weights| M[Base model]\n    M --&gt; S[Serving service]\n\n    E[Event stream<br>clicks, purchases] --&gt;|Kafka| OL[Online learner<br>bandit / SGD]\n    OL --&gt;|small delta layer| S\n\n    S --&gt;|prediction + A/B logging| Log[Outcomes log]\n    Log --&gt;|feeds back| H\n    Log --&gt;|feeds back| E\n        </div>\n      </div>\n    </div>\n\n    <div class=\"callout callout-good\">\n      <div class=\"callout-label\">Interview answer</div>\n      <p>\"Default to nightly offline training with online feature freshness. Add an online bandit layer only where exploration matters (ad selection, fast-changing trends). Keep the offline model as a fallback so a bad online update can't break the system.\"</p>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "Operational pitfalls",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Operational pitfalls</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>Training-serving skew.</strong> Solved by sharing feature transformation code via a <a href=\"/concepts/feature-store\">feature store</a>.</li>\n        <li><strong>Distribution drift.</strong> The world the model was trained on isn't the world it serves. Monitor input feature distributions vs training distributions; alert on KL divergence above threshold.</li>\n        <li><strong>Label leakage.</strong> Training data accidentally contains future signal. Always use point-in-time joins.</li>\n        <li><strong>Ground truth lag.</strong> \"Did the user buy?\" answer arrives hours/days later. Online models must handle delayed labels.</li>\n        <li><strong>Catastrophic forgetting</strong> (online learning specific). Sustained updates on a new distribution erase old knowledge. Mitigate with replay buffers or elastic weight consolidation.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Netflix recommendations</div><h4>Hybrid</h4><p>Daily offline retrain of the deep ranker. Lightweight online update layer for \"things you just clicked on.\" A/B test framework compares both side by side.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Google Ads</div><h4>Genuinely online</h4><p>Click prediction model updates continuously. Bandit-style exploration for new ads. Massive online infrastructure — one of the few places that needs it.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Spotify Discover Weekly</div><h4>Pure offline batch</h4><p>Weekly playlist generation. Nothing online. Works because user taste changes slowly.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Stripe Radar</div><h4>Daily retrain + online features</h4><p>Fraud model retrained daily. Real-time features (current session, IP velocity) update online via Kafka — but model weights are static between training runs.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Recommendation algorithm uses offline training + online feature freshness. News feed retrains ranker daily but applies fresh engagement features online. Leaderboard's scoring weights rarely change — pure static.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [
+    {
+      "sectionId": "deep-dive",
+      "source": "flowchart LR\n    H[Historical data warehouse] -->|nightly job| OT[Offline trainer]\n    OT -->|model weights| M[Base model]\n    M --> S[Serving service]\n\n    E[Event streamclicks, purchases] -->|Kafka| OL[Online learnerbandit / SGD]\n    OL -->|small delta layer| S\n\n    S -->|prediction + A/B logging| Log[Outcomes log]\n    Log -->|feeds back| H\n    Log -->|feeds back| E",
+      "index": 0
+    }
+  ],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

@@ -1,0 +1,2023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Ticketmaster / StubHub — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+
+    /* ============================================================
+       DESIGN SYSTEM — DO NOT MODIFY VARIABLE NAMES
+       Only change --accent-h, --accent-s, --accent-l per problem
+       ============================================================ */
+    :root {
+      /* ── Accent — Violet for Ticketmaster ── */
+      --accent-h:       262;
+      --accent-s:       72%;
+      --accent-l:       52%;
+      --accent:         hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light:   hsl(var(--accent-h), 80%, 94%);
+      --accent-mid:     hsl(var(--accent-h), 70%, 88%);
+      --accent-text:    hsl(var(--accent-h), var(--accent-s), 32%);
+      --accent-border:  hsl(var(--accent-h), 60%, 80%);
+
+      /* ── Highlights ── */
+      --hl-yellow:      #fff0a0;
+      --hl-yellow-dark: #a07a00;
+      --hl-accent:      hsl(var(--accent-h), 90%, 88%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 30%);
+
+      /* ── Surfaces ── */
+      --bg:             #ffffff;
+      --bg-subtle:      #f7f7f5;
+      --bg-raised:      #f0eeeb;
+      --bg-code:        #f4f3f0;
+      --border:         #e4e2de;
+      --border-strong:  #ccc9c4;
+
+      /* ── Text ── */
+      --text-primary:   #111110;
+      --text-secondary: #4a4845;
+      --text-muted:     #878480;
+      --text-code:      #2d2c2b;
+
+      /* ── Typography ── */
+      --font-serif:     'Instrument Serif', Georgia, serif;
+      --font-sans:      'Geist', system-ui, sans-serif;
+      --font-mono:      'JetBrains Mono', 'Fira Code', monospace;
+
+      /* ── Radii ── */
+      --radius-sm:      4px;
+      --radius-md:      8px;
+      --radius-lg:      12px;
+    }
+
+    /* ── Reset ── */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--text-primary);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Layout Shell ── */
+    .layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      grid-template-rows: auto 1fr;
+      min-height: 100vh;
+    }
+
+    /* ── Topbar ── */
+    .topbar {
+      grid-column: 1 / -1;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 52px;
+      padding: 0 24px;
+      background: rgba(255,255,255,0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .topbar-left a {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .topbar-left a:hover { color: var(--accent); }
+
+    .topbar-sep {
+      color: var(--border-strong);
+      user-select: none;
+    }
+
+    .topbar-problem {
+      color: var(--accent-text);
+      font-weight: 500;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .topbar-tag {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      background: var(--accent-light);
+      color: var(--accent-text);
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      position: sticky;
+      top: 52px;
+      height: calc(100vh - 52px);
+      overflow-y: auto;
+      padding: 28px 20px 40px;
+      border-right: 1px solid var(--border);
+      background: var(--bg-subtle);
+    }
+
+    .sidebar::-webkit-scrollbar { width: 3px; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+
+    .sidebar-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .sidebar-nav { list-style: none; margin-bottom: 32px; }
+
+    .sidebar-nav li { margin-bottom: 2px; }
+
+    .sidebar-nav a {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 15px;
+      font-weight: 400;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: all 0.15s ease;
+      position: relative;
+    }
+
+    .sidebar-nav a::before {
+      content: '';
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--border-strong);
+      flex-shrink: 0;
+      transition: all 0.2s ease;
+    }
+
+    .sidebar-nav a:hover {
+      background: var(--bg-raised);
+      color: var(--text-primary);
+    }
+
+    .sidebar-nav a.active {
+      background: var(--accent-light);
+      color: var(--accent-text);
+      font-weight: 500;
+    }
+
+    .sidebar-nav a.active::before {
+      background: var(--accent);
+      width: 6px;
+      height: 6px;
+    }
+
+    .sidebar-related {
+      list-style: none;
+      margin-top: 8px;
+    }
+
+    .sidebar-related li { margin-bottom: 4px; }
+
+    .sidebar-related a {
+      font-size: 14.5px;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .sidebar-related a:hover { color: var(--accent); }
+
+    /* ── Main Content ── */
+    .main {
+      padding: 0 48px 120px;
+      max-width: 860px;
+      min-width: 0;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      padding: 56px 0 40px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 48px;
+    }
+
+    .hero-number {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+
+    .hero h1 {
+      font-family: var(--font-serif);
+      font-size: 48px;
+      font-weight: 400;
+      line-height: 1.1;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+      letter-spacing: -0.02em;
+    }
+
+    .hero-desc {
+      font-size: 17px;
+      line-height: 1.65;
+      color: var(--text-secondary);
+      max-width: 600px;
+      margin-bottom: 20px;
+    }
+
+    .hero-tags {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .hero-tag {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 400;
+      letter-spacing: 0.04em;
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-raised);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+
+    /* ── Sections ── */
+    .section {
+      margin-bottom: 56px;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeUp 0.5s ease forwards;
+    }
+
+    .section:nth-child(1)  { animation-delay: 0.05s; }
+    .section:nth-child(2)  { animation-delay: 0.10s; }
+    .section:nth-child(3)  { animation-delay: 0.15s; }
+    .section:nth-child(4)  { animation-delay: 0.20s; }
+    .section:nth-child(5)  { animation-delay: 0.25s; }
+    .section:nth-child(6)  { animation-delay: 0.30s; }
+    .section:nth-child(7)  { animation-delay: 0.35s; }
+    .section:nth-child(8)  { animation-delay: 0.40s; }
+    .section:nth-child(9)  { animation-delay: 0.45s; }
+    .section:nth-child(10) { animation-delay: 0.50s; }
+    .section:nth-child(11) { animation-delay: 0.55s; }
+
+    @keyframes fadeUp {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .section-number {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+
+    .section h2 {
+      font-family: var(--font-serif);
+      font-size: 30px;
+      font-weight: 400;
+      color: var(--text-primary);
+      margin-bottom: 20px;
+      letter-spacing: -0.01em;
+    }
+
+    .section h3 {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin: 28px 0 10px;
+    }
+
+    .section p {
+      color: var(--text-secondary);
+      margin-bottom: 14px;
+      max-width: 680px;
+    }
+
+    .section ul, .section ol {
+      padding-left: 20px;
+      margin-bottom: 16px;
+      color: var(--text-secondary);
+    }
+
+    .section li {
+      margin-bottom: 6px;
+    }
+
+    /* ── Highlight Spans ── */
+    .hl {
+      background: var(--hl-yellow);
+      color: var(--hl-yellow-dark);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+
+    .hl-accent {
+      background: var(--hl-accent);
+      color: var(--hl-accent-dark);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+
+    .hl-red {
+      background: hsl(0, 85%, 93%);
+      color: hsl(0, 70%, 35%);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+
+    .hl-green {
+      background: hsl(145, 60%, 90%);
+      color: hsl(145, 55%, 28%);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+
+    /* ── Cards / Boxes ── */
+    .card {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+
+    .card-accent {
+      background: var(--accent-light);
+      border-color: var(--accent-border);
+    }
+
+    .card h4 {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+
+    .card p {
+      font-size: 16px;
+      color: var(--text-secondary);
+      margin-bottom: 0;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    /* ── Code Blocks ── */
+    .code-block {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: var(--font-mono);
+      font-size: 14.5px;
+      font-weight: 400;
+      color: var(--text-code);
+      line-height: 1.7;
+    }
+
+    .code-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .inline-code {
+      font-family: var(--font-mono);
+      font-size: 15px;
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      padding: 1px 6px;
+      border-radius: var(--radius-sm);
+      color: var(--text-code);
+    }
+
+    /* ── Tables ── */
+    .table-wrap {
+      overflow-x: auto;
+      margin-bottom: 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+    }
+
+    .table-wrap table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 15.5px;
+    }
+
+    .table-wrap th {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      text-align: left;
+      padding: 10px 16px;
+      background: var(--bg-subtle);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .table-wrap td {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+
+    .table-wrap tr:last-child td { border-bottom: none; }
+
+    /* ── Scale Estimation Grid ── */
+    .scale-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .scale-card {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      text-align: center;
+    }
+
+    .scale-card .number {
+      font-family: var(--font-mono);
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--accent-text);
+      margin-bottom: 2px;
+    }
+
+    .scale-card .label {
+      font-size: 13.5px;
+      color: var(--text-muted);
+    }
+
+    /* ── Architecture SVG ── */
+    .arch-diagram {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+    }
+
+    .arch-diagram svg { display: block; margin: 0 auto; }
+
+    .arch-diagram .node {
+      cursor: pointer;
+      transition: filter 0.2s;
+    }
+    .arch-diagram .node:hover { filter: brightness(0.95); }
+
+    .arch-diagram .node rect,
+    .arch-diagram .node-rect {
+      rx: 8;
+      ry: 8;
+      stroke-width: 1.5;
+    }
+
+    .arch-diagram .node-label {
+      font-family: 'Geist', system-ui, sans-serif;
+      font-size: 13.5px;
+      font-weight: 500;
+      fill: var(--text-primary);
+      text-anchor: middle;
+      dominant-baseline: central;
+      pointer-events: none;
+    }
+
+    .arch-diagram .node-sublabel {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      fill: var(--text-muted);
+      text-anchor: middle;
+      dominant-baseline: central;
+      pointer-events: none;
+    }
+
+    .arch-diagram .edge {
+      stroke: var(--border-strong);
+      stroke-width: 1.5;
+      fill: none;
+      marker-end: url(#arrowhead);
+    }
+
+    .arch-diagram .edge-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      fill: var(--text-muted);
+      text-anchor: middle;
+    }
+
+    .node-highlight rect { stroke: var(--accent) !important; stroke-width: 2.5 !important; }
+    .node-highlight .node-label { fill: var(--accent-text) !important; }
+
+    /* ── Flow Stepper Widget ── */
+    .flow-stepper {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .flow-stepper-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .flow-stepper-title {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .flow-stepper-controls {
+      display: flex;
+      gap: 8px;
+    }
+
+    .flow-btn {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 5px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .flow-btn:hover {
+      background: var(--accent-light);
+      border-color: var(--accent-border);
+      color: var(--accent-text);
+    }
+
+    .flow-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .flow-btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+    .flow-btn-primary:hover { opacity: 0.9; background: var(--accent); color: white; }
+
+    .flow-steps {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      margin-bottom: 16px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .flow-node {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      white-space: nowrap;
+      transition: all 0.3s ease;
+    }
+
+    .flow-node.active {
+      background: var(--accent-light);
+      border-color: var(--accent);
+      color: var(--accent-text);
+      box-shadow: 0 0 0 3px var(--accent-mid);
+    }
+
+    .flow-node.done {
+      background: var(--accent-light);
+      border-color: var(--accent-border);
+      color: var(--accent-text);
+    }
+
+    .flow-arrow {
+      color: var(--border-strong);
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .flow-desc {
+      font-size: 16px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      padding: 14px 16px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      min-height: 52px;
+    }
+
+    .flow-counter {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 10px;
+      text-align: right;
+    }
+
+    /* ── Mermaid ── */
+    .mermaid-wrap {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+    }
+
+    .mermaid { text-align: center; }
+
+    /* ── Tradeoff Cards ── */
+    .tradeoff {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .tradeoff-option {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+    }
+
+    .tradeoff-option.chosen {
+      border-color: var(--accent-border);
+      background: var(--accent-light);
+    }
+
+    .tradeoff-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .tradeoff-label.yes { color: hsl(145, 55%, 32%); }
+    .tradeoff-label.no  { color: var(--text-muted); }
+
+    .tradeoff-option h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+
+    .tradeoff-option p {
+      font-size: 15px;
+      color: var(--text-secondary);
+      margin-bottom: 0;
+    }
+
+    /* ── Callout ── */
+    .callout {
+      border-left: 3px solid var(--accent);
+      padding: 14px 18px;
+      background: var(--accent-light);
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+      margin-bottom: 16px;
+    }
+
+    .callout p {
+      font-size: 16px;
+      color: var(--accent-text);
+      margin-bottom: 0;
+    }
+
+    .callout-warn {
+      border-left-color: hsl(38, 92%, 50%);
+      background: hsl(38, 80%, 94%);
+    }
+    .callout-warn p { color: hsl(38, 70%, 28%); }
+
+    .callout-danger {
+      border-left-color: hsl(0, 72%, 52%);
+      background: hsl(0, 80%, 95%);
+    }
+    .callout-danger p { color: hsl(0, 65%, 32%); }
+
+    /* ── Interview Tip Cards ── */
+    .tip-card {
+      display: flex;
+      gap: 14px;
+      padding: 16px 20px;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      margin-bottom: 10px;
+    }
+
+    .tip-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .tip-content {
+      font-size: 16px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    .tip-content strong {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    /* ── Similar Problems ── */
+    .similar-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .similar-card {
+      display: block;
+      text-decoration: none;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 18px 20px;
+      transition: all 0.2s ease;
+    }
+
+    .similar-card:hover {
+      border-color: var(--accent-border);
+      background: var(--accent-light);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    }
+
+    .similar-card h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .similar-card p {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      margin-bottom: 0;
+    }
+
+    /* ── Evolution / Timeline ── */
+    .evolution-step {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+      position: relative;
+    }
+
+    .evolution-step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      left: 15px;
+      top: 36px;
+      bottom: -20px;
+      width: 2px;
+      background: var(--border);
+    }
+
+    .evolution-marker {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--accent-light);
+      border: 2px solid var(--accent-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--accent-text);
+      flex-shrink: 0;
+    }
+
+    .evolution-content h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .evolution-content p {
+      font-size: 15.5px;
+      color: var(--text-secondary);
+      margin-bottom: 0;
+    }
+
+    /* ── State Machine Diagram ── */
+    .state-machine {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+    }
+    .state-machine svg { display: block; margin: 0 auto; }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .main { padding: 0 20px 80px; }
+      .hero h1 { font-size: 34px; }
+      .tradeoff { grid-template-columns: 1fr; }
+      .card-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- ═══════════════════ TOPBAR ═══════════════════ -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <a href="../index.html">System Design</a>
+      <span class="topbar-sep">/</span>
+      <span class="topbar-problem">Ticketmaster / StubHub</span>
+    </div>
+    <div class="topbar-right">
+      <span class="topbar-tag">Hard</span>
+    </div>
+  </header>
+
+  <!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-label">Sections</div>
+    <ul class="sidebar-nav" id="sidebar-nav">
+      <li><a href="#problem">Problem Statement</a></li>
+      <li><a href="#requirements">Requirements</a></li>
+      <li><a href="#scale">Scale Estimation</a></li>
+      <li><a href="#api">API Design</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#deep-dive">Deep Dive</a></li>
+      <li><a href="#tradeoffs">Tradeoffs</a></li>
+      <li><a href="#failures">Failure Scenarios</a></li>
+      <li><a href="#interview-tips">Interview Tips</a></li>
+      <li><a href="#similar">Similar Problems</a></li>
+      <li><a href="#evolution">Evolution</a></li>
+    </ul>
+
+    <div class="sidebar-label">Related</div>
+    <ul class="sidebar-related">
+      <li><a href="../rate-limiter/index.html">Rate Limiter</a></li>
+      <li><a href="../notification-system/index.html">Notification System</a></li>
+      <li><a href="../uber/index.html">Uber / Ride Sharing</a></li>
+      <li><a href="../redis-cache/index.html">Design a Cache (Redis)</a></li>
+    </ul>
+  </aside>
+
+  <!-- ═══════════════════ MAIN ═══════════════════ -->
+  <main class="main">
+
+    <!-- ── Hero ── -->
+    <div class="hero">
+      <div class="hero-number">System Design — 016</div>
+      <h1>Ticketmaster / StubHub</h1>
+      <p class="hero-desc">
+        Design an online ticket booking platform that handles extreme concurrency spikes — millions of users competing for thousands of seats — without ever selling the same seat twice.
+      </p>
+      <div class="hero-tags">
+        <span class="hero-tag">Concurrency</span>
+        <span class="hero-tag">Distributed Locks</span>
+        <span class="hero-tag">Inventory Management</span>
+        <span class="hero-tag">Virtual Queue</span>
+        <span class="hero-tag">Flash Sale</span>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 01 · PROBLEM STATEMENT ═══════════════ -->
+    <div class="section" id="problem">
+      <div class="section-number">01</div>
+      <h2>Problem Statement</h2>
+      <p>
+        Design a system like Ticketmaster or StubHub that allows users to browse events, view interactive seat maps, select and temporarily hold seats, and complete purchases. The system must handle <span class="hl">extreme demand spikes</span> — when a popular artist's tickets go on sale, millions of users may compete for tens of thousands of seats within seconds.
+      </p>
+      <p>
+        Unlike most e-commerce systems where inventory is abundant, ticket booking has a unique constraint: every seat is a <span class="hl">unique, non-fungible item</span>. Seat A1 in Row 3 is different from A2. This means the system can never oversell — selling the same seat to two people is a catastrophic failure, not just a data inconsistency.
+      </p>
+
+      <div class="callout">
+        <p><strong>Core question:</strong> How do you let thousands of people compete for a limited number of seats without overselling, while keeping the system responsive and fair?</p>
+      </div>
+
+      <h3>The Two Fundamental Tensions</h3>
+      <div class="card-grid">
+        <div class="card">
+          <h4>Availability vs. Correctness</h4>
+          <p>You want the site to stay up under massive load (availability), but you absolutely cannot double-sell a seat (correctness). This is one of the rare systems where you <span class="hl-green">lean toward consistency over availability</span> — a brief "try again" is acceptable, selling two people the same seat is not.</p>
+        </div>
+        <div class="card">
+          <h4>UX vs. Inventory Accuracy</h4>
+          <p>When a user browses the seat map, should they see real-time availability? If yes, you're hammering your inventory service. If no, they'll try to buy seats that are already gone. The solution: <span class="hl-accent">eventually consistent reads</span> with <span class="hl-accent">strongly consistent writes</span>.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 02 · REQUIREMENTS ═══════════════ -->
+    <div class="section" id="requirements">
+      <div class="section-number">02</div>
+      <h2>Requirements</h2>
+
+      <h3>Functional Requirements</h3>
+      <div class="card">
+        <ul>
+          <li><strong>Browse & search events</strong> — by artist, venue, date, location, genre</li>
+          <li><strong>View seat map</strong> — interactive map showing available seats with pricing tiers</li>
+          <li><strong>Select & temporarily hold seats</strong> — when a user picks seats, hold them for ~8 minutes so nobody else can grab them</li>
+          <li><strong>Purchase tickets</strong> — complete payment and issue a digital ticket with QR code</li>
+          <li><strong>Cancel / refund</strong> — release seats back to inventory on cancellation</li>
+          <li><strong>Virtual waiting room</strong> — for high-demand events, manage a fair queue before the sale starts</li>
+        </ul>
+      </div>
+
+      <h3>Non-Functional Requirements</h3>
+      <div class="card">
+        <ul>
+          <li><span class="hl">Strong consistency on inventory</span> — never oversell a single seat</li>
+          <li><strong>High availability for reads</strong> — seat maps, event browsing should always work</li>
+          <li><strong>Low latency under extreme concurrency</strong> — checkout flow must work when 100K+ users hit it simultaneously</li>
+          <li><strong>Fairness</strong> — first-come-first-served during hot sales, no gaming the queue</li>
+          <li><strong>Idempotent payments</strong> — never double-charge a customer</li>
+        </ul>
+      </div>
+
+      <div class="callout-warn callout">
+        <p><strong>Out of scope:</strong> Secondary market (resale), dynamic pricing, recommendation engine, user authentication (assume existing OAuth/JWT).</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 03 · SCALE ESTIMATION ═══════════════ -->
+    <div class="section" id="scale">
+      <div class="section-number">03</div>
+      <h2>Scale Estimation</h2>
+
+      <p>We derive numbers from assumptions — the numbers drive the architecture, not the other way around.</p>
+
+      <div class="scale-grid">
+        <div class="scale-card">
+          <div class="number">500M</div>
+          <div class="label">Registered Users</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~550/day</div>
+          <div class="label">Events on Sale</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">11M/day</div>
+          <div class="label">Total Tickets Available</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~2 TB/yr</div>
+          <div class="label">Ticket Data Storage</div>
+        </div>
+      </div>
+
+      <h3>The Spike That Drives the Design</h3>
+      <div class="card card-accent">
+        <h4>Major On-Sale Event (Taylor Swift Scale)</h4>
+        <p>
+          <span class="hl">50,000 seats</span>, <span class="hl">5–10M users</span> competing. 90% of seats sell in the first 2 minutes.
+          That's ~375 write TPS for purchases — manageable. But the reads are the killer:
+          <span class="hl">500K+ requests/second</span> as millions refresh the seat map.
+        </p>
+      </div>
+
+      <div class="card">
+        <h4>Derivation</h4>
+        <p>
+          200K events/year × 20K avg seats = 4B tickets/year. At ~500 bytes per ticket record: ~2 TB/year of ticket data. Event metadata, user profiles, and payment records add 5–10×, but still manageable. The <span class="hl">read:write ratio during hot sales is ~1000:1</span> — this extreme ratio shapes the entire architecture. Reads must be cached aggressively; writes must be serialized per seat.
+        </p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Parameter</th>
+              <th>Value</th>
+              <th>Drives...</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Entrants (hot sale)</td>
+              <td><strong>5–10M</strong></td>
+              <td>Queue capacity, polling load</td>
+            </tr>
+            <tr>
+              <td>Seats per event</td>
+              <td><strong>50K</strong></td>
+              <td>Total admissions needed</td>
+            </tr>
+            <tr>
+              <td>Avg checkout time</td>
+              <td><strong>~3 min</strong></td>
+              <td>Batch admission rate</td>
+            </tr>
+            <tr>
+              <td>Hold timeout</td>
+              <td><strong>8 min</strong></td>
+              <td>Recapture window, queue drain speed</td>
+            </tr>
+            <tr>
+              <td>Inventory svc capacity</td>
+              <td><strong>10K concurrent</strong></td>
+              <td>Batch size per admission wave</td>
+            </tr>
+            <tr>
+              <td>Status poll interval</td>
+              <td><strong>~5 sec</strong></td>
+              <td>Queue status endpoint QPS (~1M)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 04 · API DESIGN ═══════════════ -->
+    <div class="section" id="api">
+      <div class="section-number">04</div>
+      <h2>API Design</h2>
+
+      <div class="code-label">Search Events</div>
+      <div class="code-block">
+        <code><pre>GET /api/events?query=taylor+swift&location=dubai&date_from=2025-06-01
+Authorization: Bearer {jwt}
+
+Response 200:
+{
+  "events": [
+    {
+      "event_id": "evt_abc123",
+      "name": "Taylor Swift — Eras Tour",
+      "venue": "Dubai Arena",
+      "date": "2025-09-15T20:00:00Z",
+      "seats_available": 32847,
+      "price_range": { "min": 150, "max": 950, "currency": "USD" },
+      "queue_enabled": true,
+      "sale_starts": "2025-06-01T10:00:00Z"
+    }
+  ],
+  "total": 1,
+  "cursor": "..."
+}</pre></code>
+      </div>
+
+      <div class="code-label">Get Seat Map Availability</div>
+      <div class="code-block">
+        <code><pre>GET /api/events/{event_id}/availability
+Response 200:
+{
+  "event_id": "evt_abc123",
+  "total_seats": 50000,
+  "available": 32847,
+  "sections": {
+    "SEC-A": { "available": 120, "tier": "platinum", "min_price": 950 },
+    "SEC-B": { "available": 380, "tier": "gold", "min_price": 450 },
+    "SEC-C": { "available": 1200, "tier": "silver", "min_price": 250 }
+  },
+  "cached_at": "2025-06-01T10:00:02Z",
+  "ttl_seconds": 3
+}
+// NOTE: This is eventually consistent (2-5s stale). OK for display.</pre></code>
+      </div>
+
+      <div class="code-label">Join Waiting Room</div>
+      <div class="code-block">
+        <code><pre>POST /api/queue/join
+Body: { "event_id": "evt_abc123" }
+Response 200: { "queue_token": "qt_xyz789", "status": "waiting" }
+
+GET /api/queue/status?token=qt_xyz789
+Response 200:
+{
+  "position": 847293,
+  "now_serving": 450000,
+  "estimated_wait": "12 minutes",
+  "status": "waiting"   // waiting | admitted | event_sold_out
+}</pre></code>
+      </div>
+
+      <div class="code-label">Hold Seats (Critical Path)</div>
+      <div class="code-block">
+        <code><pre>POST /api/inventory/hold
+Headers: X-Admission-Token: {queue_admission_token}
+Body: {
+  "event_id": "evt_abc123",
+  "seats": ["SEC-A_ROW-3_SEAT-15", "SEC-A_ROW-3_SEAT-16"],
+  "hold_duration_seconds": 480
+}
+Response 200:
+{
+  "hold_id": "hold_abc",
+  "seats": ["SEC-A_ROW-3_SEAT-15", "SEC-A_ROW-3_SEAT-16"],
+  "expires_at": "2025-06-01T10:08:00Z",
+  "total_price": 1900.00
+}
+Response 409: { "error": "seat_taken", "unavailable": ["SEC-A_ROW-3_SEAT-15"] }</pre></code>
+      </div>
+
+      <div class="code-label">Purchase Tickets</div>
+      <div class="code-block">
+        <code><pre>POST /api/payments/charge
+Headers: Idempotency-Key: {user_id}:{event_id}:{hold_id}
+Body: {
+  "hold_id": "hold_abc",
+  "payment_method_id": "pm_stripe_xyz",
+  "total": 1900.00
+}
+Response 200:
+{
+  "order_id": "ord_def456",
+  "tickets": [
+    { "ticket_id": "tkt_001", "seat": "SEC-A_ROW-3_SEAT-15", "qr_code": "..." },
+    { "ticket_id": "tkt_002", "seat": "SEC-A_ROW-3_SEAT-16", "qr_code": "..." }
+  ],
+  "status": "confirmed"
+}</pre></code>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 05 · HIGH-LEVEL ARCHITECTURE ═══════════════ -->
+    <div class="section" id="architecture">
+      <div class="section-number">05</div>
+      <h2>High-Level Architecture</h2>
+
+      <p>
+        Every component exists to serve one step of the user journey: search → view seats → queue → hold → pay → confirm.
+        Services are separated by <span class="hl-accent">scaling characteristics</span> — read-heavy event browsing scales independently from write-critical inventory holds.
+      </p>
+
+      <!-- ── Inline SVG Architecture Diagram ── -->
+      <div class="arch-diagram">
+        <svg viewBox="0 0 920 520" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="#ccc9c4"/>
+            </marker>
+          </defs>
+
+          <!-- Row 1: Client + CDN -->
+          <g class="node" id="node-client" onclick="hlNode('node-client')">
+            <rect class="node-rect" x="20" y="220" width="110" height="60" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="75" y="244">Client</text>
+            <text class="node-sublabel" x="75" y="261">Mobile / Web</text>
+          </g>
+
+          <g class="node" id="node-cdn" onclick="hlNode('node-cdn')">
+            <rect class="node-rect" x="20" y="40" width="110" height="60" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="75" y="64">CDN</text>
+            <text class="node-sublabel" x="75" y="81">Static + Seat Maps</text>
+          </g>
+
+          <!-- Load Balancer -->
+          <g class="node" id="node-lb" onclick="hlNode('node-lb')">
+            <rect class="node-rect" x="200" y="220" width="110" height="60" fill="hsl(262,80%,94%)" stroke="hsl(262,60%,80%)"/>
+            <text class="node-label" x="255" y="244">Load Balancer</text>
+            <text class="node-sublabel" x="255" y="261">Path Routing</text>
+          </g>
+
+          <!-- Service Layer -->
+          <g class="node" id="node-queue" onclick="hlNode('node-queue')">
+            <rect class="node-rect" x="380" y="40" width="130" height="60" fill="hsl(262,80%,94%)" stroke="hsl(262,60%,80%)"/>
+            <text class="node-label" x="445" y="64">Queue Service</text>
+            <text class="node-sublabel" x="445" y="81">Waiting Room</text>
+          </g>
+
+          <g class="node" id="node-event" onclick="hlNode('node-event')">
+            <rect class="node-rect" x="380" y="140" width="130" height="60" fill="hsl(262,80%,94%)" stroke="hsl(262,60%,80%)"/>
+            <text class="node-label" x="445" y="164">Event Service</text>
+            <text class="node-sublabel" x="445" y="181">Search / Browse</text>
+          </g>
+
+          <g class="node" id="node-inventory" onclick="hlNode('node-inventory')">
+            <rect class="node-rect" x="380" y="240" width="130" height="60" fill="hsl(262,80%,94%)" stroke="hsl(262,60%,80%)"/>
+            <text class="node-label" x="445" y="264">Inventory Service</text>
+            <text class="node-sublabel" x="445" y="281">Holds + Purchases</text>
+          </g>
+
+          <g class="node" id="node-payment" onclick="hlNode('node-payment')">
+            <rect class="node-rect" x="380" y="340" width="130" height="60" fill="hsl(262,80%,94%)" stroke="hsl(262,60%,80%)"/>
+            <text class="node-label" x="445" y="364">Payment Service</text>
+            <text class="node-sublabel" x="445" y="381">Stripe / Adyen</text>
+          </g>
+
+          <g class="node" id="node-notif" onclick="hlNode('node-notif')">
+            <rect class="node-rect" x="380" y="440" width="130" height="60" fill="hsl(262,80%,94%)" stroke="hsl(262,60%,80%)"/>
+            <text class="node-label" x="445" y="464">Notification Svc</text>
+            <text class="node-sublabel" x="445" y="481">Email / Push</text>
+          </g>
+
+          <!-- Data Layer -->
+          <g class="node" id="node-redis-queue" onclick="hlNode('node-redis-queue')">
+            <rect class="node-rect" x="600" y="40" width="130" height="60" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="665" y="64">Redis</text>
+            <text class="node-sublabel" x="665" y="81">Sorted Set (Queue)</text>
+          </g>
+
+          <g class="node" id="node-es" onclick="hlNode('node-es')">
+            <rect class="node-rect" x="600" y="120" width="130" height="60" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="665" y="144">Elasticsearch</text>
+            <text class="node-sublabel" x="665" y="161">Event Search</text>
+          </g>
+
+          <g class="node" id="node-redis-cache" onclick="hlNode('node-redis-cache')">
+            <rect class="node-rect" x="770" y="120" width="130" height="60" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="835" y="144">Redis</text>
+            <text class="node-sublabel" x="835" y="161">Event Cache</text>
+          </g>
+
+          <g class="node" id="node-redis-holds" onclick="hlNode('node-redis-holds')">
+            <rect class="node-rect" x="600" y="220" width="130" height="60" fill="hsl(0,85%,93%)" stroke="hsl(0,60%,80%)"/>
+            <text class="node-label" x="665" y="244">Redis</text>
+            <text class="node-sublabel" x="665" y="261">SET NX (Holds)</text>
+          </g>
+
+          <g class="node" id="node-pg" onclick="hlNode('node-pg')">
+            <rect class="node-rect" x="770" y="220" width="130" height="60" fill="hsl(0,85%,93%)" stroke="hsl(0,60%,80%)"/>
+            <text class="node-label" x="835" y="244">PostgreSQL</text>
+            <text class="node-sublabel" x="835" y="261">Source of Truth</text>
+          </g>
+
+          <g class="node" id="node-kafka" onclick="hlNode('node-kafka')">
+            <rect class="node-rect" x="600" y="440" width="130" height="60" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="665" y="464">Kafka / SQS</text>
+            <text class="node-sublabel" x="665" y="481">Event Bus</text>
+          </g>
+
+          <!-- Edges -->
+          <!-- Client → CDN -->
+          <line class="edge" x1="75" y1="220" x2="75" y2="100"/>
+          <text class="edge-label" x="60" y="160">Static</text>
+
+          <!-- Client → LB -->
+          <line class="edge" x1="130" y1="250" x2="200" y2="250"/>
+          <text class="edge-label" x="165" y="242">HTTPS</text>
+
+          <!-- LB → Services -->
+          <line class="edge" x1="310" y1="230" x2="380" y2="70" />
+          <line class="edge" x1="310" y1="240" x2="380" y2="170"/>
+          <line class="edge" x1="310" y1="250" x2="380" y2="270"/>
+          <line class="edge" x1="310" y1="260" x2="380" y2="370"/>
+          <text class="edge-label" x="340" y="145">Path</text>
+          <text class="edge-label" x="340" y="160">Routing</text>
+
+          <!-- Queue → Redis Queue -->
+          <line class="edge" x1="510" y1="70" x2="600" y2="70"/>
+
+          <!-- Event → ES + Redis Cache -->
+          <line class="edge" x1="510" y1="160" x2="600" y2="150"/>
+          <line class="edge" x1="510" y1="175" x2="770" y2="150"/>
+
+          <!-- Inventory → Redis Holds + PG -->
+          <line class="edge" x1="510" y1="260" x2="600" y2="250"/>
+          <line class="edge" x1="510" y1="275" x2="770" y2="250"/>
+          <text class="edge-label" x="558" y="240">Fast Gate</text>
+          <text class="edge-label" x="640" y="295">Authority</text>
+
+          <!-- Payment → Inventory (confirm) -->
+          <line class="edge" x1="445" y1="340" x2="445" y2="300"/>
+          <text class="edge-label" x="468" y="322">Confirm</text>
+
+          <!-- Payment → Kafka -->
+          <line class="edge" x1="510" y1="370" x2="600" y2="460"/>
+
+          <!-- Kafka → Notification -->
+          <line class="edge" x1="600" y1="470" x2="510" y2="470"/>
+
+          <!-- Critical Path Highlight Label -->
+          <rect x="595" y="305" width="210" height="24" rx="4" fill="hsl(262,80%,94%)" stroke="hsl(262,60%,80%)" stroke-width="1"/>
+          <text class="edge-label" x="700" y="320" style="font-size:10px; fill:hsl(262,72%,32%); font-weight:500;">⚡ CRITICAL PATH — NEVER OVERSELL</text>
+        </svg>
+      </div>
+
+      <h3>Component Responsibilities</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Component</th>
+              <th>Role</th>
+              <th>Scaling Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>CDN</strong></td>
+              <td>Serves static assets + seat map base images. 90% of traffic never reaches origin.</td>
+              <td>Edge-cached globally</td>
+            </tr>
+            <tr>
+              <td><strong>Load Balancer</strong></td>
+              <td>Path-based routing: <span class="inline-code">/api/events/*</span> → Event Svc, <span class="inline-code">/api/inventory/*</span> → Inventory Svc, etc.</td>
+              <td>Ensures hot-path isolation</td>
+            </tr>
+            <tr>
+              <td><strong>Queue Service</strong></td>
+              <td>Virtual waiting room for hot events. Randomized position assignment at on-sale time. Controlled batch admission.</td>
+              <td>Redis Sorted Set, stateless workers</td>
+            </tr>
+            <tr>
+              <td><strong>Event Service</strong></td>
+              <td>Read-heavy workhorse. Full-text search (Elasticsearch), event details (Redis cache), availability overlay.</td>
+              <td>50+ instances during hot sales</td>
+            </tr>
+            <tr>
+              <td><strong>Inventory Service</strong></td>
+              <td>Seat state machine: AVAILABLE → HELD → SOLD. Two-layer: Redis SET NX (fast gate) + PostgreSQL (authority).</td>
+              <td>Sharded by event_id</td>
+            </tr>
+            <tr>
+              <td><strong>Payment Service</strong></td>
+              <td>Decoupled, async. Charges via Stripe/Adyen with idempotency keys. Confirms or releases hold on result.</td>
+              <td>Independent scaling</td>
+            </tr>
+            <tr>
+              <td><strong>Notification Service</strong></td>
+              <td>Consumes Kafka events. Generates QR tickets, sends emails/push. Fire-and-forget from payment's perspective.</td>
+              <td>Async, retry from queue</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ── Flow Stepper ── -->
+      <div class="flow-stepper">
+        <div class="flow-stepper-header">
+          <span class="flow-stepper-title">Complete Purchase Flow — Step Through</span>
+          <div class="flow-stepper-controls">
+            <button class="flow-btn" onclick="resetFlow()" id="flow-reset" disabled>Reset</button>
+            <button class="flow-btn flow-btn-primary" onclick="runFlow()" id="flow-next">Next Step →</button>
+          </div>
+        </div>
+        <div class="flow-steps" id="flow-steps">
+          <!-- Populated by JS -->
+        </div>
+        <div class="flow-desc" id="flow-desc">Click <strong>Next Step</strong> to walk through a ticket purchase from search to confirmation.</div>
+        <div class="flow-counter" id="flow-counter"></div>
+      </div>
+
+      <h3>Seat Map: CDN + Lightweight Data Overlay</h3>
+      <p>
+        A 50,000-seat stadium map is a complex visual. Rendering it from scratch per-request would be prohibitively expensive. Instead, the <span class="hl-accent">base seat map</span> (venue layout, section boundaries, seat positions) is a pre-rendered static asset served from CDN — think of it as the empty blueprint.
+      </p>
+      <p>
+        The <span class="hl-accent">availability overlay</span> is a lightweight JSON payload fetched separately (~200KB for 50K seats), cacheable for 2–5 seconds. The browser loads the cached image from CDN and overlays colored dots based on the fresh JSON. This turns a heavy rendering problem into a <span class="hl-green">lightweight data-fetch problem</span>.
+      </p>
+    </div>
+
+    <!-- ═══════════════ 06 · DEEP DIVE ═══════════════ -->
+    <div class="section" id="deep-dive">
+      <div class="section-number">06</div>
+      <h2>Deep Dive — Preventing Double-Selling Under Extreme Concurrency</h2>
+
+      <p>
+        This is THE interesting problem in this design. When 10,000 users click on the same seat within a second, exactly one must win and 9,999 must be told "seat taken" — instantly, with no race conditions.
+      </p>
+
+      <h3>The Naive Approach (and Why It Fails)</h3>
+      <div class="code-block">
+        <code><pre>-- Thread 1 and Thread 2 both run this simultaneously
+SELECT status FROM seats WHERE seat_id = 'A1' AND event_id = 'E1';
+-- Both see: AVAILABLE  ← race condition window
+
+UPDATE seats SET status = 'HELD', user_id = 'U1' WHERE seat_id = 'A1';
+-- Thread 1 wins
+UPDATE seats SET status = 'HELD', user_id = 'U2' WHERE seat_id = 'A1';
+-- Thread 2 ALSO succeeds → DOUBLE SOLD</pre></code>
+      </div>
+      <p>
+        Two reads happen before either write. Both see "available" and both proceed. This is a classic <span class="hl-red">read-then-write race condition</span>.
+      </p>
+
+      <h3>The Two-Layer Hold Pattern</h3>
+      <p>
+        The solution uses <span class="hl-accent">Redis as a fast gate</span> and <span class="hl-accent">PostgreSQL as the authority</span>. Redis rejects 99% of contention without ever touching the database.
+      </p>
+
+      <!-- Mermaid Sequence Diagram -->
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+sequenceDiagram
+    participant U as User
+    participant IS as Inventory Service
+    participant R as Redis
+    participant PG as PostgreSQL
+
+    U->>IS: POST /hold (seat A1)
+    IS->>R: SET seat:E1:A1 user_123 NX EX 480
+    alt Key already exists
+        R-->>IS: nil (FAIL)
+        IS-->>U: 409 Seat Taken
+    else Key set successfully
+        R-->>IS: OK
+        IS->>PG: UPDATE seats SET status='HELD' WHERE status='AVAILABLE' AND version=N
+        alt rows_affected = 1
+            PG-->>IS: 1 row updated
+            IS-->>U: 200 Hold Confirmed (8 min)
+        else rows_affected = 0
+            PG-->>IS: 0 rows
+            IS->>R: DEL seat:E1:A1
+            IS-->>U: 409 Seat Taken
+        end
+    end
+        </div>
+      </div>
+
+      <h3>Why SET NX Instead of Redlock?</h3>
+      <div class="card-grid">
+        <div class="card card-accent">
+          <h4>SET NX — Simple Claim</h4>
+          <p>Single atomic command. 1 network round-trip. The <span class="inline-code">NX</span> flag means "only set if not exists." The <span class="inline-code">EX 480</span> gives an 8-minute TTL. We're <strong>claiming</strong>, not locking — the hold itself <em>is</em> the state.</p>
+        </div>
+        <div class="card">
+          <h4>Redlock — Overkill</h4>
+          <p>Requires 5 independent Redis masters, 5 round-trips, clock sync assumptions. Designed for mutual exclusion (lock → work → unlock), but we don't have a critical section. Known issues with GC pauses and clock drift (see Kleppmann's critique).</p>
+        </div>
+      </div>
+
+      <h3>What if Redis Succeeds but DB Fails?</h3>
+      <p>
+        The Redis SET NX succeeds, but the PostgreSQL UPDATE fails (timeout, crash, disk full). Now Redis thinks the seat is held, but the DB thinks it's available — <span class="hl-red">split-brain state</span>.
+      </p>
+      <div class="code-block">
+        <code><pre>async def hold_seat(event_id, seat_id, user_id):
+    redis_key = f"seat:{event_id}:{seat_id}"
+    
+    # Phase 1: Fast gate
+    acquired = await redis.set(redis_key, user_id, nx=True, ex=480)
+    if not acquired:
+        return HoldResult.SEAT_TAKEN
+    
+    # Phase 2: Authoritative write
+    try:
+        rows = await db.execute("""
+            UPDATE seats SET status = 'HELD', user_id = %s, 
+                   held_until = NOW() + INTERVAL '8 min',
+                   version = version + 1
+            WHERE seat_id = %s AND event_id = %s
+              AND status = 'AVAILABLE'
+        """, [user_id, seat_id, event_id])
+        
+        if rows == 0:
+            await redis.delete(redis_key)  # Clean up
+            return HoldResult.SEAT_TAKEN
+        return HoldResult.SUCCESS
+        
+    except Exception:
+        await redis.delete(redis_key)  # Roll back Redis
+        return HoldResult.RETRY</pre></code>
+      </div>
+
+      <h3>Defense in Depth — 4 Safety Layers</h3>
+      <div class="card">
+        <h4>The Hierarchy of Truth</h4>
+        <p>
+          <strong>Layer 1 — PostgreSQL</strong> is the source of truth (survives restarts, is ACID). <br/>
+          <strong>Layer 2 — Redis</strong> is the performance optimization (fast filter, may be stale). <br/>
+          <strong>Layer 3 — TTL</strong> is the self-healing mechanism (bounds duration of any inconsistency to 8 min). <br/>
+          <strong>Layer 4 — Reconciliation job</strong> is the safety net (scans every 30s, catches anything TTL hasn't fixed).
+        </p>
+      </div>
+
+      <h3>"Best Available" — FOR UPDATE SKIP LOCKED</h3>
+      <p>
+        Many users don't pick specific seats — they request "2 best available in Section B." PostgreSQL's <span class="hl-accent">FOR UPDATE SKIP LOCKED</span> is perfect:
+      </p>
+      <div class="code-block">
+        <code><pre>SELECT seat_id FROM seats
+WHERE event_id = ? AND status = 'AVAILABLE' AND price_tier = ?
+ORDER BY row_number ASC, seat_position ASC  -- front-center is "best"
+LIMIT ?
+FOR UPDATE SKIP LOCKED  -- Skip rows locked by other transactions</pre></code>
+      </div>
+      <p>
+        If 10 people request "best available" simultaneously, they each get different seats without blocking each other. No deadlocks, no waiting.
+      </p>
+
+      <h3>General Admission — Atomic Counter</h3>
+      <p>
+        For events without reserved seating, per-seat locking is unnecessary. Instead, use a single Redis <span class="inline-code">DECR</span>:
+      </p>
+      <div class="code-block">
+        <code><pre>remaining = DECR event:E1:remaining
+if remaining >= 0:
+    # Purchase succeeds — write to DB async
+else:
+    INCR event:E1:remaining  # Roll back
+    # Sold out</pre></code>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 07 · TRADEOFFS ═══════════════ -->
+    <div class="section" id="tradeoffs">
+      <div class="section-number">07</div>
+      <h2>Key Design Decisions &amp; Tradeoffs</h2>
+
+      <h3>1. Consistency Model</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Strong Writes + Eventual Reads</h4>
+          <p>Seat map reads are cached (2–5s stale). A seat might show as "available" but be held when you click it — user gets a clear "seat taken" error. Writes (holds, purchases) are strongly consistent via atomic operations.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Fully Real-Time Reads</h4>
+          <p>Every seat map view queries live inventory. Perfectly accurate but 500K+ QPS hammers the DB. Unsustainable during hot sales and no meaningful UX improvement — seats change hands in milliseconds anyway.</p>
+        </div>
+      </div>
+
+      <h3>2. Queue Activation</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Conditional Queue (per-event flag)</h4>
+          <p>Only enable the virtual waiting room when expected demand exceeds 10× capacity. Small events go directly to the seat map. Avoids unnecessary friction for 95% of events.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Always-On Queue</h4>
+          <p>Every event gets a queue. Simpler architecture (one code path) but adds latency and frustration for small shows where seats are abundant. Nobody wants to wait in line for a 200-seat comedy club.</p>
+        </div>
+      </div>
+
+      <h3>3. Hold Duration</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>8-Minute Hold with TTL</h4>
+          <p>Balances user checkout comfort with inventory turnover. Redis TTL auto-expires holds without cleanup logic. Short enough that abandoned carts don't lock seats for long.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>15-Minute Hold</h4>
+          <p>Better UX — users feel less rushed. But during a hot sale with 50K seats, 15-min holds mean ~83K admissions needed. That's 25+ minutes of queue draining vs. ~15 min with 8-min holds. More inventory locked = more lost sales.</p>
+        </div>
+      </div>
+
+      <h3>4. Data Store for Inventory</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>PostgreSQL (ACID)</h4>
+          <p>ACID transactions guarantee seat state correctness. Optimistic locking with version column. Sharded by event_id. Mature, battle-tested. <span class="inline-code">FOR UPDATE SKIP LOCKED</span> handles concurrent "best available" beautifully.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>DynamoDB / NoSQL</h4>
+          <p>Better write throughput and auto-scaling. But conditional writes for complex state machines are harder to reason about. You'd need to build consistency guarantees yourself — the wrong tradeoff when correctness is existential.</p>
+        </div>
+      </div>
+
+      <h3>5. Queue Position Assignment</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Random Shuffle at On-Sale Time</h4>
+          <p>Everyone who joins before the sale starts gets a random position. Prevents bots from gaming arrival time. Uses cryptographic randomness with a publicly committed seed for auditability.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>FIFO (First-Come-First-Served)</h4>
+          <p>Feels "fair" intuitively. But in practice, rewards people with faster internet, refresh-spamming, and bot scripts. Not actually fair — just fast. Late arrivals (after on-sale) still get FIFO as a tail.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 08 · FAILURE SCENARIOS ═══════════════ -->
+    <div class="section" id="failures">
+      <div class="section-number">08</div>
+      <h2>What Can Go Wrong</h2>
+
+      <div class="card">
+        <h4>🔴 Payment Service Goes Down</h4>
+        <p>Hold is already in place, so the seat is safe. The system retries payment within the hold window. If the hold expires before payment succeeds, the seat is released. User must re-select. <span class="hl-green">Mitigation: hold is the safety net — worst case is lost sale, never a double-sell.</span></p>
+      </div>
+
+      <div class="card">
+        <h4>🔴 Redis Goes Down</h4>
+        <p>Fall back to <span class="hl-accent">PostgreSQL optimistic locking</span> only. Higher latency (5ms vs. &lt;1ms) but still correct. This is why PostgreSQL is the source of truth, not Redis. Feature-flag the Redis layer so it degrades gracefully.</p>
+      </div>
+
+      <div class="card">
+        <h4>🔴 Hold Expires During Payment Processing</h4>
+        <p>The scariest edge case. User submits payment at minute 7, hold expires at minute 8, payment completes at minute 8:15 — but the seat was released and re-held by someone else. <span class="hl-green">Solution: the confirm_purchase call does an atomic WHERE check</span> — if the seat is no longer held by this user, the payment is refunded immediately.</p>
+      </div>
+
+      <div class="card">
+        <h4>🔴 Bot Attacks</h4>
+        <p>Bots try to grab hundreds of seats using multiple accounts. Defenses: CAPTCHA at queue entry, device fingerprinting, rate limiting on token generation (one per IP per event), random queue position assignment (bots can't gain speed advantage), second CAPTCHA at admission.</p>
+      </div>
+
+      <div class="card">
+        <h4>🔴 Hot Partition</h4>
+        <p>A single popular event means all requests hit the same DB shard. <span class="hl-green">Redis absorbs most contention</span> (99% of rejections happen at the SET NX layer). The DB only sees successful holds (~50K writes over 15 minutes). Shard by event_id so other events are unaffected.</p>
+      </div>
+
+      <div class="card">
+        <h4>🔴 Split-Brain: Redis Says Held, DB Says Available</h4>
+        <p>Redis SET NX succeeds, DB write fails. The rollback logic immediately DELs the Redis key. If even the DEL fails, the <span class="hl-accent">8-minute TTL self-heals</span> — the key auto-expires and the seat becomes available again. Background reconciliation job catches stragglers every 30 seconds.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 09 · INTERVIEW TIPS ═══════════════ -->
+    
+  <section class="section" id="antipatterns">
+    <div class="section-head"><span class="section-n">⚠</span><h2 class="section-title">Anti-patterns</h2></div>
+    <div class="prose">
+      
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Optimistic concurrency on seat row</div>
+        <p class="why">100k people all try to grab seat A12 simultaneously → 99,999 retries.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Pessimistic lock + queue-based waiting room; users enter sequentially.</div>
+    </div>
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Cache seat availability aggressively</div>
+        <p class="why">TTL of seconds means 10k users see the same seat as available.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Real-time availability; SSE/WebSocket updates; cache only static (event, venue) data.</div>
+    </div>
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">One monolithic DB transaction from reserve → payment</div>
+        <p class="why">Transaction holds seat locks for minutes while user types card info.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Two-phase: soft hold (5 min TTL) then payment; explicit release on timeout.</div>
+    </div>
+    </div>
+  </section>
+
+  <div class="section" id="interview-tips">
+      <div class="section-number">09</div>
+      <h2>Interview Tips</h2>
+
+      <div class="tip-card">
+        <span class="tip-icon">💡</span>
+        <div class="tip-content">
+          <strong>Lead with the constraint, not the components.</strong><br/>
+          "The core challenge here is preventing double-selling under extreme concurrency. Let me design around that." This immediately shows you understand what makes this problem unique — it's not a generic CRUD app.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">⚡</span>
+        <div class="tip-content">
+          <strong>Clarify the seating model early.</strong><br/>
+          Ask: "Are we designing for reserved seating (pick your seat) or general admission?" This fundamentally changes the concurrency approach — reserved needs per-seat locking (SET NX), GA needs an atomic counter (DECR).
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🎯</span>
+        <div class="tip-content">
+          <strong>The virtual queue is your scaling secret weapon.</strong><br/>
+          Proactively say "we need to protect downstream systems by controlling the admission rate." Interviewers love this — it shows you think about production realities, not just component diagrams.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🧠</span>
+        <div class="tip-content">
+          <strong>Don't forget: the happy path is boring.</strong><br/>
+          The interesting design is in edge cases: hold expiration during payment, Redis/DB inconsistency, queue fairness under bot attacks. Volunteer these — "let me talk about what happens when things go wrong."
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🔑</span>
+        <div class="tip-content">
+          <strong>Know the magic words: SET NX, FOR UPDATE SKIP LOCKED, idempotency key.</strong><br/>
+          These three techniques — Redis atomic set-if-not-exists, PostgreSQL row-level skip-locking, and payment idempotency — are the concrete implementation details that turn a hand-wavy design into a credible one.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">📊</span>
+        <div class="tip-content">
+          <strong>State the read:write ratio.</strong><br/>
+          "During a hot sale, reads outnumber writes ~1000:1. This means I can serve reads from a cache with 2–5 second staleness, while writes go through an atomic path." This single sentence justifies the entire caching strategy.
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 10 · SIMILAR PROBLEMS ═══════════════ -->
+    <div class="section" id="similar">
+      <div class="section-number">10</div>
+      <h2>Similar Problems</h2>
+
+      <div class="similar-grid">
+        <a href="../rate-limiter/index.html" class="similar-card">
+          <h4>Rate Limiter</h4>
+          <p>Same pattern of controlling flow rate. The queue service is essentially a rate limiter for the inventory service — admitting users in batches.</p>
+        </a>
+        <a href="../uber/index.html" class="similar-card">
+          <h4>Uber / Ride Sharing</h4>
+          <p>Real-time matching under concurrency. Both Uber and ticketing solve "many users competing for limited resources" — seats vs. drivers.</p>
+        </a>
+        <a href="../notification-system/index.html" class="similar-card">
+          <h4>Notification System</h4>
+          <p>Fan-out to millions of users. The queue position updates and ticket confirmations share notification infrastructure patterns.</p>
+        </a>
+        <a href="../redis-cache/index.html" class="similar-card">
+          <h4>Design a Cache (Redis)</h4>
+          <p>Redis as a fast gate with TTL-based self-healing. The two-layer hold pattern (Redis + DB) is a cache-aside variant adapted for correctness-critical writes.</p>
+        </a>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 11 · EVOLUTION ═══════════════ -->
+    <div class="section" id="evolution">
+      <div class="section-number">11</div>
+      <h2>Evolution</h2>
+      <p>How this design grows from a single-server prototype to a planet-scale ticketing platform.</p>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">1</div>
+        <div class="evolution-content">
+          <h4>MVP — Single Server, Small Venues</h4>
+          <p>Single PostgreSQL database with optimistic locking (version column). No Redis, no queue. Direct seat selection → payment. Works for venues up to ~5,000 seats where concurrent demand is manageable. Simple, correct, and easy to reason about.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">2</div>
+        <div class="evolution-content">
+          <h4>Growth — Redis + Virtual Queue</h4>
+          <p>Add Redis as a fast gate for seat holds (SET NX). Introduce the virtual waiting room for events with expected demand &gt; 10× seat count. Add read replicas for seat map queries. Elasticsearch for event search. CDN for static assets and seat map images. Handles events up to ~50,000 seats.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">3</div>
+        <div class="evolution-content">
+          <h4>Scale — Sharding + Global Reach</h4>
+          <p>Shard PostgreSQL by event_id so hot events don't affect others. Async payment processing with idempotency keys. Multi-region deployment (CDN edge + regional API servers). Kafka event bus for decoupled notification and analytics. Dynamic queue batch sizing based on real-time inventory service load. Handles multiple simultaneous hot sales globally.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">4</div>
+        <div class="evolution-content">
+          <h4>Platform — Secondary Market + Dynamic Pricing</h4>
+          <p>Add verified resale marketplace (separate service layer on top of primary). Dynamic pricing service that adjusts prices based on demand signals from the queue. Mobile-first ticket delivery with NFC/Apple Wallet. Analytics pipeline for venue operators. Fraud detection ML for bot prevention. Transfer and gifting capabilities.</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SCRIPTS
+     ═══════════════════════════════════════════════════════ -->
+<script>
+  // ── Mermaid Init ──
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: 'hsl(262, 80%, 94%)',
+      primaryTextColor: '#111110',
+      primaryBorderColor: 'hsl(262, 60%, 80%)',
+      lineColor: '#ccc9c4',
+      secondaryColor: '#f7f7f5',
+      tertiaryColor: '#f0eeeb',
+      fontFamily: 'Geist, system-ui, sans-serif',
+      fontSize: '13px'
+    }
+  });
+
+  // ── Sidebar Scroll Observer ──
+  (function() {
+    const sections = document.querySelectorAll('.section[id]');
+    const navLinks = document.querySelectorAll('#sidebar-nav a');
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+          navLinks.forEach(link => {
+            link.classList.toggle('active', link.getAttribute('href') === '#' + id);
+          });
+        }
+      });
+    }, {
+      rootMargin: '-80px 0px -60% 0px',
+      threshold: 0
+    });
+
+    sections.forEach(s => observer.observe(s));
+  })();
+
+  // ── Architecture Node Highlight ──
+  let highlightedNode = null;
+  function hlNode(id) {
+    if (highlightedNode) {
+      document.getElementById(highlightedNode).classList.remove('node-highlight');
+    }
+    if (highlightedNode === id) {
+      highlightedNode = null;
+      return;
+    }
+    document.getElementById(id).classList.add('node-highlight');
+    highlightedNode = id;
+  }
+
+  // ── Flow Stepper ──
+  const FLOW_NODES = [
+    'Client',
+    'CDN',
+    'Event Svc',
+    'Queue Svc',
+    'Inventory Svc',
+    'Redis (NX)',
+    'PostgreSQL',
+    'Payment Svc',
+    'Kafka',
+    'Notification'
+  ];
+
+  const FLOW_DESCS = [
+    '<strong>User searches for an event.</strong> The client sends a search request ("Taylor Swift Dubai") to the Event Service via the load balancer.',
+    '<strong>CDN serves static assets.</strong> The seat map base image, venue layout, and app shell are served from CDN edge nodes. 90% of static traffic never reaches origin.',
+    '<strong>Event Service returns results.</strong> Elasticsearch handles full-text search with geo-filtering. Event details come from Redis cache (99% hit rate). Availability overlay is a lightweight JSON (2–5s stale).',
+    '<strong>User joins the waiting room.</strong> For hot events, the Queue Service assigns a randomized position at on-sale time. Users poll every 5 seconds. Batch admission controls flow rate to protect downstream services.',
+    '<strong>User is admitted and selects seats.</strong> Inventory Service validates the admission token, then attempts to hold the requested seats using the two-layer pattern.',
+    '<strong>Redis SET NX — the fast gate.</strong> <code>SET seat:E1:A1 user_123 NX EX 480</code> — if the key exists, the seat is taken (instant rejection, &lt;1ms). If it doesn\'t exist, the key is created with an 8-minute TTL.',
+    '<strong>PostgreSQL — the authority.</strong> <code>UPDATE seats SET status=\'HELD\' WHERE status=\'AVAILABLE\' AND version=N</code> — optimistic locking confirms the hold. If rows_affected=0, Redis is rolled back. The DB is always the source of truth.',
+    '<strong>Payment is processed.</strong> User submits payment. The Payment Service charges via Stripe with an idempotency key (<code>user:event:hold</code>). On success → confirm purchase. On failure → release hold. On timeout → retry with same key.',
+    '<strong>Event published to Kafka.</strong> Payment confirmation triggers a Kafka event on the <code>ticket.confirmed</code> topic. This decouples downstream processing from the critical purchase path.',
+    '<strong>Notification Service delivers the ticket.</strong> Consumes from Kafka. Generates a QR-code ticket PDF. Sends confirmation email via SendGrid/SES. Pushes to the user\'s "My Tickets" in-app. Fire-and-forget from payment\'s perspective — retries from queue on failure.'
+  ];
+
+  let flowStep = -1;
+  const flowStepsEl = document.getElementById('flow-steps');
+  const flowDescEl  = document.getElementById('flow-desc');
+  const flowCounter = document.getElementById('flow-counter');
+  const flowNextBtn = document.getElementById('flow-next');
+  const flowResetBtn = document.getElementById('flow-reset');
+
+  // Build step nodes
+  FLOW_NODES.forEach((name, i) => {
+    if (i > 0) {
+      const arrow = document.createElement('span');
+      arrow.className = 'flow-arrow';
+      arrow.textContent = '→';
+      flowStepsEl.appendChild(arrow);
+    }
+    const node = document.createElement('span');
+    node.className = 'flow-node';
+    node.id = 'fnode-' + i;
+    node.textContent = name;
+    flowStepsEl.appendChild(node);
+  });
+
+  function runFlow() {
+    flowStep++;
+    if (flowStep >= FLOW_NODES.length) {
+      flowNextBtn.disabled = true;
+      flowDescEl.innerHTML = '<strong>✓ Flow complete.</strong> The user has their ticket. Click Reset to start over.';
+      return;
+    }
+
+    flowResetBtn.disabled = false;
+
+    // Mark previous nodes as done
+    for (let i = 0; i < flowStep; i++) {
+      document.getElementById('fnode-' + i).classList.remove('active');
+      document.getElementById('fnode-' + i).classList.add('done');
+    }
+
+    // Mark current node as active
+    document.getElementById('fnode-' + flowStep).classList.add('active');
+    document.getElementById('fnode-' + flowStep).scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+
+    flowDescEl.innerHTML = FLOW_DESCS[flowStep];
+    flowCounter.textContent = `Step ${flowStep + 1} of ${FLOW_NODES.length}`;
+
+    if (flowStep === FLOW_NODES.length - 1) {
+      flowNextBtn.textContent = 'Finish ✓';
+    }
+  }
+
+  function resetFlow() {
+    flowStep = -1;
+    FLOW_NODES.forEach((_, i) => {
+      const el = document.getElementById('fnode-' + i);
+      el.classList.remove('active', 'done');
+    });
+    flowDescEl.innerHTML = 'Click <strong>Next Step</strong> to walk through a ticket purchase from search to confirmation.';
+    flowCounter.textContent = '';
+    flowNextBtn.disabled = false;
+    flowNextBtn.textContent = 'Next Step →';
+    flowResetBtn.disabled = true;
+  }
+</script>
+
+</body>
+</html>

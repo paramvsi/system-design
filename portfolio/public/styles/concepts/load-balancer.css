@@ -1,0 +1,56 @@
+/* ux-v2-bumped */
+
+    .hero-desc { font-size: 14.5px; color: var(--text-secondary); max-width: 640px; line-height: 1.75; font-weight: 300; margin-bottom: 1.25rem; }
+    .hero-tags { display:flex; flex-wrap:wrap; gap:6px; }
+    .tag { font-family:var(--font-mono); font-size: 12px; padding:3px 10px; border-radius:20px; border:1px solid var(--border); color:var(--text-secondary); background:var(--bg-subtle); letter-spacing:0.02em; }
+    .tag.accent { background:var(--accent-light); color:var(--accent-text); border-color:var(--accent-border); font-weight:500; }
+    .section { margin-bottom: 3rem; scroll-margin-top: 72px; }
+    .section-head { display:flex; align-items:baseline; gap:10px; margin-bottom:1.25rem; padding-bottom:8px; border-bottom:1px solid var(--border); }
+    .section-n { font-family:var(--font-mono); font-size: 11px; color:var(--accent); opacity:.7; min-width:22px; letter-spacing:0.04em; }
+    .section-title { font-family:var(--font-sans); font-size:15px; font-weight:600; color:var(--text-primary); letter-spacing:-0.01em; }
+    .hl { background:var(--hl-yellow); color:var(--text-primary); padding:1px 4px; border-radius:3px; font-weight:500; }
+    .hl-accent { background:var(--hl-accent); color:var(--hl-accent-dark); padding:1px 4px; border-radius:3px; font-weight:500; }
+    .hl-red { background:#fce8e6; color:#8b1a12; padding:1px 4px; border-radius:3px; font-weight:500; }
+    .hl-green { background:#e4f5ec; color:#1a5c38; padding:1px 4px; border-radius:3px; font-weight:500; }
+    .prose { font-size: 16px; color:var(--text-secondary); font-weight:300; line-height:1.75; }
+    .prose p { margin-bottom:0.85em; } .prose p:last-child { margin-bottom:0; }
+    .prose strong { color:var(--text-primary); font-weight:600; }
+    .prose code { font-family:var(--font-mono); font-size: 13.5px; background:var(--bg-code); border:1px solid var(--border); border-radius:3px; padding:1px 5px; color:var(--text-code); }
+    .callout { border-left:3px solid var(--accent); padding:14px 18px; background:var(--accent-light); border-radius:0 var(--radius-md) var(--radius-md) 0; margin-bottom:16px; }
+    .callout-label { font-family:var(--font-mono); font-size: 11px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent-text); margin-bottom:4px; }
+    .callout p { font-size: 16px; color:var(--accent-text); margin-bottom:0; }
+    .callout.callout-warn { border-left-color:hsl(38,92%,50%); background:hsl(38,80%,94%); }
+    .callout.callout-warn .callout-label { color:hsl(38,70%,28%); }
+    .callout.callout-warn p { color:hsl(38,70%,28%); }
+    .callout.callout-good { border-left-color:hsl(145,55%,42%); background:hsl(145,60%,94%); }
+    .callout.callout-good .callout-label { color:hsl(145,55%,26%); }
+    .callout.callout-good p { color:hsl(145,55%,26%); }
+    .tradeoff-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+    .tradeoff-option { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 20px; }
+    .tradeoff-option.chosen { border-color:var(--accent-border); background:var(--accent-light); }
+    .tradeoff-label { font-family:var(--font-mono); font-size: 11px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; margin-bottom:6px; color:var(--text-muted); }
+    .tradeoff-option.chosen .tradeoff-label { color:var(--accent-text); }
+    .tradeoff-option h4 { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:6px; }
+    .tradeoff-option p { font-size: 15px; color:var(--text-secondary); margin-bottom:0; line-height:1.6; }
+    .scale-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:20px; }
+    .scale-card { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px; text-align:center; }
+    .scale-card .number { font-family:var(--font-mono); font-size:22px; font-weight:500; color:var(--accent-text); margin-bottom:2px; }
+    .scale-card .label { font-size: 13.5px; color:var(--text-muted); }
+    .algo-table { width:100%; border-collapse:collapse; font-size: 15px; border:1px solid var(--border); border-radius:var(--radius-md); overflow:hidden; margin-bottom:16px; }
+    .algo-table th { font-family:var(--font-mono); font-size: 11px; letter-spacing:0.06em; text-transform:uppercase; text-align:left; padding:10px 14px; background:var(--bg-subtle); color:var(--text-muted); border-bottom:1px solid var(--border); font-weight:500; }
+    .algo-table td { padding:10px 14px; border-bottom:1px solid var(--border); color:var(--text-secondary); vertical-align:top; }
+    .algo-table tr:last-child td { border-bottom:none; }
+    .algo-table .algo-name { font-family:var(--font-mono); font-size: 13.5px; color:var(--text-primary); font-weight:500; white-space:nowrap; }
+    .diagram-wrap { border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; margin-bottom:1rem; background:var(--bg); }
+    .diagram-head { display:flex; align-items:center; justify-content:space-between; padding:8px 14px; background:var(--bg-subtle); border-bottom:1px solid var(--border); }
+    .diagram-label { font-family:var(--font-mono); font-size: 11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted); }
+    .diagram-type { font-family:var(--font-mono); font-size: 11px; color:var(--accent); letter-spacing:0.04em; }
+    .diagram-body { padding:1.5rem; }
+    .arch-svg { width:100%; height:auto; display:block; }
+    .mermaid { display:flex; justify-content:center; }
+    .mermaid svg { max-width:100%; }
+    .real-world-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+    .rw-card { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 18px; }
+    .rw-card .rw-name { font-family:var(--font-mono); font-size: 12px; color:var(--accent); letter-spacing:0.04em; margin-bottom:4px; font-weight:500; }
+    .rw-card h4 { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:6px; }
+    .rw-card p { font-size: 15px; color:var(--text-secondary); line-height:1.55; margin:0; }

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Feature Store — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 30; --accent-s: 80%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>"User's last 7-day click count" is a feature. Your training pipeline computes it from click logs in Spark; your serving pipeline computes it from a Kafka stream. The two implementations <span class="hl-red">drift</span> — one bug here, one rounding there. Models trained on offline features mispredict on different online features. <strong>Training-serving skew</strong> kills more ML systems than bad models.</p>
+      <p>A <strong>feature store</strong> is the single source of truth for features. One implementation, two access paths: batch (training) and online (serving). Production-grade ML at every serious company runs on one — Uber Michelangelo, Airbnb Zipline, Instacart, Lyft, all have their own. Feast and Tecton are the open + commercial standards.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The dual-store model</h2></div>
+    <div class="prose">
+      <p>Every feature has two homes:</p>
+      <ul>
+        <li><strong>Offline store</strong> — historical feature values for every entity at every point in time. Stored in a data warehouse (BigQuery, Snowflake) or lakehouse (Iceberg, Delta). Used to construct <em>training data</em> by joining labels with feature values <em>as of</em> the prediction time.</li>
+        <li><strong>Online store</strong> — latest feature values per entity, sub-millisecond lookup. Stored in a KV store (Redis, DynamoDB, Cassandra). Used at <em>serving time</em> when the model needs features for a fresh prediction.</li>
+      </ul>
+      <p>Both populated by the same feature transformation code. Same logic, two destinations. That's the magic.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Point-in-time correctness</h2></div>
+    <div class="prose">
+      <p>The killer feature (pun) of a feature store is <strong>point-in-time joins</strong>. To build training data without leaking the future:</p>
+      <ol>
+        <li>Take the labels: e.g. <code>(user_id, did_purchase, timestamp)</code> rows.</li>
+        <li>For each row, join the feature values <em>as they were at that timestamp</em>. Not the latest value — the historical value at that exact moment.</li>
+        <li>Train on the result.</li>
+      </ol>
+      <p>Without this, your training data has features computed from data that didn't exist yet at prediction time. Model looks great offline; flops in production. Feature stores enforce correctness via SQL window functions (<code>LAST_VALUE … RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW</code>) or temporal joins.</p>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Feature Store Architecture</span>
+        <span class="diagram-type">Mermaid</span>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+flowchart LR
+    R[Raw events<br/>Kafka / S3] --> T[Transformation<br/>same code]
+    T --> O[(Offline store<br/>BigQuery / Iceberg)]
+    T --> N[(Online store<br/>Redis / DynamoDB)]
+    O -->|point-in-time join| TR[Training pipeline]
+    TR --> M[Model training]
+    N -->|sub-ms lookup| S[Serving service]
+    M -->|deploy| S
+    S --> P[Prediction]
+        </div>
+      </div>
+    </div>
+
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-val">&lt; 5 ms</div><div class="kv-lbl">online lookup p99</div></div>
+      <div class="kv-card"><div class="kv-val">100s-1000s</div><div class="kv-lbl">features per request</div></div>
+      <div class="kv-card"><div class="kv-val">15 min</div><div class="kv-lbl">typical batch refresh interval</div></div>
+      <div class="kv-card"><div class="kv-val">~seconds</div><div class="kv-lbl">streaming feature freshness</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Three feature classes</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Class</th><th>Update cadence</th><th>Source</th><th>Examples</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Batch features</td><td>Hourly / daily</td><td>Spark over warehouse</td><td>"7-day rolling spend", "cohort age"</td></tr>
+        <tr><td class="algo-name">Streaming features</td><td>Seconds</td><td>Flink / Kafka Streams</td><td>"clicks last 5 min", "session length"</td></tr>
+        <tr><td class="algo-name">Request-time features</td><td>Per-request</td><td>Computed online</td><td>"current geo distance", "device type"</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — why most teams fail at feature stores</h2></div>
+    <div class="prose">
+      <p>Feature stores look simple in slides ("just two stores!"). They die in production for three reasons:</p>
+      <p><strong>1. Schema sprawl.</strong> Teams add features ad-hoc; nobody owns the catalog. After a year, you have 5,000 features, 30% duplicates with subtly different names. Discoverability dies. Mitigation: feature registry with mandatory metadata (owner, refresh, lineage), feature-of-the-month review.</p>
+      <p><strong>2. Online/offline drift.</strong> The "same code" promise breaks the moment someone hot-fixes the streaming job without backporting to batch. CI must replay the same input through both pipelines and assert numeric equivalence (within float epsilon). Tecton enforces this; rolling your own you'll skip it once and pay forever.</p>
+      <p><strong>3. Freshness vs cost.</strong> 15-min batch features are cheap; 30-second streaming features cost 100× more compute. Most teams over-stream. Rule: only stream the features the model proves benefit from at sub-minute freshness.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"We use a feature store with point-in-time joins for training and a sub-millisecond online store for serving. Same transformation code feeds both, so no training-serving skew. Most features are batch-refreshed; a few critical ones stream via Flink. Feature registry catalogs ownership and lineage."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Uber Michelangelo</div><h4>The original</h4><p>Pioneered the pattern in 2016. Powers ETA, ride pricing, driver matching. Internal-only but inspired everything that followed.</p></div>
+      <div class="rw-card"><div class="rw-name">Feast</div><h4>Open-source standard</h4><p>Kubernetes-native, multi-store backends (BigQuery + Redis typical). Adopted by Robinhood, Twitter, Salesforce.</p></div>
+      <div class="rw-card"><div class="rw-name">Tecton</div><h4>Commercial</h4><p>Founded by ex-Uber Michelangelo team. SaaS feature store with Spark + streaming + online serving baked in.</p></div>
+      <div class="rw-card"><div class="rw-name">Airbnb Zipline</div><h4>Internal</h4><p>Stream-first feature store. Influenced Chronon (open-source) which runs at Airbnb + Stripe scale.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Recommendation algorithm uses a feature store to share user/item features between training + serving. News feed ranker pulls real-time engagement features. Leaderboard recomputes scoring features in a streaming pipeline.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

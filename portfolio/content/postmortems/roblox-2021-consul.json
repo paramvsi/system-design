@@ -1,0 +1,64 @@
+{
+  "slug": "roblox-2021-consul",
+  "title": "73 Hours Down",
+  "problemNumber": "10",
+  "difficulty": null,
+  "heroDescription": "Enabling a new streaming feature in Consul KV triggered a pathological interaction with BoltDB, Consul's embedded storage. Write latency exploded; Consul became unresponsive. Recovery took 73 hours — the worst outage in Roblox's history. HashiCorp engineers flew in.",
+  "tags": [
+    "Consul",
+    "BoltDB pathology",
+    "73 hour outage",
+    "Hotspot"
+  ],
+  "accent": {
+    "h": 0,
+    "s": 70,
+    "l": 48
+  },
+  "category": "Coordination + consensus",
+  "blurb": "Enabling a new streaming feature in Consul KV triggered a pathological interaction with BoltDB, Consul's embedded storage. Write latency exploded; Consul became unresponsive. Recovery took 73 hours — the worst outage in ",
+  "sections": [
+    {
+      "id": "tldr",
+      "label": "TL;DR",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">TL;DR</h2></div>\n    <div class=\"prose\">\n      <p>Roblox enabled Consul's new \"streaming\" feature to reduce CPU pressure. The feature, under high write load, interacted badly with BoltDB's free-list allocator. Write latency went from &lt;10 ms to &gt;1 s. Consul clients flooded with stale reads and timeouts. Every service that depended on Consul for config/discovery — which was most of them — broke. Fixing required disabling streaming, repairing Raft state, and finally patching the BoltDB interaction.</p>\n    </div>"
+    },
+    {
+      "id": "timeline",
+      "label": "Timeline",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Timeline</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>Oct 28, 13:37 PT</strong> — Roblox users begin reporting they can't connect. Backend failures widespread.</li>\n        <li><strong>Oct 28, evening</strong> — Engineers identify Consul cluster as the failing component. Roll back the streaming feature. Write latency still high; Consul remains unstable.</li>\n        <li><strong>Oct 29</strong> — HashiCorp engineers engaged. Investigation into BoltDB free-list behavior — performance degraded non-linearly with free-list size.</li>\n        <li><strong>Oct 30</strong> — Iterative recovery: snapshot restore, Raft leadership recovery, patch applied to free-list handling. Many false starts.</li>\n        <li><strong>Oct 31, evening</strong> — Consul stable. Services restarted + warmed up. Roblox fully operational after 73 hours.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "rootcause",
+      "label": "Root cause",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Root cause</h2></div>\n    <div class=\"prose\">\n      <p>Roblox turned on Consul streaming, a relatively new feature, in production. Under sustained high write load, streaming triggered a BoltDB free-list pathology: the free-list grew enormous as pages were freed + allocated; scanning the free-list on each transaction took longer than the transaction itself. Consul writes slowed from sub-ms to seconds.</p>\n      <p>Once write latency climbed, Consul leaders couldn't maintain Raft heartbeat. Followers re-elected. Re-election consumed more writes. Feedback loop. Even turning streaming off couldn't immediately recover — the bloated free-list needed compaction.</p>\n      <p>Deeper cause: Roblox used Consul not just for service discovery but as the shared config + KV + locks primitive for almost every service. Single point of failure — no service could operate degraded-but-functional when Consul was unavailable.</p>\n    </div>"
+    },
+    {
+      "id": "impact",
+      "label": "Blast radius",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Blast radius</h2></div>\n    <div class=\"prose\">\n      <p>73-hour full Roblox outage. ~50M daily active users. The three-day Halloween weekend — normally peak traffic — was entirely missed. Revenue impact $25M+. Reputational damage especially among kids / parents who couldn't explain why. Roblox published an unusually detailed 40-page post-mortem (now an industry reference) months later.</p>\n    </div>"
+    },
+    {
+      "id": "lessons",
+      "label": "Lessons",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Lessons</h2></div>\n    <div class=\"prose\">\n      <ol>\n        <li><strong>New features go through isolated staging.</strong> Enabling streaming directly in production, on the cluster that ~every service depends on, is unsafe. Stage in a canary region / tenant / time-window.</li>\n        <li><strong>Don't build on a single point of dependency.</strong> Roblox's services should have been designed to operate degraded-but-functional when Consul was down. Instead, \"Consul down = nothing works.\"</li>\n        <li><strong>Storage engine internals matter at scale.</strong> The BoltDB free-list pathology was invisible until sustained high write throughput. Know what your storage does when stressed.</li>\n        <li><strong>Recovery drills for \"all-services-depend-on-X is broken\" scenarios.</strong> When Consul was unavailable, Roblox's service restart ordering was itself Consul-dependent. Rebooting in the right order required printing runbooks on paper.</li>\n      </ol>\n    </div>"
+    },
+    {
+      "id": "concepts-used",
+      "label": "Concepts in play",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Concepts in play</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><a href=\"/concepts/service-discovery\">Service discovery</a> — Consul's dominant role.</li>\n        <li><a href=\"/concepts/consensus-paxos-raft\">Consensus (Raft)</a> — why elections under load multiply problems.</li>\n        <li><a href=\"/concepts/b-tree-vs-lsm\">Storage engine internals</a> — BoltDB as an example of free-list pitfalls.</li>\n        <li><a href=\"/concepts/blast-radius-minimization\">Blast radius</a> — avoid ecosystem-wide dependencies.</li>\n        <li><a href=\"/concepts/graceful-degradation\">Graceful degradation</a> — services should survive degraded Consul.</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

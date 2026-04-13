@@ -1,0 +1,71 @@
+{
+  "slug": "service-mesh",
+  "title": "Service Mesh",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 215,
+    "s": 70,
+    "l": 45
+  },
+  "category": "Networking & Delivery",
+  "blurb": "You have 50 microservices in production. Every service-to-service call needs: TLS encryption, mTLS auth, retries, timeouts, circuit breaking, observability, traffic routing. Implementing all of that in every service, in ",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>You have 50 microservices in production. Every service-to-service call needs: TLS encryption, mTLS auth, retries, timeouts, <a href=\"/concepts/circuit-breaker\">circuit breaking</a>, observability, traffic routing. Implementing all of that <em>in every service, in every language</em> is impossible to maintain. Half your services do retries differently; some forgot mTLS; nobody can tell where the latency cliff is.</p>\n      <p>A <strong>service mesh</strong> moves all of that into a sidecar proxy that runs alongside each service. Application code becomes simple HTTP/gRPC calls; the sidecar handles everything operational. One config file in one place changes behavior everywhere.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The architecture in one picture",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The architecture in one picture</h2></div>\n    <div class=\"prose\">\n      <p>Each pod runs your service container <em>plus</em> a sidecar proxy (Envoy is the dominant choice). All traffic in/out of the pod goes through the sidecar. The sidecar handles: TLS termination, mTLS to peers, retries, timeouts, circuit breaking, traffic shaping, request logging, distributed tracing.</p>\n      <p>A central <strong>control plane</strong> (Istiod, Linkerd's control plane, Consul) pushes configuration to all sidecars: who can talk to whom, what timeouts apply where, how to route traffic. Sidecars pull this via <a href=\"/concepts/service-discovery\">xDS</a> from Envoy.</p>\n    </div>\n\n    <div class=\"diagram-wrap\">\n      <div class=\"diagram-head\"><span class=\"diagram-label\">Service Mesh Topology</span><span class=\"diagram-type\">Mermaid</span></div>\n      <div class=\"diagram-body\">\n        <div class=\"mermaid\">\nflowchart LR\n    CP[Control Plane<br>Istiod / Linkerd]\n    subgraph PodA[Pod A]\n      A[App A] --- SA[Sidecar]\n    end\n    subgraph PodB[Pod B]\n      SB[Sidecar] --- B[App B]\n    end\n    subgraph PodC[Pod C]\n      SC[Sidecar] --- C[App C]\n    end\n    SA -- mTLS + retries + circuit breaker --&gt; SB\n    SA -- mTLS --&gt; SC\n    CP -. xDS config .-&gt; SA\n    CP -. xDS config .-&gt; SB\n    CP -. xDS config .-&gt; SC\n        </div>\n      </div>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "What the mesh actually delivers",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">What the mesh actually delivers</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>Zero-trust networking</strong> — mTLS for every service-to-service call, automatic certificate rotation. App code talks plaintext HTTP locally; the sidecar wraps it.</li>\n        <li><strong>Traffic shaping</strong> — \"send 5% of v2 traffic to the canary.\" Configured centrally, applied at the data plane, no code changes.</li>\n        <li><strong>Resilience policies</strong> — retries, timeouts, circuit breakers, rate limits. One YAML changes them everywhere.</li>\n        <li><strong>Observability</strong> — uniform metrics (success rate, P99, RPS) per service edge, automatic distributed tracing, no app-side instrumentation.</li>\n        <li><strong>Authorization</strong> — \"service A can call service B's <code>/orders</code> endpoint but not <code>/admin</code>.\" Enforced at the sidecar, not the app.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "The cost of all this magic",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">The cost of all this magic</h2></div>\n    <div class=\"prose\">\n      <p>Service mesh isn't free. Real costs:</p>\n      <ul>\n        <li><strong>Latency tax</strong> — every request goes through 2 extra proxy hops (out via your sidecar, in via the peer's). Adds 1-3ms per call.</li>\n        <li><strong>Memory tax</strong> — each pod runs an Envoy (~50-100 MB). At 1000 pods = 100 GB just for sidecars.</li>\n        <li><strong>Operational complexity</strong> — the mesh itself is a distributed system. Istio has reputation for being hard to debug. A misconfigured mesh policy can take down inter-service communication everywhere at once.</li>\n        <li><strong>Yet another layer</strong> — when something is slow, the failure could be in app, sidecar, control plane, or peer's sidecar. Diagnosis surface area grows.</li>\n      </ul>\n      <div class=\"callout callout-warn\">\n        <div class=\"callout-label\">Don't reach for it too early</div>\n        <p>If you have 5 services, you don't need a mesh — implement retries + tracing in a shared library. Consider a mesh once you have ≥ 20 services in multiple languages, or strict zero-trust requirements.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — sidecar vs sidecar-less",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — sidecar vs sidecar-less</h2></div>\n    <div class=\"prose\">\n      <p>The sidecar pattern is dominant but not universal. Recent alternatives:</p>\n      <p><strong>Linkerd's micro-proxy</strong> — a Rust-based proxy ~10× lighter than Envoy. Same model, fraction of the resource cost.</p>\n      <p><strong>Istio Ambient Mesh</strong> — the new architecture (2023+). Replaces per-pod sidecars with shared per-node ztunnels for L4 (mTLS) + optional waypoint proxies for L7. Cuts memory cost dramatically; trade-off is more complex routing.</p>\n      <p><strong>eBPF-based meshes</strong> (Cilium Service Mesh) — implement mesh capabilities in the kernel via eBPF. No userland proxies in the data path. Lowest latency overhead. Newer; less mature than Istio/Linkerd.</p>\n      <p>The trajectory: the original \"sidecar everywhere\" pattern is being replaced by lighter approaches. By 2027 most production meshes will likely be ambient-style or eBPF-based. The capabilities stay the same; the overhead shrinks.</p>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">The interview answer</div>\n        <p>\"At sufficient microservice scale, a mesh is essential — uniform mTLS, retries, observability without per-service code. We picked Linkerd for its lower overhead vs Istio. Tradeoff: extra latency (~2ms/call), extra memory (~50MB/pod). Worth it once we passed ~30 services.\"</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Istio</div><h4>Most-deployed mesh</h4><p>Envoy data plane + Istiod control plane. Feature-rich; complex. Used by Google, IBM, big enterprises.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Linkerd</div><h4>Lighter alternative</h4><p>Rust-based micro-proxy. ~10× less memory than Istio. Simpler config. CNCF graduated.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Consul Connect</div><h4>HashiCorp's mesh</h4><p>Tight Vault + Consul integration. Multi-platform (VMs + containers). Common in HashiCorp shops.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Cilium Service Mesh</div><h4>eBPF-based</h4><p>Sidecar-free; mesh logic in kernel. Lowest overhead. Newest; production-ready as of 2023+.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>News feed's microservices run inside Istio for mTLS + uniform observability. Uber's massive microservice fleet uses Envoy-based mesh internally. E-commerce uses mesh for traffic shaping during checkout-flow experiments.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [
+    {
+      "sectionId": "intuition",
+      "source": "flowchart LR\n    CP[Control PlaneIstiod / Linkerd]\n    subgraph PodA[Pod A]\n      A[App A] --- SA[Sidecar]\n    end\n    subgraph PodB[Pod B]\n      SB[Sidecar] --- B[App B]\n    end\n    subgraph PodC[Pod C]\n      SC[Sidecar] --- C[App C]\n    end\n    SA -- mTLS + retries + circuit breaker --> SB\n    SA -- mTLS --> SC\n    CP -. xDS config .-> SA\n    CP -. xDS config .-> SB\n    CP -. xDS config .-> SC",
+      "index": 0
+    }
+  ],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

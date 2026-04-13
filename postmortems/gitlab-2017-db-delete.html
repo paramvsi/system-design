@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>GitLab — January 31, 2017 — Accidental rm -rf + Backup Failure</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 340; --accent-s: 75%; --accent-l: 52%; }</style>
+</head>
+<body>
+<main>
+
+  <div class="hero" id="problem">
+    <div class="hero-kicker">Post-mortem · 2017-01-31 · GitLab.com</div>
+    <h1 class="hero-title">GitLab <em>Accidentally Deleted</em> the Primary Database</h1>
+    <p class="hero-desc">An engineer, tired and debugging a replication issue at 11pm, ran <code>rm -rf</code> on the production primary database directory instead of the replica. Five of six backup methods were later discovered to have been silently failing for months. Lost 6 hours of user data.</p>
+    <div class="hero-tags">
+      <span class="tag">Operator error</span>
+      <span class="tag">Backups failing silently</span>
+      <span class="tag">Data loss</span>
+      <span class="tag">Live-streamed recovery</span>
+    </div>
+  </div>
+
+  <section class="section" id="tldr">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">TL;DR</h2></div>
+    <div class="prose">
+      <p>Spam attack made GitLab.com slow. An engineer debugging replication ran <code>rm -rf</code> on what they thought was the replica's data directory — it was the primary's. The moment they realized, they tried restoring from backups. Five of six backup systems had silently been broken for months; no one knew. The one working backup was 6 hours old. GitLab restored from that, publicly live-streaming the recovery to their credit. ~5,000 projects, ~5,000 comments, ~700 new users lost.</p>
+    </div>
+  </section>
+
+  <section class="section" id="timeline">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Timeline</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Evening Jan 31</strong> — GitLab.com under spam attack causing replication lag. Engineer decides to manually reset the replica and re-sync from primary.</li>
+        <li><strong>23:00 UTC</strong> — Engineer, on production console for primary DB (<code>db1.cluster.gitlab.com</code>) believing they're on the replica, runs <code>rm -rf /var/opt/gitlab/postgresql/data</code>.</li>
+        <li><strong>23:00:01 UTC</strong> — Realizes mistake ~1 second later. Only ~4.5 GB of ~300 GB remaining. Stops the <code>rm</code>.</li>
+        <li><strong>23:00–00:00 UTC</strong> — Attempted restore from LVM snapshots — not in use. From pg_dump cron — empty files from a months-old bug. From S3 snapshots — S3 bucket empty. From Azure disk snapshots — never enabled.</li>
+        <li><strong>~00:30 UTC</strong> — Discover a 6-hour-old snapshot of the <em>staging</em> database that was made by a lucky coincidence. This is the only usable restore.</li>
+        <li><strong>00:30 UTC Feb 1 → 18:00 UTC</strong> — GitLab public live-streams the recovery on YouTube. Transparent throughout.</li>
+        <li><strong>~18:00 UTC Feb 1</strong> — Service restored from 6-hour-old snapshot. ~18 hours total outage.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="rootcause">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Root cause</h2></div>
+    <div class="prose">
+      <p>The trigger was human error — wrong terminal. The real root causes were the silently failing backups:</p>
+      <ol>
+        <li><strong>pg_dump</strong> produced zero-byte files because of a Postgres version mismatch no one noticed.</li>
+        <li><strong>LVM snapshots</strong> were documented but never actually set up in production.</li>
+        <li><strong>S3 snapshots</strong> were enabled but the bucket was configured with a lifecycle rule that expired them daily.</li>
+        <li><strong>Azure disk snapshots</strong> weren't turned on for the DB disks.</li>
+        <li><strong>Replication</strong> was the fifth "backup" — but replication copies deletes, so it's not a backup.</li>
+      </ol>
+      <p>Nobody had tested a restore from any of these in months. If any one engineer had tried, the broken backups would have surfaced — but no one did.</p>
+    </div>
+  </section>
+
+  <section class="section" id="impact">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Blast radius</h2></div>
+    <div class="prose">
+      <p>~18 hours of downtime. 6 hours of user data permanently lost: ~5,000 projects created or updated, ~5,000 comments, ~700 new users. No compensation was possible for data loss other than apology + changes in process. Reputational impact was actually softened by the transparency of the live-streamed recovery — many in the community appreciated the openness.</p>
+    </div>
+  </section>
+
+  <section class="section" id="lessons">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Lessons</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>Backups that aren't tested are not backups.</strong> Automated periodic restore-and-verify is the only way to know. A dashboard of "time since last successful restore" per backup system is a must.</li>
+        <li><strong>Replication is not a backup.</strong> It propagates deletes and corruption. Point-in-time recovery from WAL or explicit snapshots is what catches "oops I deleted it."</li>
+        <li><strong>Dangerous commands need scripts with confirmations.</strong> "If I were going to delete 300 GB from a prod primary, what safeguards would I want?" should inform the answer. Tooling should surface "you are about to delete X TB of production data; type the hostname to confirm."</li>
+        <li><strong>Prominent terminal identification on production.</strong> Bright color on prod, bold prompt showing host + role. Human brains fail at 11pm.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="concepts-used">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Concepts in play</h2></div>
+    <div class="prose">
+      <ul>
+        <li><a href="/concepts/backup-restore">Backup + restore</a> — test the restore path, not the backup pipeline.</li>
+        <li><a href="/concepts/replication-strategies">Replication</a> — why replication is not backup.</li>
+        <li><a href="/concepts/disaster-recovery">Disaster recovery</a> — RPO measured in hours reflects actual recovery capability, not promised.</li>
+        <li><a href="/concepts/blast-radius-minimization">Blast radius</a> — destructive ops need guardrails.</li>
+        <li><a href="/concepts/incident-response">Incident response</a> — live-streaming the recovery was a masterclass in transparency.</li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

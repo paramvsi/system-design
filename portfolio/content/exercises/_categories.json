@@ -1,0 +1,33 @@
+{
+  "Social & Feed": [
+    "exercise-instagram",
+    "exercise-news-feed"
+  ],
+  "Communication": [
+    "exercise-slack-discord",
+    "exercise-whatsapp",
+    "exercise-notification-system"
+  ],
+  "Media & Streaming": [
+    "exercise-youtube-netflix"
+  ],
+  "Search & Discovery": [
+    "exercise-search-engine"
+  ],
+  "Marketplace & Booking": [
+    "exercise-uber",
+    "exercise-doordash",
+    "exercise-ticketmaster"
+  ],
+  "Storage & Data": [
+    "exercise-google-drive"
+  ],
+  "Financial & Trading": [
+    "exercise-payment-gateway",
+    "exercise-stock-exchange"
+  ],
+  "Infrastructure": [
+    "exercise-rate-limiter",
+    "exercise-url-shortener"
+  ]
+}

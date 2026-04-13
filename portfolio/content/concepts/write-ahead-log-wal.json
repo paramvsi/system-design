@@ -1,0 +1,65 @@
+{
+  "slug": "write-ahead-log-wal",
+  "title": "Write-Ahead Log (WAL)",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 30,
+    "s": 75,
+    "l": 48
+  },
+  "category": "Databases",
+  "blurb": "You commit a transaction. Two milliseconds later, the power fails. On reboot, is the commit there? If yes, your DB is durable. If no, it's a lie. The trick every durable datastore uses — Postgres, MySQL, Cassandra, SQLit",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>You commit a transaction. Two milliseconds later, the power fails. On reboot, is the commit there? If yes, your DB is durable. If no, it's a lie. The trick every durable datastore uses — Postgres, MySQL, Cassandra, SQLite, Kafka — is the <strong>write-ahead log</strong>: before any change touches the main data files, write the intent to an append-only log on disk and <code>fsync()</code>. Crash? Replay the log, recover the state. This single technique powers the <strong>D</strong> in ACID.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "How it works",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">How it works</h2></div>\n    <div class=\"prose\">\n      <p>Every modification follows this sequence:</p>\n      <ol>\n        <li><strong>Write intent to WAL</strong> — an append-only sequential file. Fast, because disks are great at sequential writes.</li>\n        <li><strong>fsync()</strong> — ensure the log entry is actually on disk, not just in OS cache. This is the slow part; the source of commit-latency floor (~1–5ms on NVMe, ~10ms on HDD).</li>\n        <li><strong>Acknowledge</strong> — return success to the client. The operation is durable.</li>\n        <li><strong>Apply to data files</strong> — eventually, update the main B-tree / SSTables. Can happen lazily in the background.</li>\n      </ol>\n      <p>On crash recovery: read the WAL from the last known-good point. Replay every committed entry. Main data files catch up. System is consistent again.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "Why sequential writes are a superpower",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Why sequential writes are a superpower</h2></div>\n    <div class=\"prose\">\n      <p>Random disk writes (updating a B-tree leaf in place) are slow because the disk arm (HDD) or SSD controller has to seek. Sequential writes are fast — just append to the end.</p>\n      <p>An HDD does ~100 random IOPS but ~100 MB/s sequential. A modern SSD does ~100k random IOPS but ~3 GB/s sequential. Every generation of storage has this gap.</p>\n      <p>WAL exploits this: writes are <em>always</em> sequential. The expensive random updates to the main data structures happen in big batches, asynchronously, when the system is idle. Commit latency = one fsync + sequential append. Orders of magnitude faster than \"update the B-tree in place and fsync.\"</p>\n    \n      <div class=\"code-caption\" data-code-snippet=\"1\">Write-ahead log append + flush</div>\n      <pre><code class=\"lang-python\">import json, os, time\n\nclass WAL:\n    def __init__(self, path, sync_every_ms=5):\n        self.f = open(path, \"ab\")\n        self.sync_every_ms = sync_every_ms\n        self.last_sync = time.monotonic() * 1000\n\n    def append(self, record):\n        line = json.dumps(record) + \"\\n\"\n        self.f.write(line.encode())\n        now = time.monotonic() * 1000\n        if now - self.last_sync &gt;= self.sync_every_ms:\n            self.f.flush()\n            os.fsync(self.f.fileno())\n            self.last_sync = now\n\n# Group commit: batch records between fsyncs. Trade durability window\n# (bounded by sync_every_ms) for dramatically higher write throughput.</code></pre>\n  </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Where you see WAL",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Where you see WAL</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>System</th><th>WAL name</th><th>Role</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Postgres</td><td>WAL</td><td>Durability + replication streaming (replicas tail the WAL)</td></tr>\n        <tr><td class=\"algo-name\">MySQL / InnoDB</td><td>redo log</td><td>Durability + crash recovery</td></tr>\n        <tr><td class=\"algo-name\">SQLite</td><td>WAL mode</td><td>Enable with <code>PRAGMA journal_mode=WAL</code>. Better concurrency than rollback journal.</td></tr>\n        <tr><td class=\"algo-name\">Cassandra / RocksDB</td><td>Commit log</td><td>Crash recovery for the memtable before it flushes to SSTable</td></tr>\n        <tr><td class=\"algo-name\">Kafka</td><td>The whole topic IS the log</td><td>Messages are the log. No separate WAL; the log is the source of truth.</td></tr>\n        <tr><td class=\"algo-name\">etcd / Raft</td><td>Log</td><td>Every committed operation appended; replicated to quorum; survives any single-node crash.</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — group commit",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — group commit</h2></div>\n    <div class=\"prose\">\n      <p>Each fsync costs 1–5ms. If you fsync per transaction, max throughput = 200–1000 commits/sec. That's the durable-write ceiling for a single thread.</p>\n      <p><strong>Group commit</strong> trick: batch multiple transactions into one fsync. N concurrent committers each write their WAL entries to the same buffer. One thread fsyncs. All N get their ack at once. Throughput goes from ~500 TPS to 50k+ TPS. Per-commit latency only rises slightly (you wait for the batch to flush).</p>\n      <p>This is why high-concurrency durable systems handle 10k+ commits/sec: the fsync cost amortizes across many transactions. Postgres (with <code>synchronous_commit=on</code> + concurrent clients), MySQL group commit, and Kafka's batching are all variants.</p>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">Interview one-liner</div>\n        <p>\"Durability via write-ahead log: every commit appends to a sequential log and fsyncs before ACK. Reads serve from memory / B-trees; the log only matters on crash recovery. Group commit amortizes fsync cost across concurrent transactions.\"</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Postgres streaming replication</div><h4>Replicas tail the WAL</h4><p>Ship WAL records to replicas; replicas apply them. One log, two purposes: durability + replication.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Debezium / change-data-capture</div><h4>Tail the WAL for events</h4><p>CDC tools read the WAL directly to emit change events to Kafka. Every DB write becomes an event without app-side instrumentation.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Kafka</div><h4>Log-as-database</h4><p>Kafka inverts the model — the log is the database. \"Turn your database inside out.\" Source of event-sourcing / CQRS architectures.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Raft / etcd / Consul</div><h4>Replicated log</h4><p>Every consensus-backed store is a replicated WAL. Writes appended; majority confirms; state machine applies.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Payment gateway uses WAL for the ledger (every transaction atomic). E-commerce order placement uses WAL via Postgres. Google Drive uses append-only logs for file-operation history. Distributed logging literally IS a giant WAL.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

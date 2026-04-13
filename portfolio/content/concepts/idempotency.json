@@ -1,0 +1,77 @@
+{
+  "slug": "idempotency",
+  "title": "Idempotency",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 35,
+    "s": 75,
+    "l": 48
+  },
+  "category": "Reliability",
+  "blurb": "A user clicks \"Pay.\" The request hits your server, charges their card, but the response packet is lost in the network. The user's app doesn't see success, retries. Now you've charged them twice. Classic distributed-syste",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>A user clicks \"Pay.\" The request hits your server, charges their card, but the response packet is lost in the network. The user's app doesn't see success, retries. Now you've charged them twice. <span class=\"hl-red\">Classic distributed-systems horror story.</span></p>\n      <p>Idempotency is the property that <strong>repeating an operation yields the same result as doing it once</strong>. If the payment POST is idempotent, the retry is harmless — the server sees \"already processed, return the original response.\" The user is charged once, sees success, life is good.</p>\n      <p>Every production-grade API must handle retries safely. Idempotency is how.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "Which HTTP methods are already idempotent",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Which HTTP methods are already idempotent</h2></div>\n    <div class=\"prose\">\n      <p>The HTTP spec says:</p>\n      <ul>\n        <li><strong>GET, HEAD, OPTIONS</strong> — idempotent. Reads don't change state.</li>\n        <li><strong>PUT, DELETE</strong> — idempotent. \"Set user status to active\" repeated still yields active. \"Delete user 5\" repeated still yields deleted.</li>\n        <li><strong>POST</strong> — NOT idempotent by default. \"Create new order\" repeated creates two orders.</li>\n        <li><strong>PATCH</strong> — NOT idempotent by default. Depends on operation (set vs increment).</li>\n      </ul>\n      <p>In practice, designers often use POST for operations that <em>should</em> be idempotent (create user with specific ID, charge a card with a specific intent). The fix: <strong>idempotency keys</strong>.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "Idempotency keys — the industry pattern",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Idempotency keys — the industry pattern</h2></div>\n    <div class=\"prose\">\n      <p>Client generates a unique key (UUID) and sends it in a header: <code>Idempotency-Key: abc123</code>. Server stores: <code>{key → response}</code>.</p>\n      <ul>\n        <li>First request with key <code>abc123</code> → process normally, store the response, return it.</li>\n        <li>Retry with same key → server sees the key exists, returns the stored response without re-processing.</li>\n        <li>Key TTL: usually 24 hours — long enough to cover any reasonable retry window.</li>\n      </ul>\n      <p>Stripe pioneered this in their public API. Clients send a key; the second retry returns the same charge. Most payment APIs and many non-payment APIs (GitHub Apps, Twilio) now support the pattern.</p>\n    \n      <div class=\"code-caption\" data-code-snippet=\"1\">Idempotency-key enforcement (Postgres)</div>\n      <pre><code class=\"lang-sql\">-- client sends Idempotency-Key header\n-- server upserts into an idempotent-requests table:\nCREATE TABLE idempotency_keys (\n  key          TEXT PRIMARY KEY,\n  user_id      BIGINT NOT NULL,\n  request_hash TEXT NOT NULL,        -- SHA-256 of body\n  response     JSONB,\n  status_code  INT,\n  created_at   TIMESTAMPTZ DEFAULT now(),\n  expires_at   TIMESTAMPTZ NOT NULL  -- e.g. now() + INTERVAL '24 hours'\n);\n\n-- On request:\n-- 1. SELECT existing row FOR UPDATE\n-- 2. If hit + request_hash matches → return stored response (200)\n-- 3. If hit + request_hash differs → 409 Conflict\n-- 4. If miss → INSERT placeholder, execute, UPDATE with response</code></pre>\n  </div>\n\n    <div class=\"diagram-wrap\">\n      <div class=\"diagram-head\"><span class=\"diagram-label\">Idempotency-Key Flow</span><span class=\"diagram-type\">Mermaid</span></div>\n      <div class=\"diagram-body\">\n        <div class=\"mermaid\">\nsequenceDiagram\n    participant C as Client\n    participant S as Server\n    participant DB as DB\n\n    C-&gt;&gt;S: POST /charge<br>Idempotency-Key: abc123\n    S-&gt;&gt;DB: check idem_keys\n    DB--&gt;&gt;S: not found\n    S-&gt;&gt;DB: INSERT charge, INSERT idem_key(abc123, response)\n    S--&gt;&gt;C: 200 OK\n    Note over C: Network error · retry\n    C-&gt;&gt;S: POST /charge<br>Idempotency-Key: abc123\n    S-&gt;&gt;DB: check idem_keys\n    DB--&gt;&gt;S: found · response stored\n    S--&gt;&gt;C: 200 OK (same response)\n        </div>\n      </div>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Three ways to make operations idempotent",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Three ways to make operations idempotent</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Pattern</th><th>Mechanism</th><th>Best for</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Deterministic resource ID</td><td>Client generates ID (UUID), server uses upsert</td><td>Create operations where client can pre-mint ID</td></tr>\n        <tr><td class=\"algo-name\">Idempotency key table</td><td>Store <code>(key → response)</code>; match + return on retry</td><td>Complex operations with side effects</td></tr>\n        <tr><td class=\"algo-name\">Conditional update</td><td>If-Match / version number check — only updates if current version matches</td><td>Optimistic concurrency updates</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — the concurrent-retry race",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — the concurrent-retry race</h2></div>\n    <div class=\"prose\">\n      <p>Two retries race. Both use the same key. The naive flow is:</p>\n      <ol>\n        <li>Request A: SELECT idempotency_keys WHERE key = 'abc123' → not found.</li>\n        <li>Request B: SELECT idempotency_keys WHERE key = 'abc123' → also not found (A hasn't committed).</li>\n        <li>Both process the charge. Card is charged twice. Both try to INSERT the key — one fails, but the damage is done.</li>\n      </ol>\n      <p>Fix: <strong>INSERT first, then process</strong>. Start with <code>INSERT ... ON CONFLICT DO NOTHING</code> in the idempotency table. If the INSERT fails, another request is processing; wait for the result. If it succeeds, you own the key — proceed.</p>\n      <p>Or stronger: acquire a <a href=\"/concepts/distributed-locking\">distributed lock</a> keyed by idempotency key for the duration of the operation. Release after committing. Second retry blocks until first finishes, then reads the stored response.</p>\n      <p>Stripe's public <a href=\"https://stripe.com/blog/idempotency\">blog post</a> on this is the definitive read. Short version: \"insert the key as a 'pending' row with a unique constraint; finalize with the response when done.\" Pending rows become your distributed lock.</p>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "What NOT to make idempotent",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">What NOT to make idempotent</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>Truly non-idempotent operations.</strong> \"Send a push notification\" — if client retries, they want a second notification sent. Don't suppress.</li>\n        <li><strong>Real-time messaging.</strong> Chat app retries? Deliver both; let the client dedupe by message ID.</li>\n        <li><strong>Anything where the client controls the semantics.</strong> If the client explicitly wants \"process again,\" they should use a different key.</li>\n      </ul>\n      <p>The rule: idempotency is a tool, not a reflex. Apply it where double-execution would cause harm. Do not apply it where double-execution is the intent.</p>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Stripe</div><h4>Idempotency-Key header</h4><p>All mutating endpoints accept the header. Response cached for 24 hours. The reference implementation.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">AWS SQS FIFO</div><h4>MessageDeduplicationId</h4><p>Within a 5-minute window, messages with the same dedupe ID are dropped. Exactly-once semantics inside SQS FIFO.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">PayPal / Twilio</div><h4>X-Idempotency-Key</h4><p>Same pattern. Twilio gives a 24-hour window; PayPal 24 hours for payments.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Database unique constraints</div><h4>The low-tech version</h4><p>Put a unique constraint on <code>orders(external_order_id)</code>. INSERT retries fail the constraint; catch + treat as idempotent.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "08",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">08</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Payment gateway problems always use idempotency keys. Ticketmaster uses them to prevent double-booking on retries. Notification system pairs idempotency keys with at-least-once delivery for dedup.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [
+    {
+      "sectionId": "how-it-works",
+      "source": "sequenceDiagram\n    participant C as Client\n    participant S as Server\n    participant DB as DB\n\n    C->>S: POST /chargeIdempotency-Key: abc123\n    S->>DB: check idem_keys\n    DB-->>S: not found\n    S->>DB: INSERT charge, INSERT idem_key(abc123, response)\n    S-->>C: 200 OK\n    Note over C: Network error · retry\n    C->>S: POST /chargeIdempotency-Key: abc123\n    S->>DB: check idem_keys\n    DB-->>S: found · response stored\n    S-->>C: 200 OK (same response)",
+      "index": 0
+    }
+  ],
+  "related": [],
+  "similar": [],
+  "readMinutes": 4
+}

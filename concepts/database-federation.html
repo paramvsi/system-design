@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Database Federation — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 240; --accent-s: 60%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>One huge database holds everything: users, orders, products, reviews, notifications, sessions. As the company grows, this DB becomes the bottleneck — every team's slow query affects everyone, schema changes touch everyone, scaling means scaling for the noisiest workload.</p>
+      <p><strong>Database federation</strong> (also called functional or vertical sharding) splits the data <em>by function</em>: users go in one DB, orders in another, products in a third. Each tuned for its workload. Each scaled independently. Distinct from <a href="/concepts/sharding">horizontal sharding</a>, which splits a single table across nodes by row.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Functional vs horizontal split</h2></div>
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">Horizontal sharding</div>
+        <h4>One table, split by row across N nodes</h4>
+        <p>Users 1-1M on shard A, 1M-2M on shard B. Same schema everywhere. Solves "this table is too big."</p>
+      </div>
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">Functional federation</div>
+        <h4>Different tables on different DBs</h4>
+        <p>Users live on user-DB. Orders on order-DB. Products on product-DB. Each DB has its own schema. Solves "this monolith is too coupled."</p>
+      </div>
+    </div>
+    <div class="prose">
+      <p>Often used together. Federate first (split monolith into per-domain DBs); shard horizontally if any single domain DB outgrows one node.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">What the split unlocks</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Independent scaling.</strong> Read-heavy product catalog needs replicas. Write-heavy order log needs sharding. Solved per-domain.</li>
+        <li><strong>Independent technology.</strong> Users in Postgres for ACID. Sessions in Redis for speed. Search in Elasticsearch. Time-series metrics in InfluxDB. <a href="/concepts/database-types">Polyglot persistence</a> falls naturally out of federation.</li>
+        <li><strong>Independent ops.</strong> Reschedule order-DB maintenance Tuesday; user-DB Wednesday. Smaller blast radius per upgrade.</li>
+        <li><strong>Independent ownership.</strong> Each team owns its DB. Schema changes don't require cross-team coordination.</li>
+        <li><strong>Smaller indexes.</strong> Each DB is smaller → indexes fit in RAM, queries faster.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">What you give up</h2></div>
+    <div class="prose">
+      <p>The price is steep: <strong>you can no longer JOIN across DBs</strong>. Need "user + their orders"? You fetch from user-DB, then fetch from order-DB, join in app code (or denormalize).</p>
+      <p>Other costs:</p>
+      <ul>
+        <li>No multi-DB transactions. Atomic "decrement inventory + create order" across two DBs needs a <a href="/concepts/transactions-distributed">saga</a> or 2PC.</li>
+        <li>Cross-DB foreign keys don't exist. You can't enforce <code>order.user_id REFERENCES user.id</code> across DBs.</li>
+        <li>More moving pieces — N DBs to monitor, back up, restore.</li>
+      </ul>
+      <div class="callout callout-warn">
+        <div class="callout-label">Anti-pattern</div>
+        <p>Federating too early. A startup with 5 engineers and one Postgres doesn't need federation — it needs better indexes and connection pooling. Federation is for when team boundaries and scale jointly justify the operational tax.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — the migration path</h2></div>
+    <div class="prose">
+      <p>Going from one DB to federated takes months. The pattern most companies use:</p>
+      <ol>
+        <li><strong>Identify a domain to extract.</strong> Pick something with low coupling (orders, recommendations, search). Avoid the most-joined tables (users) until last.</li>
+        <li><strong>Wrap access in a service.</strong> No more direct SQL from random callers — only the new "Orders Service" reads/writes <code>orders</code>. Forces the API boundary clean before the data moves.</li>
+        <li><strong>Dual-write transition.</strong> New writes go to both old DB and new DB. Reads still hit old DB.</li>
+        <li><strong>Backfill.</strong> Copy historical data from old to new. Verify consistency.</li>
+        <li><strong>Cut over reads.</strong> Switch the service to read from new DB. Old DB becomes write-only.</li>
+        <li><strong>Stop dual-writes.</strong> All writes go only to new DB. Old DB schema is dead.</li>
+      </ol>
+      <p>Each step is reversible. Each step ships independently. <a href="/concepts/cdc-change-data-capture">CDC</a> tools (Debezium) automate steps 3-4 by streaming the WAL. The whole migration takes weeks per domain in the best case.</p>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Amazon (early 2000s)</div><h4>Service-per-domain</h4><p>Famously decreed every team must expose its data only via API. Forced functional federation as a side effect. Foundation of AWS.</p></div>
+      <div class="rw-card"><div class="rw-name">eBay</div><h4>Dozens of federated DBs</h4><p>Auctions, listings, users, payments — each its own DB. Sharded horizontally within each domain.</p></div>
+      <div class="rw-card"><div class="rw-name">Shopify</div><h4>"Pods" architecture</h4><p>Each pod is a federated stack — DB + workers + cache — serving a subset of merchants. Federation + sharding combined.</p></div>
+      <div class="rw-card"><div class="rw-name">Microservices in general</div><h4>Each owns its DB</h4><p>The microservice principle "each service has its own DB" is functional federation by another name.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>E-commerce splits user-DB / order-DB / product-DB / inventory-DB. Uber federates by domain (rides, payments, driver-location, eats). News feed federates posts vs engagement vs feed-cache. Stock trading separates positions, orders, market-data, settlements.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

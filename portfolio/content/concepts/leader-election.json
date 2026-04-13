@@ -1,0 +1,65 @@
+{
+  "slug": "leader-election",
+  "title": "Leader Election",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 252,
+    "s": 60,
+    "l": 52
+  },
+  "category": "Distributed Systems",
+  "blurb": "Distributed systems are full of \"only one at a time\" jobs: one cron runner, one database primary, one billing reconciler, one job scheduler. Without coordination, every replica does the same work — duplicate emails, dupl",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>Distributed systems are full of \"only one at a time\" jobs: one cron runner, one database primary, one billing reconciler, one job scheduler. Without coordination, every replica does the same work — <span class=\"hl-red\">duplicate emails, duplicate charges, conflicting writes</span>. Leader election picks exactly one node (the \"leader\") and the rest defer to it. If the leader dies, a new one is elected quickly.</p>\n      <p>This sounds easy. It's not. The failure mode — <strong>two nodes both think they're leader</strong> (split-brain) — is one of the most dangerous bugs in distributed systems.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The naive version and why it fails",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The naive version and why it fails</h2></div>\n    <div class=\"prose\">\n      <p>Naive approach: every node holds a TTL lock in Redis/etcd (\"I'm leader\"). The holder renews every 5 seconds. If the lock expires, another node grabs it.</p>\n      <p><strong>This breaks under GC pause.</strong> Leader A is holding the lock. A stops-the-world for 15 seconds (long GC, paging, CPU steal from a noisy neighbor). Lock expires. B acquires it, does leader work. A wakes up, still believes \"I'm leader,\" continues writing. Two writers. Corruption.</p>\n      <p>So leader election can't just be \"I hold a lock.\" It must be <strong>verifiable by anyone who reads from the leader's output.</strong> Enter fencing tokens (see <a href=\"/concepts/distributed-locking\">distributed locking</a>): each leader gets a monotonically-increasing token; downstream systems reject writes tagged with a stale token.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "The mainstream approaches",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">The mainstream approaches</h2></div>\n    <div class=\"prose\">\n      <p><strong>1. Consensus-backed (Raft/Paxos).</strong> Nodes run a consensus protocol internally. The elected leader of the consensus group is <em>the</em> leader. This is what etcd, Zookeeper, and Consul provide. Downsides: consensus is expensive to run (~5 nodes, majority acks), overkill for simple \"pick one cron runner.\"</p>\n      <p><strong>2. Lock + fencing token.</strong> Store the lock and a monotonic counter in one atomic DB. Every acquire increments the counter. Downstream systems (DBs, APIs) reject stale tokens. Works great if your downstreams can enforce the check.</p>\n      <p><strong>3. DB row with heartbeat.</strong> A <code>leaders</code> table: <code>(resource_id, node_id, expires_at)</code>. Each node tries to insert its row with ON CONFLICT DO NOTHING (or equivalent). Winner updates expires_at every few seconds. Losers poll. Simple; works in Postgres.</p>\n      <p><strong>4. Sticky by resource.</strong> Use <a href=\"/concepts/consistent-hashing\">consistent hashing</a> to map each resource to a node deterministically. \"Resource foo always handled by the node whose ID is the clockwise neighbor of hash(foo).\" Implicit leader. Rebalances on node add/remove.</p>\n    \n      <div class=\"code-caption\" data-code-snippet=\"1\">Raft leader election (pseudocode)</div>\n      <pre><code class=\"lang-python\"># Raft: followers → candidate → leader.\n# Random election timeout (150–300ms) prevents split votes.\n\nimport random\n\nclass RaftNode:\n    def __init__(self, node_id, peers):\n        self.id = node_id\n        self.peers = peers\n        self.term = 0\n        self.voted_for = None\n        self.state = \"follower\"\n        self.timeout = random.uniform(0.15, 0.30)\n\n    def on_timeout(self):\n        # Followers promote to candidate when leader silent too long\n        self.state = \"candidate\"\n        self.term += 1\n        self.voted_for = self.id\n        votes = 1\n        for p in self.peers:\n            if p.request_vote(self.term, self.id): votes += 1\n        if votes &gt; (len(self.peers) + 1) // 2:\n            self.state = \"leader\"\n            self.start_heartbeats()\n        else:\n            self.state = \"follower\"  # lost or split\n\n    def request_vote(self, term, candidate_id):\n        if term &gt; self.term and self.voted_for is None:\n            self.term, self.voted_for = term, candidate_id\n            return True\n        return False</code></pre>\n  </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Pick by what you already have",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Pick by what you already have</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>You already run</th><th>Use</th><th>Why</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Kubernetes</td><td>K8s lease objects</td><td>Built into K8s API. Client-go provides <code>leaderelection</code> package.</td></tr>\n        <tr><td class=\"algo-name\">Zookeeper</td><td>Ephemeral sequential znodes</td><td>Classic pattern — create ephemeral node; lowest sequence = leader. Zab handles correctness.</td></tr>\n        <tr><td class=\"algo-name\">etcd</td><td>Concurrency APIs</td><td>Built-in leader election primitive (v3 concurrency API).</td></tr>\n        <tr><td class=\"algo-name\">Postgres</td><td>Row insert with lease</td><td>No extra infra. Good enough for most cron-style workloads.</td></tr>\n        <tr><td class=\"algo-name\">Redis</td><td>SET NX + Redlock</td><td>Fast but best-effort. Not safe for correctness-critical leadership.</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — the heartbeat loop done right",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — the heartbeat loop done right</h2></div>\n    <div class=\"prose\">\n      <p>Leader election requires a liveness signal: the leader heartbeats (\"I'm alive\"); if followers stop hearing it, they elect a new leader. The heartbeat loop has several parameters that all interact:</p>\n      <ul>\n        <li><strong>Heartbeat interval</strong> — how often leader sends. Typical: 100–500ms.</li>\n        <li><strong>Heartbeat timeout</strong> — how long before a follower decides \"leader is dead.\" Typical: 2–5× heartbeat interval (1–5s).</li>\n        <li><strong>Election timeout</strong> — randomized window within which a follower will trigger an election. Typical: 150–300ms.</li>\n        <li><strong>Lease duration</strong> — how long the leader's authority lasts before it must renew. Must be &gt; heartbeat timeout.</li>\n      </ul>\n      <p>The nightmare: if heartbeat timeout is too tight, normal network jitter causes spurious elections. Too loose, and a dead leader leaves the cluster leaderless for seconds. Raft's innovation was <strong>randomized timeouts</strong> — each follower picks a random election timeout in a range, making simultaneous bids (split votes) rare.</p>\n      <div class=\"callout callout-warn\">\n        <div class=\"callout-label\">Tuning rule</div>\n        <p>Heartbeat interval = 100ms. Election timeout = random(150, 300)ms. Lease = 1s. Under these, a dead leader is replaced in ~300ms, and split votes are rare because each candidate's random timeout is different.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Kubernetes controllers</div><h4>Lease-based</h4><p>Every controller uses k8s lease object for leader election. Scheduler, controller-manager, custom operators — all the same pattern.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Kafka controller</div><h4>Zookeeper / KRaft</h4><p>One broker is the \"controller\" that manages partition assignments. Elected via Zookeeper (old) or KRaft (new Raft-based).</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Postgres failover</div><h4>Patroni + etcd</h4><p>Patroni coordinates Postgres replicas via etcd leader election. Primary dies → etcd lease expires → standby with latest WAL wins.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Distributed cron</div><h4>Quartz clustered, Temporal</h4><p>Quartz uses DB row locks for job-level leadership. Temporal uses its own cluster for durable workflow leadership.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Distributed job scheduler elects a leader per task partition. Distributed locking relies on leader election underneath. Stock exchange uses leader election for the matching engine (exactly one active matcher per symbol).</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 4
+}

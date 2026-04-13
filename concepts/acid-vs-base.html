@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>ACID vs BASE — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 330; --accent-s: 60%; --accent-l: 48%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>"Strong consistency" and "eventual consistency" are the two ends of a spectrum that drives every data-layer decision. Pick strong when you <em>must</em> (payments, inventory, anything involving money or exclusivity). Pick eventual when you can (feeds, analytics, notifications) — you get far better scale and availability in exchange.</p>
+      <p>ACID is the vocabulary for strong consistency. BASE is the vocabulary for eventual. Both are sloppy acronyms, but both capture a real tradeoff.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">ACID unpacked</h2></div>
+    <div class="prose">
+      <p><strong>A — Atomicity.</strong> A transaction is all-or-nothing. If one statement in the transaction fails, all changes are rolled back. You never see "the debit happened but the credit didn't."</p>
+      <p><strong>C — Consistency.</strong> (The overloaded word.) Every transaction moves the database from one <em>valid</em> state to another valid state. Foreign keys hold, check constraints hold, unique indexes hold. <span class="hl-red">This is not the same as the "C" in CAP.</span></p>
+      <p><strong>I — Isolation.</strong> Concurrent transactions don't see each other's partial work. Defined by isolation levels (see variants below). Most databases default to <em>Read Committed</em>; Serializable is the strongest and slowest.</p>
+      <p><strong>D — Durability.</strong> Once committed, a transaction survives crashes, power loss, everything short of disk destruction. Usually via write-ahead log (WAL) synced to disk before commit returns.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">BASE unpacked</h2></div>
+    <div class="prose">
+      <p><strong>BA — Basically Available.</strong> The system always responds to reads and writes. Prefers returning stale or partial data over failing the request.</p>
+      <p><strong>S — Soft state.</strong> The state of the system may change over time even without new inputs — replicas converge asynchronously. Looking at one replica vs another can return different values for a brief window.</p>
+      <p><strong>E — Eventual consistency.</strong> If no new writes happen, all replicas will eventually converge to the same value. "Eventually" is typically milliseconds to seconds, rarely longer.</p>
+      <p>BASE is what DynamoDB, Cassandra, and Mongo (in default mode) give you. It's the price of being always available during network partitions — see <a href="/concepts/cap-theorem">CAP</a>.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Isolation levels (ACID's dial)</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Level</th><th>What it prevents</th><th>What it allows</th><th>Default in</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Read Uncommitted</td><td>Nothing</td><td>Dirty reads (see uncommitted changes)</td><td>Rarely used</td></tr>
+        <tr><td class="algo-name">Read Committed</td><td>Dirty reads</td><td>Non-repeatable reads (same query returns different rows in one txn)</td><td>Postgres, Oracle, SQL Server</td></tr>
+        <tr><td class="algo-name">Repeatable Read</td><td>Non-repeatable reads</td><td>Phantom reads (new rows appear in range scan)</td><td>MySQL InnoDB</td></tr>
+        <tr><td class="algo-name">Serializable</td><td>Everything — as if transactions ran one at a time</td><td>Nothing unsafe</td><td>Rarely default (costly)</td></tr>
+      </tbody>
+    </table>
+    <div class="prose">
+      <p><strong>Pick Serializable for financial logic.</strong> Pick Read Committed (default) for almost everything else. Tune up only when you hit a specific anomaly.</p>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Tradeoffs</h2></div>
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">ACID</div>
+        <h4>Strong guarantees, harder scale</h4>
+        <p>You write code against invariants ("balance never goes negative"; "order has exactly N items"). The DB enforces them. Bug surface shrinks enormously. <span class="hl-red">Price:</span> strong coordination — every write talks to every replica (or a consensus group), limiting write throughput and regional distribution.</p>
+      </div>
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">BASE</div>
+        <h4>Massive scale, app-level invariants</h4>
+        <p>Writes commit locally and propagate async → huge throughput, cross-region writes. <span class="hl-red">Price:</span> your app code handles edge cases — "what if the counter increments from 99 → 100 → 99 when replicas converge late?" You write conflict-resolution logic (last-write-wins, CRDTs, vector clocks).</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Deep dive — the write-skew anomaly</h2></div>
+    <div class="prose">
+      <p>Read Committed is the default but has subtle bugs. The classic: two doctors on-call. The rule: "at least one doctor must be on-call." Both try to remove themselves from on-call concurrently.</p>
+      <ol>
+        <li>Txn A: reads doctors on-call → sees {Alice, Bob}. Decides it's safe for Alice to leave.</li>
+        <li>Txn B: reads doctors on-call → also sees {Alice, Bob}. Decides it's safe for Bob to leave.</li>
+        <li>Txn A: updates Alice.on_call = false. Commits.</li>
+        <li>Txn B: updates Bob.on_call = false. Commits.</li>
+        <li>Now nobody is on-call. Invariant violated.</li>
+      </ol>
+      <p>This is <strong>write skew</strong>. Each transaction individually saw a valid state; their interleaving produced an invalid one. Read Committed doesn't prevent it. Serializable does (at ~30–50% throughput cost) — or add a <code>SELECT ... FOR UPDATE</code> to materialize the intent.</p>
+      <p><strong>Moral:</strong> default isolation is fine for 99% of code; the 1% (exclusivity rules, financial invariants) needs explicit locks or Serializable.</p>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>E-commerce uses ACID for order placement (inventory invariant). Payment gateway uses Serializable for double-charge protection. News feed uses BASE for engagement counters (like/share counts). Ticketmaster uses ACID with explicit row locks to prevent double-booking a seat.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

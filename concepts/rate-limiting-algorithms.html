@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Rate Limiting Algorithms — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 262; --accent-s: 72%; --accent-l: 52%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>"Limit users to 100 requests/minute" sounds simple. It is not. <strong>Which minute?</strong> The last 60 seconds? The current calendar minute? Count as they come, or enforce an even drip? Each answer is a different algorithm with different behavior at boundaries, different memory cost, and different failure modes. Fixed window is easy to build and breaks under bursts. Sliding window log is accurate but expensive. Token bucket is the industry default.</p>
+      <p>Know all four. Interviews ask precisely this.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The four algorithms</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Algorithm</th><th>How it decides</th><th>Memory</th><th>Boundary behavior</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Fixed window</td><td>Count requests in 12:00:00–12:00:59</td><td>O(1) — one counter</td><td>2× burst at minute boundary</td></tr>
+        <tr><td class="algo-name">Sliding window log</td><td>Store every request timestamp; count in last 60s</td><td>O(N) — grows with requests</td><td>Exact</td></tr>
+        <tr><td class="algo-name">Sliding window counter</td><td>Weighted blend of current + previous fixed windows</td><td>O(1)</td><td>Approximately exact</td></tr>
+        <tr><td class="algo-name">Token bucket</td><td>Fill bucket at rate R; each request takes one token</td><td>O(1) — bucket state</td><td>Allows burst up to bucket size, smooth beyond</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Token bucket — the usual choice</h2></div>
+    <div class="prose">
+      <p>A bucket holds up to <code>capacity</code> tokens. Tokens accrue at <code>refill_rate</code> per second. Each request takes 1 token. If the bucket is empty, the request is rejected (429) or queued.</p>
+      <p>Example: bucket capacity 100, refill 10/sec. Normal state: 100 tokens available. A burst of 50 requests arrives — all served (bucket had enough). Now 50 left; refilling at 10/sec. Sustained 10 RPS works indefinitely. A second burst of 60 requests — only 50 served (capacity); the 51st gets rejected until tokens refill.</p>
+      <p>This is the sweet spot: allows short bursts, enforces long-term rate, constant memory. Most APIs (Stripe, GitHub, Twitter) use some form of token bucket.</p>
+    
+      <div class="code-caption" data-code-snippet="1">Token bucket rate limiter</div>
+      <pre><code class="lang-python">import time
+
+class TokenBucket:
+    def __init__(self, rate_per_sec, burst):
+        self.rate = rate_per_sec
+        self.capacity = burst
+        self.tokens = burst
+        self.last = time.monotonic()
+
+    def allow(self, cost=1):
+        now = time.monotonic()
+        # refill based on elapsed time
+        self.tokens = min(self.capacity, self.tokens + (now - self.last) * self.rate)
+        self.last = now
+        if self.tokens &gt;= cost:
+            self.tokens -= cost
+            return True
+        return False
+
+# 100 rps sustained, 500 burst → can handle short spikes without dropping</code></pre>
+  </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head"><span class="diagram-label">Token Bucket Over Time</span><span class="diagram-type">Mermaid</span></div>
+      <div class="diagram-body">
+        <div class="mermaid">
+flowchart LR
+    R[Refill 10/sec] --&gt; B[(Bucket<br/>max 100)]
+    B --&gt; C{Request<br/>arrives}
+    C --&gt;|tokens &gt;= 1| A[Allow + decrement]
+    C --&gt;|tokens == 0| X[Reject · 429]
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Fixed window — simple but broken</h2></div>
+    <div class="prose">
+      <p>Count requests in each calendar minute. Reset at the minute boundary. Implementation: <code>INCR key:user42:12:00</code> with 60s TTL.</p>
+      <p>Problem: at minute boundaries, a user can send 100 requests at 11:59:59 and another 100 at 12:00:00. 200 requests in 2 seconds despite a "100/min limit." <span class="hl-red">2× the intended rate</span> in the worst case.</p>
+      <p>Fix: <strong>sliding window counter</strong>. Track current and previous fixed window counts. At time 12:00:30 (50% through current window), estimated count = current_count + 0.5 × previous_count. Simple, bounded, close to exact without per-request storage. Cloudflare's rate limiter uses this.</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — distributed rate limiting</h2></div>
+    <div class="prose">
+      <p>A single-node rate limiter with an in-memory counter is easy. Across N servers, you need a shared counter — and every rate-limited request must hit it. Redis is the default.</p>
+      <p>Atomic Redis primitives make this tractable:</p>
+      <ul>
+        <li><strong>Fixed window:</strong> <code>INCR window_key</code> + <code>EXPIRE 60</code>. One round-trip per request.</li>
+        <li><strong>Token bucket:</strong> Lua script to check + refill + decrement atomically. Ensures no race between two concurrent requests from the same user.</li>
+        <li><strong>Sliding window log:</strong> <code>ZADD</code> the timestamp, <code>ZREMRANGEBYSCORE</code> old entries, <code>ZCARD</code> to count. Three ops, atomic via MULTI/EXEC.</li>
+      </ul>
+      <p>Cost per request: 0.5–1ms Redis round-trip. At 10k RPS, that's 10k Redis ops/sec — well within single-node Redis capacity (~100k ops/sec). Shard Redis by user ID for higher scale.</p>
+      <p>Alternative: <strong>approximate local limiting with occasional sync</strong>. Each server runs a local counter; gossips to peers every 100ms. Reduces Redis dependency but allows brief over-limits. Good for hot APIs where perfect fairness isn't required.</p>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Stripe</div><h4>Token bucket per API key</h4><p>Returns <code>Retry-After</code> header when limiting. Bursts of 25 requests tolerated; sustained 100/sec.</p></div>
+      <div class="rw-card"><div class="rw-name">GitHub API</div><h4>Fixed window per hour + per minute</h4><p>5000/hour for authenticated users. 60/hour unauthenticated. Headers expose remaining and reset time.</p></div>
+      <div class="rw-card"><div class="rw-name">Cloudflare</div><h4>Sliding window counter + adaptive limits</h4><p>Per-IP, per-path, per-custom-rule. Adaptive rate adjusts during traffic spikes to preserve origin.</p></div>
+      <div class="rw-card"><div class="rw-name">AWS API Gateway</div><h4>Token bucket</h4><p>Per-account, per-method, per-stage quotas. Supports burst + steady-state rates.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Rate limiter problem is entirely about these algorithms. Web crawler uses politeness-based rate limiting per domain. Payment gateway rate-limits per merchant API key to avoid abuse.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

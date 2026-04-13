@@ -1,0 +1,65 @@
+{
+  "slug": "tokenization-pci",
+  "title": "Tokenization & PCI Compliance",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 217,
+    "s": 91,
+    "l": 50
+  },
+  "category": "Observability & Security",
+  "blurb": "Your e-commerce app needs to store credit card numbers so customers don't re-enter them every time. The moment you do, your entire stack — every server that touches that data, every database that stores it, every backup ",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>Your e-commerce app needs to store credit card numbers so customers don't re-enter them every time. The moment you do, your entire stack — every server that touches that data, every database that stores it, every backup it lands in — falls under <strong>PCI DSS</strong> (Payment Card Industry Data Security Standard). Annual audits, penetration tests, encryption requirements, network segmentation. <span class=\"hl-red\">Hundreds of thousands of dollars per year.</span></p>\n      <p><strong>Tokenization</strong> is the architectural pattern that lets you keep the convenience without the compliance burden. Replace card numbers with meaningless tokens; the real numbers live in a vault that <em>you don't operate</em>. Stripe, Braintree, Adyen all run that vault for you. Your stack handles tokens; PCI scope shrinks 99%.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "The mechanics",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The mechanics</h2></div>\n    <div class=\"prose\">\n      <ol>\n        <li><strong>Customer enters card</strong> in a form.</li>\n        <li><strong>Form posts directly to payment processor</strong> (Stripe Elements, Braintree Hosted Fields). Card number never touches your server. Browser → Stripe.</li>\n        <li><strong>Processor returns a token</strong> like <code>tok_1OABC123</code> or PaymentMethod ID. This is a meaningless string that maps to the card in the processor's vault.</li>\n        <li><strong>Your server stores the token.</strong> Tokens are not card data; tokens are PCI-out-of-scope by design.</li>\n        <li><strong>To charge:</strong> POST to the processor with the token. Processor looks up real card; charges; returns success/fail. Your server still doesn't see the number.</li>\n        <li><strong>Customer comes back next month:</strong> charge the stored token. Same flow.</li>\n      </ol>\n      <p>Net effect: your servers never store, log, or process card numbers. PCI scope reduces from \"the entire infrastructure\" to \"the form field that posts to Stripe.\"</p>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "PCI scope reduction levels",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">PCI scope reduction levels</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Approach</th><th>PCI scope</th><th>Effort</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Store card data yourself</td><td>Full PCI DSS Level 1 — your entire infrastructure</td><td>$$$$ — annual audits, penetration tests, segmentation</td></tr>\n        <tr><td class=\"algo-name\">Store hashed cards (own derivation)</td><td>Still in scope — hashes considered card data</td><td>Common myth; doesn't help</td></tr>\n        <tr><td class=\"algo-name\">Tokenization via processor (server-side proxy)</td><td>SAQ D — substantial</td><td>$$ — server still touches data briefly</td></tr>\n        <tr><td class=\"algo-name\">Tokenization via processor (Stripe Elements / iframe)</td><td>SAQ A — minimal</td><td>$ — annual self-attestation, no full audit</td></tr>\n      </tbody>\n    </table>\n    <div class=\"prose\">\n      <p>SAQ A vs SAQ D is the difference between \"I sign a form once a year\" and \"I spend $200K and 6 months on compliance.\" The choice of integration pattern matters enormously.</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — vault tokenization vs format-preserving",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Deep dive — vault tokenization vs format-preserving</h2></div>\n    <div class=\"prose\">\n      <p>Two flavors of tokens you'll encounter:</p>\n      <p><strong>Vault tokens</strong> — the token is an opaque ID (<code>tok_1OABC123</code>). The mapping to the real card is in the vault. To use the token, you must call the vault. Tokens are useless to attackers without vault access.</p>\n      <p><strong>Format-preserving tokens (FPE)</strong> — the token <em>looks like</em> a card number (<code>4111-1111-2345-6789</code>). Same length, valid Luhn checksum, even preserves the BIN (bank identifier). Used when downstream legacy systems require something card-shaped (mainframe billing, third-party integrations). Tokens still meaningless without the FPE key.</p>\n      <p>Most modern stacks use vault tokens. FPE shows up in older payment infrastructure where ripping out card-shape assumptions is impossible.</p>\n      <p><strong>Detokenization</strong>: when you genuinely need the real card number (settlement, dispute resolution, regulatory request), the vault returns it under audit log + access control. Should be rare; most flows never detokenize.</p>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">Interview answer</div>\n        <p>\"For payments we use Stripe Elements — card numbers post directly from browser to Stripe; we receive only tokens. Our infrastructure is PCI SAQ A — minimal scope, annual self-attestation. We never see, store, or log raw card data. For recurring charges, we store the token and charge it via Stripe's API.\"</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "Beyond payments — generalizing the pattern",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Beyond payments — generalizing the pattern</h2></div>\n    <div class=\"prose\">\n      <p>Tokenization works for any sensitive data:</p>\n      <ul>\n        <li><strong>SSNs / national IDs.</strong> Vault stores; token in your DB.</li>\n        <li><strong>Bank account numbers.</strong> Plaid issues tokens.</li>\n        <li><strong>Health records.</strong> HIPAA tokenization vaults exist.</li>\n        <li><strong>PII for analytics.</strong> Pseudonymization tokens let you analyze user behavior without storing names/emails in the data warehouse.</li>\n      </ul>\n      <p>The principle: <strong>centralize sensitive data in one heavily-protected vault; decentralize everything else with tokens that are useless on their own</strong>. Reduces blast radius, simplifies compliance, makes data deletion (see <a href=\"/concepts/gdpr-right-to-be-forgotten\">GDPR</a>) tractable — delete the vault row and every token everywhere is now meaningless.</p>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Stripe</div><h4>The default tokenization layer</h4><p>Powers tokenization for hundreds of thousands of merchants. Stripe Elements iframe captures card; merchant's server only sees tokens.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Braintree / Adyen</div><h4>Alternatives</h4><p>Same model. Hosted fields or SDK. Multi-acquirer support for global merchants.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Apple Pay / Google Pay</div><h4>Network-level tokenization</h4><p>Visa / Mastercard issue device-specific tokens (DPAN) instead of the real card number. Even merchants don't see the underlying PAN.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Plaid (banking)</div><h4>Same model for ACH</h4><p>Bank account numbers tokenized via Plaid; merchant sees a Plaid token, never a routing/account number.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Payment gateway is fundamentally a tokenization service. E-commerce checkout integrates a tokenization layer (Stripe / Braintree) to stay PCI SAQ A. Bidding platforms and crypto exchanges use similar patterns for sensitive financial identifiers.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>URL Encoding &amp; Base62 — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 217; --accent-s: 91%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>"Make me a short URL." Sounds trivial. The shortcode must be: <span class="hl">unique</span>, <span class="hl">URL-safe</span>, <span class="hl">short</span> (6-8 chars), and ideally <span class="hl">non-guessable</span>. Plus, you need to mint billions of them at thousands per second without coordination overhead. The encoding choice — Base62 vs Base64 vs hash-based — drives the whole system design. The classic URL-shortener interview question is really about this trade-off.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Three approaches</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Strategy</th><th>How</th><th>Pros</th><th>Cons</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Hash + truncate</td><td>SHA256 of URL → take first N chars Base62</td><td>Deterministic — same URL always returns the same code</td><td>Collisions inevitable; need DB lookup to confirm uniqueness, retry if collision</td></tr>
+        <tr><td class="algo-name">Counter + Base62</td><td>Auto-increment counter, encode in Base62</td><td>Guaranteed unique; predictable length progression</td><td>Codes are sequential / guessable; counter is a hot key</td></tr>
+        <tr><td class="algo-name">Pre-generated pool</td><td>Generate batch of random codes, store, hand out</td><td>Random + collision-free; no counter contention</td><td>Need a maintenance job to refill; storage overhead</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Why Base62</h2></div>
+    <div class="prose">
+      <p>Alphabet: <code>0-9 a-z A-Z</code> = 62 characters. All URL-safe (no escaping). Each character carries log₂(62) ≈ 5.95 bits.</p>
+      <ul>
+        <li>6 chars = 62⁶ ≈ <strong>56 billion</strong> codes</li>
+        <li>7 chars = 62⁷ ≈ <strong>3.5 trillion</strong> codes</li>
+        <li>8 chars = 62⁸ ≈ <strong>218 trillion</strong> codes</li>
+      </ul>
+      <p><strong>Why not Base64?</strong> Base64 includes <code>+</code> and <code>/</code> which aren't URL-safe — they'd need percent-encoding. URL-safe Base64 (<code>-</code> and <code>_</code>) is fine but visually ugly. Base62 reads like a license plate.</p>
+      <p><strong>Why not hex (Base16)?</strong> Each char is only 4 bits → twice as long for the same key space. Base62 is the sweet spot of "URL-safe + readable + dense."</p>
+    
+      <div class="code-caption" data-code-snippet="1">Snowflake 64-bit ID generator</div>
+      <pre><code class="lang-go">package snowflake
+
+import (
+    "sync"
+    "time"
+)
+
+const (
+    epoch     int64 = 1577836800000 // 2020-01-01 UTC ms
+    machineBits = 10
+    seqBits     = 12
+    maxSeq      = (1 &lt;&lt; seqBits) - 1
+)
+
+type Node struct {
+    mu       sync.Mutex
+    machine  int64 // 0..1023
+    lastMs   int64
+    seq      int64
+}
+
+func (n *Node) NextID() int64 {
+    n.mu.Lock(); defer n.mu.Unlock()
+    now := time.Now().UnixMilli() - epoch
+    if now == n.lastMs {
+        n.seq = (n.seq + 1) &amp; maxSeq
+        if n.seq == 0 {
+            for now &lt;= n.lastMs { now = time.Now().UnixMilli() - epoch }
+        }
+    } else { n.seq = 0 }
+    n.lastMs = now
+    return (now &lt;&lt; (machineBits+seqBits)) | (n.machine &lt;&lt; seqBits) | n.seq
+}
+
+// 4096 IDs/ms/machine × 1024 machines = 4B IDs/sec ceiling</code></pre>
+  </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Deep dive — the counter problem and how to scale it</h2></div>
+    <div class="prose">
+      <p>Naive: a single Postgres counter. <code>SELECT nextval('shortcode_seq')</code>. Encode in Base62. Insert. Done.</p>
+      <p>Problem: every shortener creation takes a round-trip to one DB. At 10k QPS, the counter is a hot row. Single point of contention.</p>
+      <p><strong>Range-batch trick</strong> — each app server reserves a range of 10,000 IDs from the central counter. It hands out IDs locally without DB calls. When the range runs low, it requests another range. Coordination overhead drops 10,000×. This is how Twitter Snowflake-style ID generators work.</p>
+      <p><strong>Snowflake IDs</strong> — 64 bits split into: timestamp (41 bits) + machine ID (10 bits) + sequence-within-ms (12 bits). Each server generates locally with no coordination. Roughly time-ordered. Trivially Base62-encodable to ~11 chars.</p>
+      <p><strong>Pre-generated random pool</strong> — for non-guessable codes (interview ask: "make codes hard to enumerate"), a worker pre-generates batches of cryptographically-random 7-char Base62 strings, deduplicates against existing codes, stores them as "available." App grabs one per insertion. No contention; no enumeration attack.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">Production mix</div>
+        <p>Bit.ly + TinyURL use predictable counter-based codes for free tier, custom random codes for premium. Snowflake-style timestamp IDs are common when ordering matters (Twitter post IDs, Discord snowflakes).</p>
+      </div>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Twitter Snowflake — 64-bit ID Layout</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 720 240" xmlns="http://www.w3.org/2000/svg">
+          <g font-family="Geist, system-ui, sans-serif" font-size="11">
+            <!-- 64 bits, scaled -->
+            <text x="360" y="22" text-anchor="middle" font-weight="500">64-bit ID = 1 sign bit + 41 timestamp + 10 machine + 12 sequence</text>
+
+            <!-- Sign bit -->
+            <rect x="40"  y="50" width="10" height="50" fill="#f0eeeb" stroke="#ccc9c4"/>
+            <text x="45" y="115" text-anchor="middle" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">0</text>
+            <text x="45" y="135" text-anchor="middle" font-size="9" fill="#878480">sign</text>
+
+            <!-- Timestamp 41 bits -->
+            <rect x="55" y="50" width="410" height="50" fill="hsl(217,91%,90%)" stroke="hsl(217,91%,50%)" stroke-width="1.5"/>
+            <text x="260" y="80" text-anchor="middle" font-weight="500" fill="hsl(217,91%,30%)">timestamp (ms since epoch)</text>
+            <text x="260" y="115" text-anchor="middle" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">41 bits</text>
+            <text x="260" y="135" text-anchor="middle" font-size="10" fill="#878480">~69 years</text>
+
+            <!-- Machine 10 bits -->
+            <rect x="465" y="50" width="100" height="50" fill="hsl(45,80%,88%)" stroke="hsl(45,75%,45%)" stroke-width="1.5"/>
+            <text x="515" y="80" text-anchor="middle" font-weight="500" fill="hsl(45,75%,28%)">machine</text>
+            <text x="515" y="115" text-anchor="middle" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">10 bits</text>
+            <text x="515" y="135" text-anchor="middle" font-size="10" fill="#878480">1024 nodes</text>
+
+            <!-- Sequence 12 bits -->
+            <rect x="565" y="50" width="120" height="50" fill="hsl(145,55%,88%)" stroke="hsl(145,55%,42%)" stroke-width="1.5"/>
+            <text x="625" y="80" text-anchor="middle" font-weight="500" fill="hsl(145,55%,28%)">sequence</text>
+            <text x="625" y="115" text-anchor="middle" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">12 bits</text>
+            <text x="625" y="135" text-anchor="middle" font-size="10" fill="#878480">4096 / ms</text>
+
+            <!-- Throughput math -->
+            <text x="360" y="170" text-anchor="middle" font-weight="500">Per-machine throughput</text>
+            <text x="360" y="190" text-anchor="middle" font-size="11" fill="#4a4845">4096 IDs/ms × 1000 ms = <tspan font-weight="500" fill="hsl(217,91%,30%)">4.1M IDs/sec/machine</tspan></text>
+            <text x="360" y="210" text-anchor="middle" font-size="11" fill="#4a4845">×1024 machines = <tspan font-weight="500" fill="hsl(145,55%,28%)">4.2B IDs/sec cluster-wide</tspan></text>
+            <text x="360" y="228" text-anchor="middle" font-size="10" fill="#878480">No coordination · roughly time-ordered · ~11 chars Base62</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Bit.ly</div><h4>Counter + Base62</h4><p>Sequential by default; non-sequential / vanity codes for paid plans.</p></div>
+      <div class="rw-card"><div class="rw-name">YouTube video IDs</div><h4>Random 11-char Base64</h4><p>11 chars × 6 bits = 66 bits of namespace. Non-guessable; videos can be unlisted via secret URL.</p></div>
+      <div class="rw-card"><div class="rw-name">Twitter Snowflake</div><h4>Timestamp + machine + seq</h4><p>64-bit IDs, base-10 in URLs. Enables cursor pagination by time without an extra column.</p></div>
+      <div class="rw-card"><div class="rw-name">Imgur / Reddit</div><h4>5-7 char Base36 / Base62</h4><p>Mix of counter-based (older content) and random (newer). Reddit visible IDs use Base36.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>URL shortener is the canonical problem. Pastebin uses the same encoding tricks. Any "shareable link" feature (Google Drive shares, Notion pages, Stripe payment links) builds on these patterns.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Service Workers &amp; PWA Offline — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 217; --accent-s: 70%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Native mobile apps work offline. Web apps don't — refresh the page on a flight, you get the dinosaur. <strong>Service workers</strong> close that gap. A service worker is a JavaScript file the browser runs in the background, intercepting every network request the page makes. It can serve from cache, queue requests for retry, push notifications when the page is closed, even sync data in the background.</p>
+      <p>Combined with web app manifests + HTTPS, service workers turn a website into a <strong>Progressive Web App (PWA)</strong> — installable, offline-capable, indistinguishable from a native app for many use cases. Twitter Lite, Spotify Web, Pinterest, Notion all ship as PWAs.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The lifecycle</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>Page registers a service worker</strong>: <code>navigator.serviceWorker.register('/sw.js')</code>.</li>
+        <li><strong>Browser installs it</strong> in the background. Runs <code>install</code> event — typically pre-cache critical assets.</li>
+        <li><strong>Activates</strong> on next page load (or immediately with <code>skipWaiting()</code>). Old service worker dies.</li>
+        <li><strong>Intercepts requests</strong> via <code>fetch</code> event. Can return cached, fetch from network, or combine.</li>
+        <li><strong>Runs in background</strong> independent of any open page. Can receive push notifications, run sync jobs.</li>
+      </ol>
+      <p>Critical detail: service worker has no access to the DOM. It's a worker process. Communicates with pages via <code>postMessage</code>.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Caching strategies</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Strategy</th><th>Behavior</th><th>Best for</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Cache-only</td><td>Always serve from cache; never network</td><td>App shell (HTML, CSS, JS) versioned at build time</td></tr>
+        <tr><td class="algo-name">Network-only</td><td>Always serve from network; bypass SW for this path</td><td>Analytics, third-party APIs</td></tr>
+        <tr><td class="algo-name">Cache-first, fall back to network</td><td>Cache hit → return; miss → fetch + cache</td><td>Static assets, user avatars</td></tr>
+        <tr><td class="algo-name">Network-first, fall back to cache</td><td>Try network; if offline, serve cache</td><td>HTML pages — fresh when online, available offline</td></tr>
+        <tr><td class="algo-name">Stale-while-revalidate</td><td>Serve cache immediately, refresh in background</td><td>Mostly-static content with occasional updates</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Deep dive — background sync + push</h2></div>
+    <div class="prose">
+      <p>Service workers' superpower is that they run when the page isn't open. Two protocols exploit this:</p>
+      <p><strong>Background Sync API.</strong> User taps "send tweet" while offline. Tweet queued. Browser closed. Hours later, the user's phone reconnects to WiFi. Service worker wakes up, retries queued requests, syncs successfully. User opens the app later: tweet is already sent. Twitter Lite uses this heavily.</p>
+      <p><strong>Web Push.</strong> A push server can deliver a notification to a user's device even when the browser is closed. Service worker receives, displays system notification. User taps → opens the relevant page. Used by Slack web, X, Notion. Built on the same VAPID + HTTPS protocol as Chrome push extensions.</p>
+      <p>Combined effect: a PWA can behave like a native app — works offline, syncs in background, notifies the user. Without going through Apple/Google app stores.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"Service worker intercepts fetch events to serve offline (network-first for HTML, cache-first for static assets). Background Sync queues writes that fail when offline, retries on reconnect. Web Push delivers notifications even when the site isn't open. Combined, it's a near-native experience without an app store."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Limitations</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>HTTPS only.</strong> Service workers refuse to run over HTTP. (Localhost is allowed for dev.)</li>
+        <li><strong>iOS support is partial.</strong> Apple resisted PWAs for years to push native App Store. iOS 17+ now supports installable PWAs but with restrictions on push and some APIs.</li>
+        <li><strong>Cache eviction is opaque.</strong> Browser may evict your cached data under storage pressure. Don't store the only copy of anything important.</li>
+        <li><strong>Update gotchas.</strong> Old SW serves cached HTML pointing at deleted JS bundle. Versioning + cleanup logic is essential. Workbox handles most of this.</li>
+        <li><strong>Debugging is hard.</strong> SW runs in a separate context; you can't <code>console.log</code> from page → SW. DevTools has a dedicated SW panel; learn it.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Twitter Lite</div><h4>The PWA showcase</h4><p>Drop-in replacement for Twitter mobile web. Works offline, supports notifications, installable. Cut data usage 70% vs native app on slow networks.</p></div>
+      <div class="rw-card"><div class="rw-name">Notion / Linear</div><h4>Editor PWAs</h4><p>Service worker caches the entire app shell. Pages cached locally. Editing offline syncs on reconnect via Background Sync.</p></div>
+      <div class="rw-card"><div class="rw-name">Workbox</div><h4>Google's SW library</h4><p>Abstracts the common patterns (cache strategies, precaching, background sync). The standard for non-trivial PWAs.</p></div>
+      <div class="rw-card"><div class="rw-name">Spotify Web</div><h4>Streaming PWA</h4><p>Service worker handles playback + offline manifest caching. Indistinguishable from desktop app for most users.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>News feed mobile-web uses service workers for offline reading. Google Docs caches the editor app shell + documents you've recently opened. E-commerce uses service workers for fast repeat-visit page loads.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,65 @@
+{
+  "slug": "field-level-encryption",
+  "title": "Field-Level Encryption",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 195,
+    "s": 65,
+    "l": 42
+  },
+  "category": "Observability & Security",
+  "blurb": "\"Our database is encrypted.\" Sounds great. Look closer: encrypted at rest with a single key controlled by the cloud provider. A DBA, a compromised app, an SRE running SELECT * sees plaintext. Encryption-at-rest only prot",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>\"Our database is encrypted.\" Sounds great. Look closer: encrypted at rest with a single key controlled by the cloud provider. A DBA, a compromised app, an SRE running <code>SELECT *</code> sees plaintext. Encryption-at-rest only protects against someone stealing the disk — almost nobody's actual threat model.</p>\n      <p><strong>Field-level encryption</strong> encrypts <em>specific sensitive fields</em> (SSN, credit card, medical record) with keys the database doesn't have. Even a full DB dump or rogue admin sees ciphertext. Plaintext only exists in app memory while serving an authorized request.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "The encryption layers",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The encryption layers</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Layer</th><th>Protects against</th><th>Plaintext visible to</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Disk encryption (LUKS, BitLocker)</td><td>Stolen physical disk</td><td>Anyone with OS access</td></tr>\n        <tr><td class=\"algo-name\">DB-level encryption-at-rest (TDE)</td><td>Stolen DB file, backup</td><td>Anyone with DB connection</td></tr>\n        <tr><td class=\"algo-name\">Column-level encryption</td><td>Backup theft, rogue DBA</td><td>Anyone with the column key (often app server)</td></tr>\n        <tr><td class=\"algo-name\">Field-level encryption with KMS</td><td>Rogue DBA, compromised app, partial key compromise</td><td>Only authorized request handlers with KMS access</td></tr>\n        <tr><td class=\"algo-name\">End-to-end encryption (E2EE)</td><td>Everyone except endpoint owners</td><td>Only the data owners; server sees nothing</td></tr>\n      </tbody>\n    </table>\n    <div class=\"prose\">\n      <p>Each layer adds protection at a cost. Most apps need encryption-at-rest + field-level for sensitive fields. E2EE only when the threat model truly excludes the operator (Signal, WhatsApp messages, password managers).</p>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "The KMS-based pattern",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">The KMS-based pattern</h2></div>\n    <div class=\"prose\">\n      <p>The standard production approach:</p>\n      <ol>\n        <li><strong>KMS</strong> (AWS KMS, Google Cloud KMS, HashiCorp Vault Transit) holds the master key. App can never extract it.</li>\n        <li><strong>To encrypt</strong>: app generates a random per-record data-encryption key (DEK), encrypts the field with AES-GCM, asks KMS to encrypt the DEK with the master key (KEK), stores ciphertext + encrypted DEK in the DB. KEK never leaves KMS.</li>\n        <li><strong>To decrypt</strong>: app reads ciphertext + encrypted DEK from DB, asks KMS to decrypt the DEK, then locally decrypts the field. KEK still never leaves KMS.</li>\n        <li><strong>Audit</strong>: every KMS decrypt is logged. You can see exactly which app + which user requested decryption of which record at what time.</li>\n        <li><strong>Rotate keys</strong>: rotate the KEK in KMS without re-encrypting all records (KMS handles the chain). Rotate DEKs by re-encrypting affected records.</li>\n      </ol>\n      <p>Why two-key (envelope encryption): KMS would be a bottleneck if every encrypt/decrypt called it. With per-record DEKs, KMS is hit once per record (cheap, rare), not once per byte.</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — searchable encrypted fields",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Deep dive — searchable encrypted fields</h2></div>\n    <div class=\"prose\">\n      <p>Encrypted fields lose searchability. <code>WHERE encrypted_email = ...</code> can't match because every encryption produces different ciphertext (semantic security). How do you query?</p>\n      <p>Three approaches:</p>\n      <p><strong>1. Deterministic encryption.</strong> Same plaintext always produces same ciphertext. <code>WHERE encrypted_email = encrypted('alice@x.com')</code> works. <span class=\"hl-red\">Cost</span>: leaks frequency information — attacker can see \"this ciphertext appears 1000 times\" and infer it's a common value. Acceptable for high-cardinality fields (emails); dangerous for low-cardinality (zip code).</p>\n      <p><strong>2. Blind index.</strong> Store an HMAC of the plaintext as a separate searchable column. <code>HMAC(\"alice@x.com\")</code> is deterministic; the encrypted value isn't. Search the HMAC column, then decrypt the matching encrypted value. CipherSweet library implements this for PHP/Java.</p>\n      <p><strong>3. Field-format encryption</strong> with searchable schemes (CryptDB academic work, MongoDB CSFLE). Letting the encryption scheme support equality, range, or order queries. Always with cryptographic tradeoffs — every searchable scheme leaks more than the unsearchable equivalent.</p>\n      <p>Practical default: deterministic encryption for primary lookups (user IDs, SSNs), random encryption for the rest, blind indexes when you genuinely need to search.</p>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">Interview answer</div>\n        <p>\"Field-level encryption via envelope encryption — KMS holds the master key, per-record data keys encrypt sensitive fields. Search via blind indexes (HMAC) or deterministic encryption depending on cardinality. Rogue admin sees ciphertext; auditor sees every decrypt event in KMS logs.\"</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "When to skip field-level encryption",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">When to skip field-level encryption</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>Your threat model doesn't include rogue admins / compromised app.</strong> Disk encryption + good IAM is enough.</li>\n        <li><strong>The data isn't actually sensitive.</strong> Tagging non-sensitive fields creates ops burden with no real benefit.</li>\n        <li><strong>You can use <a href=\"/concepts/tokenization-pci\">tokenization</a> instead.</strong> For payment cards, SSNs, etc., outsourcing to a vault provider is operationally simpler.</li>\n        <li><strong>Latency is critical.</strong> Each KMS round trip adds ~5-10ms. For a 1ms p99 endpoint serving 100k QPS, this is unacceptable. Cache decrypted DEKs (with care).</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">AWS KMS + DynamoDB Encryption Client</div><h4>SDK pattern</h4><p>Library wraps DynamoDB calls; transparently encrypts/decrypts marked fields using KMS-rooted keys.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">MongoDB Client-Side Field Level Encryption (CSFLE)</div><h4>Driver-level</h4><p>Encryption happens in the MongoDB driver before data hits server. Server stores ciphertext; never sees plaintext.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">HashiCorp Vault Transit</div><h4>Encryption-as-a-service</h4><p>App calls Vault: \"encrypt this string with key X.\" Vault returns ciphertext. Same for decrypt. Centralized + auditable.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Signal protocol</div><h4>End-to-end variant</h4><p>Field-level encryption taken to E2E — server only sees ciphertext, can't decrypt at all. Per-message key ratcheting.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Payment gateway field-encrypts card metadata (last 4 digits, expiry). WhatsApp uses E2EE for messages — neither WhatsApp nor anyone else can read the content. E-commerce field-encrypts PII (address, phone) in the order DB.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

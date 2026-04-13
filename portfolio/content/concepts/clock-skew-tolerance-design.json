@@ -1,0 +1,65 @@
+{
+  "slug": "clock-skew-tolerance-design",
+  "title": "Clock-Skew Tolerance Design",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 240,
+    "s": 55,
+    "l": 48
+  },
+  "category": "Distributed Systems",
+  "blurb": "You read time-sync-clocks and learned wall clocks drift, NTP misbehaves, leap seconds break things. Now what? You can't avoid using time entirely — TTLs, timeouts, scheduling, ordering, JWT expiry all need it. Clock-skew",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>You read <a href=\"/concepts/time-sync-clocks\">time-sync-clocks</a> and learned wall clocks drift, NTP misbehaves, leap seconds break things. Now what? You can't avoid using time entirely — TTLs, timeouts, scheduling, ordering, JWT expiry all need it. <strong>Clock-skew tolerance</strong> is the discipline of designing systems so that a few hundred milliseconds of clock disagreement doesn't break correctness.</p>\n      <p>Every distributed system has clock-skew bugs. Most are subtle — they only manifest at scale, around midnight, on leap seconds, after NTP corrections. Knowing the patterns lets you avoid them in design rather than discover them in incident reviews.</p>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "The five common bug patterns",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The five common bug patterns</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Pattern</th><th>Bug</th><th>Mitigation</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Timeout via wall clock</td><td>Clock jumps back → operation \"expires\" 5 minutes early</td><td>Use monotonic clock for elapsed time; never wall</td></tr>\n        <tr><td class=\"algo-name\">TTL-precision lease</td><td>Holder thinks 30s left; lock server thinks 0s left</td><td>Holder treats lease as expired well before TTL (use 2/3 rule)</td></tr>\n        <tr><td class=\"algo-name\">JWT expiry comparison</td><td>Producer's \"valid until 12:00\" is consumer's \"already expired at 12:00:01\" due to skew</td><td>Add ε grace window (~30s typical) on validity check</td></tr>\n        <tr><td class=\"algo-name\">Last-write-wins by timestamp</td><td>Server with fast clock always wins, regardless of actual order</td><td>Use logical clocks (Lamport, vector) for ordering</td></tr>\n        <tr><td class=\"algo-name\">Time-bucketed metrics</td><td>Skewed clocks misattribute events to wrong minute</td><td>Snap timestamps to coarse buckets (1m, 5m); accept blur at boundaries</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "The 2/3 lease rule",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">The 2/3 lease rule</h2></div>\n    <div class=\"prose\">\n      <p>The most useful single pattern. If a lease is granted for T seconds, the holder should treat it as expired at <code>2T/3</code> seconds, not T. Why?</p>\n      <ul>\n        <li>Holder's clock might be running fast vs lock server's clock.</li>\n        <li>Network might delay the renewal request.</li>\n        <li>Renewal request might fail and need retry.</li>\n        <li>You need budget to release cleanly before the server kicks you.</li>\n      </ul>\n      <p>For a 30s lease, holder treats it as good for 20s. Renews around then. If renewal fails, holder still has 10s of margin to retry or release. Lock server has confidence that an unreached holder is genuinely gone, not just slow.</p>\n      <p>This pattern shows up in Kubernetes leases, Zookeeper sessions, DynamoDB heartbeats, and every well-designed lock system.</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — uncertainty intervals (Spanner pattern)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Deep dive — uncertainty intervals (Spanner pattern)</h2></div>\n    <div class=\"prose\">\n      <p>The most sophisticated approach: don't pretend you know the time. Acknowledge a window.</p>\n      <p>Spanner's TrueTime API returns <code>now() = [earliest, latest]</code> — a guaranteed bracket around the true time. Typical width: ε ≈ 5ms.</p>\n      <p>For commits at timestamp T, Spanner uses <strong>commit wait</strong>: don't acknowledge until <code>now().earliest &gt; T</code>. This guarantees that any later observer sees T in their past, regardless of their clock skew. External consistency at a global scale.</p>\n      <p>You can apply the pattern without atomic clocks. <strong>Hybrid Logical Clocks (HLC)</strong> bundle wall time + logical counter — clock skew is bounded by logical-counter advance. CockroachDB, YugabyteDB use HLC to get most of TrueTime's benefit using only NTP.</p>\n      <p>The principle that scales: <strong>don't use a point estimate for time when an interval is what you actually have</strong>. Most clock-skew bugs come from pretending time is exact when it isn't.</p>\n    </div>\n\n    <div class=\"diagram-wrap\">\n      <div class=\"diagram-head\">\n        <span class=\"diagram-label\">Commit Wait — Bounded Uncertainty</span>\n        <span class=\"diagram-type\">SVG</span>\n      </div>\n      <div class=\"diagram-body\">\n        <svg class=\"arch-svg\" viewBox=\"0 0 720 240\" xmlns=\"http://www.w3.org/2000/svg\">\n          <g font-family=\"Geist, system-ui, sans-serif\" font-size=\"11\">\n            <text x=\"360\" y=\"22\" text-anchor=\"middle\" font-weight=\"500\">Commit at T=100, ε=5ms — wait until now.earliest &gt; 100</text>\n            <line x1=\"40\" y1=\"120\" x2=\"700\" y2=\"120\" stroke=\"#ccc9c4\" stroke-width=\"1.5\"></line>\n            <text x=\"40\" y=\"140\" font-size=\"9\" fill=\"#878480\" font-family=\"JetBrains Mono, monospace\">90</text>\n            <text x=\"370\" y=\"140\" font-size=\"9\" fill=\"#878480\" font-family=\"JetBrains Mono, monospace\">100</text>\n            <text x=\"700\" y=\"140\" font-size=\"9\" fill=\"#878480\" font-family=\"JetBrains Mono, monospace\" text-anchor=\"end\">110</text>\n            <!-- Uncertainty intervals -->\n            <rect x=\"320\" y=\"60\" width=\"100\" height=\"20\" fill=\"hsl(240,55%,85%)\" stroke=\"hsl(240,55%,48%)\"></rect>\n            <text x=\"370\" y=\"74\" text-anchor=\"middle\" font-size=\"10\" fill=\"hsl(240,55%,28%)\">now() at write</text>\n            <line x1=\"370\" y1=\"80\" x2=\"370\" y2=\"120\" stroke=\"hsl(240,55%,48%)\" stroke-dasharray=\"3 2\"></line>\n            <text x=\"370\" y=\"55\" text-anchor=\"middle\" font-size=\"9\" fill=\"#878480\" font-family=\"JetBrains Mono, monospace\">[95, 105]</text>\n\n            <!-- Wait period -->\n            <rect x=\"370\" y=\"160\" width=\"80\" height=\"20\" fill=\"hsl(45,80%,88%)\" stroke=\"hsl(45,75%,45%)\"></rect>\n            <text x=\"410\" y=\"174\" text-anchor=\"middle\" font-size=\"10\" fill=\"hsl(45,75%,28%)\">commit wait — 5ms</text>\n\n            <!-- Resolved -->\n            <rect x=\"450\" y=\"160\" width=\"100\" height=\"20\" fill=\"hsl(145,55%,85%)\" stroke=\"hsl(145,55%,42%)\"></rect>\n            <text x=\"500\" y=\"174\" text-anchor=\"middle\" font-size=\"10\" fill=\"hsl(145,55%,28%)\">ACK to client (T=105)</text>\n            <text x=\"500\" y=\"200\" text-anchor=\"middle\" font-size=\"9\" fill=\"#878480\">any later observer sees T=100 in their past</text>\n          </g>\n        </svg>\n      </div>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "Practical rules",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Practical rules</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>Monotonic for elapsed time.</strong> Always. Wall clock can jump backward; <code>time.monotonic()</code> can't.</li>\n        <li><strong>Wall clock + ε margin for absolute time.</strong> Add 30s grace to JWT expiry checks, lease renewals, time-windowed rate limits.</li>\n        <li><strong>Logical clocks for ordering.</strong> Lamport / vector when \"what came first?\" matters across nodes.</li>\n        <li><strong>Snap to coarse buckets.</strong> When time-windowing events, accept a few seconds of misattribution rather than precision math.</li>\n        <li><strong>Observe NTP health.</strong> Alert when clock drift &gt; 100ms. Most clock bugs surface only when this drifts unnoticed.</li>\n        <li><strong>Log timestamps from one source.</strong> When correlating events across services, all timestamps from <em>your</em> logging tier — not from each service's wall clock.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Spanner TrueTime</div><h4>Atomic-clock-backed intervals</h4><p>The reference design. ε ≈ 5ms worldwide via GPS + atomic clocks. Commit wait turns the window into external consistency.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">CockroachDB HLC</div><h4>Hybrid Logical Clocks</h4><p>NTP + logical counter. Achieves Spanner-like guarantees without atomic clocks; falls back gracefully on bad clocks.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Kubernetes leases</div><h4>2/3 renewal rule</h4><p>controller-runtime renews leases at ~⅔ duration. Survives moderate clock skew + missed renewals.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">JWT libraries</div><h4>iat/exp grace windows</h4><p>Most JWT validators support clock-skew tolerance config (default 30s). Without it, clock drift breaks logins.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Stock exchange uses PTP (sub-μs) and HLC for matching-engine determinism. Distributed locking applies the 2/3 lease rule to all locks. Google Docs uses logical-clock ordering for OT operations (wall clocks would silently corrupt history).</p></div>"
+    }
+  ],
+  "archSvg": "<svg class=\"arch-svg\" viewBox=\"0 0 720 240\" xmlns=\"http://www.w3.org/2000/svg\">\n          <g font-family=\"Geist, system-ui, sans-serif\" font-size=\"11\">\n            <text x=\"360\" y=\"22\" text-anchor=\"middle\" font-weight=\"500\">Commit at T=100, ε=5ms — wait until now.earliest &gt; 100</text>\n            <line x1=\"40\" y1=\"120\" x2=\"700\" y2=\"120\" stroke=\"#ccc9c4\" stroke-width=\"1.5\"></line>\n            <text x=\"40\" y=\"140\" font-size=\"9\" fill=\"#878480\" font-family=\"JetBrains Mono, monospace\">90</text>\n            <text x=\"370\" y=\"140\" font-size=\"9\" fill=\"#878480\" font-family=\"JetBrains Mono, monospace\">100</text>\n            <text x=\"700\" y=\"140\" font-size=\"9\" fill=\"#878480\" font-family=\"JetBrains Mono, monospace\" text-anchor=\"end\">110</text>\n            <!-- Uncertainty intervals -->\n            <rect x=\"320\" y=\"60\" width=\"100\" height=\"20\" fill=\"hsl(240,55%,85%)\" stroke=\"hsl(240,55%,48%)\"></rect>\n            <text x=\"370\" y=\"74\" text-anchor=\"middle\" font-size=\"10\" fill=\"hsl(240,55%,28%)\">now() at write</text>\n            <line x1=\"370\" y1=\"80\" x2=\"370\" y2=\"120\" stroke=\"hsl(240,55%,48%)\" stroke-dasharray=\"3 2\"></line>\n            <text x=\"370\" y=\"55\" text-anchor=\"middle\" font-size=\"9\" fill=\"#878480\" font-family=\"JetBrains Mono, monospace\">[95, 105]</text>\n\n            <!-- Wait period -->\n            <rect x=\"370\" y=\"160\" width=\"80\" height=\"20\" fill=\"hsl(45,80%,88%)\" stroke=\"hsl(45,75%,45%)\"></rect>\n            <text x=\"410\" y=\"174\" text-anchor=\"middle\" font-size=\"10\" fill=\"hsl(45,75%,28%)\">commit wait — 5ms</text>\n\n            <!-- Resolved -->\n            <rect x=\"450\" y=\"160\" width=\"100\" height=\"20\" fill=\"hsl(145,55%,85%)\" stroke=\"hsl(145,55%,42%)\"></rect>\n            <text x=\"500\" y=\"174\" text-anchor=\"middle\" font-size=\"10\" fill=\"hsl(145,55%,28%)\">ACK to client (T=105)</text>\n            <text x=\"500\" y=\"200\" text-anchor=\"middle\" font-size=\"9\" fill=\"#878480\">any later observer sees T=100 in their past</text>\n          </g>\n        </svg>",
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

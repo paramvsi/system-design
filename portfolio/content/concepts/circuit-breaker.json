@@ -1,0 +1,71 @@
+{
+  "slug": "circuit-breaker",
+  "title": "Circuit Breaker",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 0,
+    "s": 72,
+    "l": 50
+  },
+  "category": "Reliability",
+  "blurb": "Service B is slow. Service A calls it on every request, each call hanging for 30 seconds before timing out. A's threads fill up waiting for B. A's latency spikes. A's LB marks A unhealthy. Now A is down because B is slow",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>Service B is slow. Service A calls it on every request, each call hanging for 30 seconds before timing out. A's threads fill up waiting for B. A's latency spikes. A's LB marks A unhealthy. Now A is down because B is slow. <span class=\"hl-red\">Cascading failure.</span></p>\n      <p>A circuit breaker (pattern, not a box) detects a downstream dependency is failing and <strong>stops calling it</strong> for a while, failing fast instead. A's threads free up. A stays responsive; it just returns \"service unavailable\" for the features that needed B. When B recovers, the breaker lets traffic through again.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The three states",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The three states</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>Closed</strong> (normal). All calls go through. Breaker counts failures.</li>\n        <li><strong>Open</strong> (tripped). Failure rate exceeded threshold → breaker opens. All calls fail immediately, no actual call is made.</li>\n        <li><strong>Half-open</strong> (testing). After a cooldown, let one (or a few) test calls through. If they succeed, close the breaker. If they fail, back to open.</li>\n      </ul>\n    </div>\n\n    <div class=\"diagram-wrap\">\n      <div class=\"diagram-head\"><span class=\"diagram-label\">Circuit Breaker States</span><span class=\"diagram-type\">Mermaid</span></div>\n      <div class=\"diagram-body\">\n        <div class=\"mermaid\">\nstateDiagram-v2\n    [*] --&gt; Closed\n    Closed --&gt; Open: failure rate &gt; threshold\n    Open --&gt; HalfOpen: cooldown elapsed\n    HalfOpen --&gt; Closed: test call succeeded\n    HalfOpen --&gt; Open: test call failed\n        </div>\n      </div>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "Tuning the breaker",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Tuning the breaker</h2></div>\n    <div class=\"prose\">\n      <p>Four parameters:</p>\n      <ul>\n        <li><strong>Failure threshold</strong> — \"50% of the last 20 calls failed\" OR \"10 consecutive failures.\" Percentage-based handles low-traffic scenarios better than count-based.</li>\n        <li><strong>Minimum call count</strong> — don't trip on 1 failure out of 1 call. Require ≥ 20 calls before judging.</li>\n        <li><strong>Cooldown</strong> — how long to stay open. Typical: 30s for fast-recovering services, minutes for external APIs.</li>\n        <li><strong>What counts as failure</strong> — timeouts? 5xx? 4xx? Usually: timeouts + 5xx. 4xx is the client's fault, not the service's.</li>\n      </ul>\n    \n      <div class=\"code-caption\" data-code-snippet=\"1\">Circuit breaker state machine</div>\n      <pre><code class=\"lang-python\">import time\nfrom enum import Enum\n\nclass State(Enum): CLOSED, OPEN, HALF_OPEN = 1, 2, 3\n\nclass CircuitBreaker:\n    def __init__(self, fail_threshold=5, reset_timeout=30):\n        self.fail_threshold = fail_threshold\n        self.reset_timeout = reset_timeout\n        self.failures = 0\n        self.state = State.CLOSED\n        self.opened_at = 0\n\n    def call(self, fn, *args, **kw):\n        if self.state == State.OPEN:\n            if time.time() - self.opened_at &gt;= self.reset_timeout:\n                self.state = State.HALF_OPEN  # probe\n            else:\n                raise Exception(\"circuit open\")\n        try:\n            r = fn(*args, **kw)\n            self._on_success(); return r\n        except Exception as e:\n            self._on_failure(); raise\n\n    def _on_success(self):\n        self.failures = 0; self.state = State.CLOSED\n\n    def _on_failure(self):\n        self.failures += 1\n        if self.failures &gt;= self.fail_threshold:\n            self.state = State.OPEN\n            self.opened_at = time.time()</code></pre>\n  </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Per-call vs per-instance vs per-service",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Per-call vs per-instance vs per-service</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Granularity</th><th>Failure scope</th><th>When to use</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Per-service</td><td>Failures to any instance of service B count together</td><td>Simplest. Misses per-instance issues.</td></tr>\n        <tr><td class=\"algo-name\">Per-instance</td><td>Separate breakers per upstream host</td><td>One bad instance doesn't trip the whole service. Best for microservices.</td></tr>\n        <tr><td class=\"algo-name\">Per-endpoint</td><td>Separate breaker per (service, path) combo</td><td>One slow endpoint in service B doesn't trip calls to other endpoints. Finest grain, most state.</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — fallback strategies",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — fallback strategies</h2></div>\n    <div class=\"prose\">\n      <p>When the breaker is open, what do you return? Options, from best to worst:</p>\n      <ol>\n        <li><strong>Cached response.</strong> \"Here's your feed from 2 minutes ago.\" User barely notices. Works for reads.</li>\n        <li><strong>Degraded response.</strong> Home page without the \"related products\" widget. Core content still served.</li>\n        <li><strong>Queue for later.</strong> Writes get queued to a durable store (Kafka, SQS) and processed when the service recovers.</li>\n        <li><strong>Sensible default.</strong> \"Recommendations service down → show trending instead.\"</li>\n        <li><strong>Error to user.</strong> \"Can't complete this right now, try again later.\" Last resort — but still better than hanging.</li>\n      </ol>\n      <p>The breaker's value isn't in detecting failure (everything does that). It's in <strong>giving you a place to define graceful degradation</strong>. Without a breaker, failure cascades. With one, failure stays contained at the call site.</p>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">Design together</div>\n        <p>Circuit breaker + <a href=\"/concepts/retry-backoff-jitter\">retry with backoff</a> + timeouts form the \"reliability stack.\" Never one without the others. Retries without a breaker amplify overload; breakers without retries fail on transient blips.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Netflix Hystrix</div><h4>Popularized the pattern</h4><p>Java library from Netflix (2012). Circuit breaker + fallback + bulkheads + metrics. Now in maintenance; successors include resilience4j.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Envoy / Istio</div><h4>Sidecar-level</h4><p>Circuit breakers configured in the service mesh; no app code. Defaults per upstream; overrides per destination.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">resilience4j</div><h4>Modern Java library</h4><p>Functional API for circuit breakers, retries, rate limiters, bulkheads. Composes into decorators around service calls.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Polly</div><h4>.NET equivalent</h4><p>Same patterns. Fluent API: <code>Policy.Handle&lt;Exception&gt;().CircuitBreaker(...)</code>.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>News feed uses circuit breakers around downstream ranker and enrichment services. E-commerce uses them for payment provider calls (fall back to queue). Notification system breaks around SMS/email providers to avoid cascading failure.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [
+    {
+      "sectionId": "intuition",
+      "source": "stateDiagram-v2\n    [*] --> Closed\n    Closed --> Open: failure rate > threshold\n    Open --> HalfOpen: cooldown elapsed\n    HalfOpen --> Closed: test call succeeded\n    HalfOpen --> Open: test call failed",
+      "index": 0
+    }
+  ],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

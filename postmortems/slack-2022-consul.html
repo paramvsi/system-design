@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Slack — February 22, 2022 — Consul + HAProxy Metastable Failure</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 320; --accent-s: 65%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <div class="hero" id="problem">
+    <div class="hero-kicker">Post-mortem · 2022-02-22 · Slack</div>
+    <h1 class="hero-title">Slack <em>Consul + HAProxy</em> Metastable Failure</h1>
+    <p class="hero-desc">A brief network blip between Slack's service registry (Consul) and its load balancers (HAProxy) caused a metastable failure: even after the network recovered, the system stayed broken because recovering generated more work than normal operation. 4+ hours of degraded Slack.</p>
+    <div class="hero-tags">
+      <span class="tag">Metastable failure</span>
+      <span class="tag">Consul</span>
+      <span class="tag">HAProxy</span>
+      <span class="tag">4h outage</span>
+    </div>
+  </div>
+
+  <section class="section" id="tldr">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">TL;DR</h2></div>
+    <div class="prose">
+      <p>Transient network issue caused Consul nodes to rapidly declare HAProxy backends unhealthy + healthy. HAProxy's config-reload-on-membership-change fired many thousand times. Each reload caused active connections to be re-established, which generated MORE health-check traffic, which caused MORE churn. Even after the network stabilized, the system couldn't catch up because the work of recovering exceeded the work of steady-state operation. Engineers had to manually dampen health-check churn.</p>
+    </div>
+  </section>
+
+  <section class="section" id="timeline">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Timeline</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>06:00 PST</strong> — Transient network flap between AZs causes Consul health checks to miss ~20% of instances for a few seconds.</li>
+        <li><strong>06:00–06:05</strong> — Consul marks thousands of backends unhealthy, then re-healthy as checks resume. Each state change triggers HAProxy config reload.</li>
+        <li><strong>06:05–10:00</strong> — HAProxy reloads at ~30/sec. Each reload cycles active connections. Slack clients reconnect; new connections trigger health checks; more churn. System does not return to steady state even after the initial network issue resolves.</li>
+        <li><strong>06:15 PST</strong> — Engineers engage. Identify the reload storm + reconnect cascade.</li>
+        <li><strong>~09:00 PST</strong> — Engineers introduce manual dampening: hold HAProxy from reloading for N seconds after membership change; tolerate temporary stale membership.</li>
+        <li><strong>~10:30 PST</strong> — Traffic recovers as feedback loop breaks.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="rootcause">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Root cause</h2></div>
+    <div class="prose">
+      <p>Classic metastable failure pattern. The system had two stable states: (A) healthy operation with ~steady-state churn, (B) death-spiral with sustained churn from reconnects that self-perpetuate. A minor perturbation pushed the system over the boundary from (A) to (B); the system stayed in (B) even after the perturbation was gone.</p>
+      <p>Specifically: each HAProxy reload kills inflight connections. Clients reconnect. Reconnects trigger Consul to re-check. Health-check traffic adds load. At high reload rate, the latency of the health check increases, which causes more "unhealthy" flaps. Positive feedback loop.</p>
+    </div>
+  </section>
+
+  <section class="section" id="impact">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Blast radius</h2></div>
+    <div class="prose">
+      <p>~4 hours of degraded Slack globally. Messages delayed; some dropped; channel switches returned errors; file uploads failed. ~10M business users affected. Revenue + customer-trust impact; Slack issued credits under SLA terms.</p>
+    </div>
+  </section>
+
+  <section class="section" id="lessons">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Lessons</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>Rate-limit membership-change reactions.</strong> Don't let a stream of "backend flapped" events trigger a stream of reloads. Batch + dampen.</li>
+        <li><strong>Reconnection storms are a separate threat model.</strong> Budget for them; ideally cap reconnect rate client-side.</li>
+        <li><strong>Metastable failures are real and specific.</strong> Often mitigated by being able to shed load: if the system is overwhelmed, drop some traffic aggressively instead of struggling.</li>
+        <li><strong>Health checks should be cheap.</strong> If health checking at rate X causes load Y that itself affects health, the check is too expensive.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="concepts-used">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Concepts in play</h2></div>
+    <div class="prose">
+      <ul>
+        <li><a href="/concepts/metastable-failures">Metastable failures</a> — exactly this pattern.</li>
+        <li><a href="/concepts/heartbeat-failure-detection">Health checks + failure detection</a> — aggressive checks cause their own failures.</li>
+        <li><a href="/concepts/load-balancer">Load balancer</a> — HAProxy reload behavior.</li>
+        <li><a href="/concepts/service-discovery">Service discovery</a> — Consul's role as source of truth.</li>
+        <li><a href="/concepts/backpressure-flow-control">Backpressure</a> — load shedding is the escape hatch.</li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

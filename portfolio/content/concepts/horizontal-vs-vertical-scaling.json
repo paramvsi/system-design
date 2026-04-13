@@ -1,0 +1,65 @@
+{
+  "slug": "horizontal-vs-vertical-scaling",
+  "title": "Horizontal vs Vertical Scaling",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 262,
+    "s": 72,
+    "l": 52
+  },
+  "category": "Scaling",
+  "blurb": "You launch with 1000 users on one server. Six months later you have 1M users. The server's CPU sits at 99%. You have exactly two knobs: make that one server bigger (vertical / \"scale up\") or add more servers alongside it",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>You launch with 1000 users on one server. Six months later you have 1M users. The server's CPU sits at 99%. You have exactly <span class=\"hl\">two knobs</span>: make that one server bigger (<strong>vertical</strong> / \"scale up\") or add more servers alongside it (<strong>horizontal</strong> / \"scale out\"). This is the first architectural decision of almost every system design.</p>\n      <p>Get it wrong and you'll either spend $40k/month on a box that still dies when one disk fails, or spend three months rebuilding a monolith into a distributed system during a traffic surge.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "Intuition",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Intuition</h2></div>\n    <div class=\"prose\">\n      <p>A restaurant has one cook. Rush hour hits. You can (a) hire a <strong>much faster cook</strong> (vertical: replace the person) or (b) hire <strong>five more cooks of the same skill</strong> (horizontal: add more people, now you need a kitchen manager to coordinate).</p>\n      <p>Option (a) is simple — same kitchen, same menu, nobody to train. But the best cook in town is 3× the price and there's a ceiling on how fast one human can work. Option (b) is cheaper per cook, has no ceiling (you can always hire more), and keeps working if any one cook calls in sick — but now you need coordination (the manager = load balancer, consistent recipes = stateless services, shared ingredient fridge = shared database).</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "How each works",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">How each works</h2></div>\n    <div class=\"prose\">\n      <p><strong>Vertical</strong> is a cloud-provider API call: stop the VM, resize it from <code>c5.2xlarge</code> (8 vCPU, 16 GB) to <code>c5.24xlarge</code> (96 vCPU, 192 GB), start it. Downtime: ~60 seconds. Your code doesn't change at all.</p>\n      <p><strong>Horizontal</strong> requires architectural work: put a <a href=\"/concepts/load-balancer\">load balancer</a> in front, run N identical instances, make sure your service is stateless (no in-memory sessions — put state in Redis or a DB), ensure the DB can handle the concurrent load (or shard it). Downtime during scale-out: zero — you just add boxes. But the one-time investment is weeks, not minutes.</p>\n    </div>\n\n    <div class=\"kv-grid\">\n      <div class=\"kv-card\"><div class=\"kv-val\">~64 vCPU</div><div class=\"kv-lbl\">typical vertical ceiling</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">10 000s</div><div class=\"kv-lbl\">horizontal ceiling (servers)</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">3–5×</div><div class=\"kv-lbl\">price premium top vs bottom of instance line</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">~60 s</div><div class=\"kv-lbl\">vertical resize downtime</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">0 s</div><div class=\"kv-lbl\">horizontal add-box downtime</div></div>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "Tradeoffs",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Tradeoffs</h2></div>\n    <div class=\"tradeoff-grid\">\n      <div class=\"tradeoff-option\">\n        <div class=\"tradeoff-label\">Vertical (scale up)</div>\n        <h4>Bigger box, same code</h4>\n        <p><span class=\"hl-green\">Zero app changes. No distributed-systems tax.</span> Fine for legacy monoliths that can't be refactored and for workloads where parallelism is hard (e.g., single-writer databases). <span class=\"hl-red\">Has a ceiling</span> (~96 vCPU, ~1 TB RAM in 2025). Single point of failure. Price scales super-linearly at the top of the instance family.</p>\n      </div>\n      <div class=\"tradeoff-option chosen\">\n        <div class=\"tradeoff-label\">Horizontal (scale out)</div>\n        <h4>More boxes, orchestrated</h4>\n        <p><span class=\"hl-green\">No ceiling. Better availability.</span> Each extra instance adds linearly. Failing one of N servers costs 1/N of your capacity — users don't notice. <span class=\"hl-red\">Requires statelessness, a load balancer, and harder debugging</span> (distributed tracing, racy bugs, cache coherency). Needs infra investment up front.</p>\n      </div>\n    </div>\n    <div class=\"callout callout-good\">\n      <div class=\"callout-label\">Rule of thumb</div>\n      <p><strong>Scale vertically first to buy time</strong> (takes a day), <strong>refactor to scale horizontally once you're past the 1 vCPU-hour-per-minute band</strong>. Stateful systems (primary DB) stay vertical longer than stateless services.</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — what actually scales horizontally",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — what actually scales horizontally</h2></div>\n    <div class=\"prose\">\n      <p><span class=\"hl\">Horizontal scaling is trivial for stateless services, excruciating for stateful ones.</span> \"Stateless\" means every request can be answered by any instance with no knowledge of prior requests from that client. Any state (sessions, counters, cached results) lives outside the service — in Redis, the DB, or a JWT the client carries.</p>\n      <p>Stateful services that don't scale horizontally for free: relational databases (one writer at a time; read replicas help reads but writes need <a href=\"/concepts/sharding\">sharding</a>), in-memory session stores (move to Redis), file uploads sitting on local disk (move to object storage), WebSocket connections (sticky sessions + a pub/sub fabric).</p>\n      <p><strong>The stateless checklist</strong> — if any answer is \"yes,\" you have work before horizontal scaling works:</p>\n      <ul>\n        <li>Does the app read or write files on local disk? → move to S3 / EFS.</li>\n        <li>Does it store sessions in process memory? → move to Redis.</li>\n        <li>Does it cache computed results per-process? → either fine (soft cache) or move to shared cache.</li>\n        <li>Does it hold open WebSocket / SSE connections? → introduce a pub/sub for cross-server message delivery.</li>\n        <li>Does it assume singleton jobs (e.g., a cron)? → introduce <a href=\"/concepts/distributed-locking\">distributed locking</a> so only one instance runs the job.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Instagram early days</div><h4>Scaled vertically to a few massive Postgres boxes</h4><p>Bought them the biggest instances available, then eventually sharded Postgres horizontally when vertical hit the wall. Typical path.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">AWS ECS/EKS</div><h4>Pure horizontal</h4><p>Services declared with replica counts. Autoscaler adds/removes tasks based on CPU/RPS. No \"resize\" concept for the service layer.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">RDS / Aurora</div><h4>Vertical for writes, horizontal for reads</h4><p>One primary, N read replicas. When the primary saturates you resize it (vertical). When reads saturate you add replicas (horizontal).</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">DynamoDB / Cassandra</div><h4>Horizontal by default</h4><p>Data is partitioned across N nodes from day one. Adding nodes scales both reads and writes linearly. No \"primary\" to resize.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Every problem in this portfolio eventually chooses horizontal scaling for its stateless API tier. The interesting decisions are in the data layer — see the sidebar for specific problems.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 4
+}

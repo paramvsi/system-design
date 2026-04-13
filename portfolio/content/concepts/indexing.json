@@ -1,0 +1,65 @@
+{
+  "slug": "indexing",
+  "title": "Indexing",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 38,
+    "s": 90,
+    "l": 48
+  },
+  "category": "Databases",
+  "blurb": "A database table with 100M rows. A query: WHERE email = 'x@y.com'. Without an index, the DB scans all 100M rows — seconds per query. With a B-tree index, it's ~10 lookups, 0.5ms total. That's a 10,000× difference and the",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>A database table with 100M rows. A query: <code>WHERE email = 'x@y.com'</code>. Without an index, the DB scans all 100M rows — <span class=\"hl-red\">seconds per query</span>. With a B-tree index, it's <span class=\"hl-green\">~10 lookups</span>, 0.5ms total. That's a 10,000× difference and the reason indexes exist.</p>\n      <p>But indexes aren't free — every write has to update the index too. The art is picking <em>what</em> to index (only hot-path queries), <em>what kind</em> (B-tree, hash, LSM, inverted), and <em>in what order</em> for composite indexes.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The four index families",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The four index families</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Index</th><th>Reads well</th><th>Writes well</th><th>Best for</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">B-tree</td><td>Point lookup + range scan in O(log N)</td><td>Moderate — log N rebalancing</td><td>General-purpose. Postgres, MySQL, Oracle default.</td></tr>\n        <tr><td class=\"algo-name\">LSM-tree</td><td>Slightly slower than B-tree (merge on read)</td><td>Excellent — sequential writes</td><td>Write-heavy. Cassandra, LevelDB, RocksDB.</td></tr>\n        <tr><td class=\"algo-name\">Hash</td><td>O(1) point lookup; no range</td><td>Fast</td><td>Exact-match only, tiny latency budgets. Redis, memcached.</td></tr>\n        <tr><td class=\"algo-name\">Inverted</td><td>Full-text / term lookups</td><td>Slow — per-term posting list updates</td><td>Search. Elasticsearch, Lucene.</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "B-tree in one breath",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">B-tree in one breath</h2></div>\n    <div class=\"prose\">\n      <p>A balanced tree where each internal node holds ~100–500 keys. For 1 billion rows, the tree is only 3–4 levels deep. Lookup = 3–4 random disk reads + final leaf scan = ~0.5–1ms.</p>\n      <p>Range scans are the killer feature: find the start, then walk leaf-level siblings. \"Give me all orders from May\" is one seek + a sequential scan, not a million lookups.</p>\n      <p>Every index row includes the indexed column(s) + a pointer to the actual row. A \"covering index\" includes every column the query needs, so you never have to fetch the actual row.</p>\n    \n      <div class=\"code-caption\" data-code-snippet=\"1\">Cursor-based pagination (stable under insert)</div>\n      <pre><code class=\"lang-sql\">-- ❌ OFFSET / LIMIT breaks: new rows shift everyone's view\n-- SELECT * FROM posts ORDER BY id DESC LIMIT 20 OFFSET 40;\n\n-- ✓ Cursor (opaque token = last-seen id or (ts, id) tuple):\nSELECT id, title, created_at\nFROM posts\nWHERE (created_at, id) &lt; ($1, $2)     -- cursor from previous page\nORDER BY created_at DESC, id DESC\nLIMIT 20;\n\n-- Encode cursor as base64(created_at || id); send to client.\n-- Stable under concurrent inserts. O(log N) per page via composite index.\n\nCREATE INDEX posts_ts_id_desc ON posts(created_at DESC, id DESC);</code></pre>\n  </div>"
+    },
+    {
+      "id": "variants",
+      "label": "LSM vs B-tree — the write-heavy tradeoff",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">LSM vs B-tree — the write-heavy tradeoff</h2></div>\n    <div class=\"tradeoff-grid\">\n      <div class=\"tradeoff-option\">\n        <div class=\"tradeoff-label\">B-tree</div>\n        <h4>Read-optimized</h4>\n        <p>Every write updates an existing tree node in place → random I/O. Well-suited when reads dominate writes (10:1 or more). Space-efficient (no duplicates).</p>\n      </div>\n      <div class=\"tradeoff-option chosen\">\n        <div class=\"tradeoff-label\">LSM-tree</div>\n        <h4>Write-optimized</h4>\n        <p>Writes go to an in-memory buffer, flushed to immutable sorted files. Background compaction merges files. <span class=\"hl-green\">Sequential writes</span> — SSDs love this. Cost: reads may check multiple files (bloom filters help).</p>\n      </div>\n    </div>\n    <div class=\"callout\">\n      <div class=\"callout-label\">Rule of thumb</div>\n      <p>B-tree if read:write is 10:1 or higher. LSM if writes dominate (logs, metrics, IoT, feeds). At 1:1 it's a wash; pick B-tree for operational familiarity.</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — composite index ordering matters",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — composite index ordering matters</h2></div>\n    <div class=\"prose\">\n      <p>You have <code>orders(user_id, status, created_at)</code>. You query mostly by user + status. Which column order?</p>\n      <p><strong>Index on (user_id, status, created_at):</strong></p>\n      <ul>\n        <li><code>WHERE user_id = 5 AND status = 'open'</code> — ✅ uses index</li>\n        <li><code>WHERE user_id = 5</code> alone — ✅ uses index (prefix)</li>\n        <li><code>WHERE status = 'open'</code> alone — ❌ can't use index (status is not leading)</li>\n        <li><code>WHERE user_id = 5 ORDER BY created_at</code> — ✅ uses index for sort (no extra sort step)</li>\n      </ul>\n      <p><strong>Rule:</strong> leading column is the most selective / most common filter. Trailing columns are for secondary filters and sort orders. Columns between them are the constraint — you can't skip.</p>\n      <p><strong>Don't over-index.</strong> Each index costs ~20–30% write throughput. Tables with 15 indexes are write-bound for no benefit. Start with the 2–3 most-used queries; measure; add only what's proven needed.</p>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Postgres B-tree</div><h4>Default for everything</h4><p>Covers 95% of use cases. GIN indexes for full-text and JSON. GiST for geospatial. Partial indexes for \"active users only.\"</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">RocksDB (embedded LSM)</div><h4>Under many distributed systems</h4><p>Used inside CockroachDB, TiDB, Kafka streams. Great write throughput. Complex tuning of compaction settings.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Elasticsearch inverted</div><h4>Search-first</h4><p>Term → doc_id posting lists. Scores documents by TF-IDF / BM25. Trade: 2–5× disk footprint vs source data.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Redis sorted sets</div><h4>Skiplist — a sort of index</h4><p>O(log N) insert/remove, O(log N) range queries by score. Leaderboards, time-series, priority queues.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Typeahead uses inverted indexes + prefix tries. E-commerce uses B-tree indexes on product IDs and category. Yelp uses geospatial B-tree variants. News feed uses LSM-style writes in Cassandra for the feed store.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

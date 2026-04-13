@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Compression &amp; Encoding — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 175; --accent-s: 60%; --accent-l: 40%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Sending 100 KB to a user costs <span class="hl">100ms over a 8 Mbps link</span>. Compress it to 20 KB → 20ms. Compression is the cheapest performance win in your stack: zero infrastructure changes, ~80% of the bytes saved, milliseconds of CPU. Yet thousands of APIs still ship uncompressed JSON.</p>
+      <p>The choice between gzip, brotli, zstd, snappy, lz4, protobuf, and msgpack hinges on workload: storage vs network, hot path vs cold archive, request body vs response body, server vs CDN edge.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The compression algorithm matrix</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Algorithm</th><th>Ratio</th><th>Speed (compress / decompress)</th><th>Best for</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">gzip / deflate</td><td>~70% size reduction on text</td><td>~100 MB/s / ~400 MB/s</td><td>Universal default; HTTP compatibility</td></tr>
+        <tr><td class="algo-name">brotli</td><td>~75-80% (best for text)</td><td>~30 MB/s / ~400 MB/s</td><td>Pre-compressed static assets at the CDN</td></tr>
+        <tr><td class="algo-name">zstd (Zstandard)</td><td>~70-78% tunable</td><td>~500 MB/s / ~1500 MB/s</td><td>Modern default — fast and good ratio</td></tr>
+        <tr><td class="algo-name">snappy</td><td>~50% — speed-prioritized</td><td>~500 MB/s / ~1700 MB/s</td><td>Internal RPC, on-disk LSM blocks</td></tr>
+        <tr><td class="algo-name">lz4</td><td>~50%</td><td>~750 MB/s / ~5000 MB/s</td><td>Fastest decompression — backups, RocksDB</td></tr>
+        <tr><td class="algo-name">xz / lzma</td><td>~85% (densest)</td><td>~5 MB/s / ~80 MB/s</td><td>Cold archives — Linux package mirrors, scientific data</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Compression vs serialization</h2></div>
+    <div class="prose">
+      <p>Two distinct savings:</p>
+      <ul>
+        <li><strong>Better serialization</strong> picks a denser format. JSON → Protobuf / MessagePack / Avro saves 50-80% before any compression. The data layout itself is more compact (binary integers, no field names per record, schema-aware).</li>
+        <li><strong>Compression</strong> applies an algorithm to whatever bytes you have. Compresses repetition, common substrings.</li>
+      </ul>
+      <p>Combine them: <strong>Protobuf + zstd</strong> on a wire payload typically lands 90-95% smaller than JSON without compression. Used by every high-performance internal RPC system (gRPC, Cap'n Proto, Thrift).</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Where to compress</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>HTTP responses</strong> — gzip or brotli via <code>Content-Encoding</code> header. Browsers all support both. Set <code>Accept-Encoding</code> negotiation. Static asset CDNs (Cloudflare, Fastly) compress automatically.</li>
+        <li><strong>HTTP request bodies</strong> — same headers, but most clients don't compress requests. Worth doing for large POST bodies (file uploads, batch APIs).</li>
+        <li><strong>Internal RPC</strong> — gRPC compresses per-message via <code>grpc-encoding</code>. Snappy or zstd typical inside datacenters where CPU is cheaper than NIC bandwidth.</li>
+        <li><strong>Database storage</strong> — Postgres TOAST, MySQL InnoDB row compression, Cassandra/RocksDB SSTable compression. Trade CPU for disk + cache.</li>
+        <li><strong>Logs + metrics</strong> — structured logs compress 10:1 with zstd. Pipe-and-compress before shipping to S3 / log aggregator.</li>
+        <li><strong>Backups + archives</strong> — xz or zstd-19 for max ratio. Restore is rare; size matters more than compression speed.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — zstd's underrated win</h2></div>
+    <div class="prose">
+      <p>Facebook open-sourced zstd in 2016. It's nearly Pareto-optimal: at any compression level, zstd matches or beats gzip on both ratio and speed. Yet most stacks still default to gzip out of inertia.</p>
+      <p>What zstd does well:</p>
+      <ul>
+        <li><strong>Tunable</strong> — levels 1 (fastest) to 22 (densest). Choose per-workload.</li>
+        <li><strong>Streaming</strong> — works on chunks; no need to buffer whole file.</li>
+        <li><strong>Trained dictionaries</strong> — pre-train a dictionary on representative data; new compression of similar data is 2-5× denser. Killer for compressing many small JSON payloads with similar shape.</li>
+        <li><strong>Hardware acceleration</strong> — Intel/AMD instructions for zstd; throughput exceeds memory bandwidth in some configurations.</li>
+      </ul>
+      <p>Brotli still beats zstd slightly on web text (HTML, CSS, JS) at high levels — Brotli's dictionary is hand-tuned for the web. For everything else, zstd wins.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">2025 defaults</div>
+        <p>Static web assets: brotli (precompressed at build, served with Content-Encoding). API responses: gzip (universal compatibility) or brotli (modern clients). Internal RPC: snappy or zstd. Logs/backups: zstd. Cold archives: xz or zstd-19.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Cloudflare / Vercel</div><h4>Brotli + gzip auto</h4><p>Edge precompresses both formats; serves whichever the client accepts.</p></div>
+      <div class="rw-card"><div class="rw-name">Kafka</div><h4>Snappy / lz4 / zstd per topic</h4><p>Producer compresses message batches. Storage and network savings; CPU paid once per batch.</p></div>
+      <div class="rw-card"><div class="rw-name">Cassandra / RocksDB</div><h4>Snappy / lz4 / zstd per SSTable</h4><p>Disk savings 2-5×; read overhead minimal. Default snappy or lz4 for hot, zstd for cold.</p></div>
+      <div class="rw-card"><div class="rw-name">Linux kernel / btrfs / zfs</div><h4>Native zstd compression</h4><p>Filesystem-level. Transparent to apps. 30% less disk for typical workloads at minimal CPU cost.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>News feed serves gzip + brotli responses at the edge. YouTube/Netflix uses brotli for manifests, codec-specific compression for media. Distributed logging compresses log batches with zstd before shipping. Video conferencing uses real-time codecs (a different compression class entirely).</p></div>
+  </section>
+
+</main>
+</body>
+</html>

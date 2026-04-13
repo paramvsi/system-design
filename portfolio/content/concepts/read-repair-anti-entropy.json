@@ -1,0 +1,65 @@
+{
+  "slug": "read-repair-anti-entropy",
+  "title": "Read Repair & Anti-Entropy",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 145,
+    "s": 55,
+    "l": 38
+  },
+  "category": "Distributed Systems",
+  "blurb": "You replicate data across 3 nodes for durability. A network blip causes node 2 to miss a write. Now node 1 + 3 have v2; node 2 has v1. Replicas have diverged. Without active repair, this divergence accumulates — the long",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>You replicate data across 3 nodes for durability. A network blip causes node 2 to miss a write. Now node 1 + 3 have v2; node 2 has v1. <strong>Replicas have diverged.</strong> Without active repair, this divergence accumulates — the longer the system runs, the more inconsistencies pile up. Eventually you read from node 2 and get stale data forever.</p>\n      <p>Dynamo-style systems (Cassandra, DynamoDB, Riak) use two complementary mechanisms: <strong>read repair</strong> (fix on the fly during reads) + <strong>anti-entropy</strong> (background sweep using <a href=\"/concepts/merkle-trees\">Merkle trees</a>). Together they keep replicas converging even under sustained partial failures.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "Read repair — opportunistic fix",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Read repair — opportunistic fix</h2></div>\n    <div class=\"prose\">\n      <p>On a quorum read (R=3 in N=3 system), the coordinator gets responses from multiple replicas. If they disagree:</p>\n      <ol>\n        <li>Take the most recent value (per timestamp / vector clock).</li>\n        <li>Return it to the client.</li>\n        <li>In the background, push the latest value to whichever replicas had stale versions.</li>\n      </ol>\n      <p>Cost: zero on the read path (the fix happens after the response). Benefit: every read on a divergent key fixes it. Hot keys converge in seconds.</p>\n      <p>Variants:</p>\n      <ul>\n        <li><strong>Foreground read repair</strong> — fix synchronously before returning. Slower; ensures the next read sees consistent data.</li>\n        <li><strong>Background read repair</strong> — fix async, return immediately. Faster; next read might still see stale.</li>\n        <li><strong>Probabilistic read repair</strong> — sample 10% of reads, repair on those. Cheap; eventually converges.</li>\n      </ul>\n    \n      <div class=\"code-caption\" data-code-snippet=\"1\">Read-repair in quorum read</div>\n      <pre><code class=\"lang-python\">def read_with_repair(key, replicas, R):\n    # Collect R responses\n    responses = []\n    for r in replicas:\n        try: responses.append((r, r.get(key)))\n        except: pass\n        if len(responses) &gt;= R: break\n\n    if not responses: return None\n\n    # Pick version with latest vector clock\n    latest = max(responses, key=lambda x: x[1].version if x[1] else 0)\n\n    # Read-repair: fire-and-forget writes to replicas with stale data\n    for r, resp in responses:\n        if resp is None or resp.version &lt; latest[1].version:\n            try: r.put(key, latest[1])  # non-blocking; doesn't affect caller\n            except: pass\n\n    return latest[1]\n\n# Lightweight anti-entropy: stale replicas caught up on every read they serve.</code></pre>\n  </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Anti-entropy — the background sweep",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Anti-entropy — the background sweep</h2></div>\n    <div class=\"prose\">\n      <p>Read repair only fixes keys that are read. <strong>Cold data — keys nobody reads — diverges silently.</strong> Anti-entropy sweeps the entire keyspace periodically.</p>\n      <p>Naive: replica A streams every key + value to replica B; B compares + repairs. Bandwidth = entire dataset. Useless at TB scale.</p>\n      <p>Practical: build a <a href=\"/concepts/merkle-trees\">Merkle tree</a> over each replica's key range. Replicas exchange roots first. Match → done, zero data transferred. Differ → recurse to identify exactly which sub-ranges diverge, transfer only those.</p>\n      <p>For 1 TB of identical data: one hash exchange. For 1 TB with 1000 differing keys: ~30 hash comparisons + 1000 row transfers. Bandwidth scales with divergence, not data size.</p>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "Combining the two",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Combining the two</h2></div>\n    <div class=\"tradeoff-grid\">\n      <div class=\"tradeoff-option\">\n        <div class=\"tradeoff-label\">Read repair only</div>\n        <h4>Fast convergence on hot data</h4>\n        <p>Hot keys (top 1% by traffic) re-converge in seconds. Cold data drifts forever. Bad for archive workloads where most data isn't read often.</p>\n      </div>\n      <div class=\"tradeoff-option chosen\">\n        <div class=\"tradeoff-label\">Read repair + anti-entropy</div>\n        <h4>Both hot and cold converge</h4>\n        <p>Read repair handles 99% of cases instantly. Weekly anti-entropy sweep catches the cold-key drift. Bandwidth amortized across days. The Cassandra default.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — hinted handoff, the third leg",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — hinted handoff, the third leg</h2></div>\n    <div class=\"prose\">\n      <p>There's a third related mechanism that completes the triangle. When node A is temporarily unreachable during a write, the coordinator stores the write locally as a <strong>hint</strong> (\"write this to A when it's back\"). When A recovers, hints are streamed to it.</p>\n      <p>Three-mechanism playbook in Dynamo-style systems:</p>\n      <ol>\n        <li><strong>Hinted handoff</strong> — handle short partitions. A is briefly unreachable; coordinator buffers writes; replays when A returns. Window: minutes to hours.</li>\n        <li><strong>Read repair</strong> — handle missed hints / longer outages. A came back but missed some hints. Reads expose the divergence; repair fixes on the fly. Window: seconds per hot key.</li>\n        <li><strong>Anti-entropy</strong> — final safety net. Cold keys never get read-repaired. Periodic Merkle-tree comparison closes the gap. Window: per scheduled run (weekly typical).</li>\n      </ol>\n      <p>Together: the system always converges to consistency, even after extended failures, without requiring synchronous replication on the hot path.</p>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">Interview answer</div>\n        <p>\"Eventual consistency requires active convergence. Three layers: hinted handoff for short partitions, read repair for hot-key drift, anti-entropy with Merkle trees for cold-key drift. Cassandra and DynamoDB run all three; together they guarantee replicas converge even when individual mechanisms miss.\"</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Cassandra</div><h4>All three layers</h4><p>Hinted handoff (3 hours default), read repair (10% of reads probabilistic), anti-entropy nodetool repair weekly.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">DynamoDB internal</div><h4>Same mechanisms</h4><p>Original Dynamo paper (2007) introduced the pattern. AWS-internal DynamoDB uses all three; they're invisible to users.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Riak</div><h4>Tunable per bucket</h4><p>Read repair always on. Anti-entropy can be tuned per workload — heavy-write buckets repair more aggressively.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">CockroachDB / TiDB</div><h4>Don't need it</h4><p>Strong-consistency systems use Raft replication — divergence can't happen. Read repair is unnecessary; anti-entropy unused.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>News feed's Cassandra-backed feed store relies on read-repair for the hot users + anti-entropy for cold archive. WhatsApp's chat replicas use hinted handoff during regional partition recovery. Distributed logging uses Merkle-based anti-entropy for log-ingest reconciliation.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 4
+}

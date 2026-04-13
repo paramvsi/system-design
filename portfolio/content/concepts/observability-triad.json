@@ -1,0 +1,65 @@
+{
+  "slug": "observability-triad",
+  "title": "Observability Triad",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 280,
+    "s": 55,
+    "l": 50
+  },
+  "category": "Observability & Security",
+  "blurb": "3 AM. Your on-call phone rings. Something is broken. You have 15 minutes before users notice and executives notice after that. With good observability, you grep a log, check a metric, pull a trace, and see the problem in",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>3 AM. Your on-call phone rings. Something is broken. You have 15 minutes before users notice and executives notice after that. With good observability, you grep a log, check a metric, pull a trace, and see the problem in 5 minutes. Without it, you guess, restart things, and hope.</p>\n      <p>Observability is the set of practices that lets you ask <strong>arbitrary questions about your system's behavior without shipping new code</strong>. The three pillars — logs, metrics, traces — each answer different questions.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The three pillars",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The three pillars</h2></div>\n    <div class=\"tradeoff-grid\">\n      <div class=\"tradeoff-option\">\n        <div class=\"tradeoff-label\">Logs</div>\n        <h4>Discrete events with full detail</h4>\n        <p>\"User 42 tried to pay $50, got charged, got receipt.\" One record per interesting event. Rich context, arbitrary fields. Most expensive to store and query. Best for: post-incident forensics, ad-hoc investigation.</p>\n      </div>\n      <div class=\"tradeoff-option chosen\">\n        <div class=\"tradeoff-label\">Metrics</div>\n        <h4>Aggregated numbers over time</h4>\n        <p>\"Requests/sec = 4200\" at each timestamp. Very cheap to store (pre-aggregated). Query fast even over weeks. No per-request detail. Best for: dashboards, alerts, SLO tracking.</p>\n      </div>\n      <div class=\"tradeoff-option\">\n        <div class=\"tradeoff-label\">Traces</div>\n        <h4>End-to-end request flow across services</h4>\n        <p>\"Request X took 340ms. 280ms of that was waiting on service B, which waited 200ms on the DB.\" Connects causes across service boundaries. Best for: diagnosing cross-service latency and cascading failures.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "The workflows — RED and USE",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">The workflows — RED and USE</h2></div>\n    <div class=\"prose\">\n      <p>Two mnemonics for picking metrics.</p>\n      <p><strong>RED (for services):</strong></p>\n      <ul>\n        <li><strong>R</strong>ate — requests/sec</li>\n        <li><strong>E</strong>rror rate — % of failed requests</li>\n        <li><strong>D</strong>uration — request latency (P50, P95, P99)</li>\n      </ul>\n      <p>If every service exposes RED metrics, you have enough to answer \"is the service healthy?\" in seconds.</p>\n      <p><strong>USE (for resources):</strong></p>\n      <ul>\n        <li><strong>U</strong>tilization — % busy (CPU, memory, disk)</li>\n        <li><strong>S</strong>aturation — queue depth, waiting time</li>\n        <li><strong>E</strong>rrors — error rate for that resource</li>\n      </ul>\n      <p>If you're trying to understand \"why is this host slow?\", USE metrics are the starting point.</p>\n    \n      <div class=\"code-caption\" data-code-snippet=\"1\">Exponential moving average for trending detection</div>\n      <pre><code class=\"lang-python\">class EMA:\n    \"\"\"Smoothed running average with geometric decay.\"\"\"\n    def __init__(self, alpha=0.1):\n        self.alpha = alpha  # higher = faster response, noisier\n        self.value = None\n\n    def update(self, x):\n        if self.value is None:\n            self.value = x\n        else:\n            self.value = self.alpha * x + (1 - self.alpha) * self.value\n        return self.value\n\n# For trending: ratio = current_rate / EMA_rate.\n# &gt; 1.5x = spiking.  α=0.1 covers ~10 periods; pick for your window.</code></pre>\n  </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Structured logging",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Structured logging</h2></div>\n    <div class=\"prose\">\n      <p>Stop writing <code>log.info(\"user \" + id + \" did \" + action)</code>. Start writing <code>log.info({event:\"action\", user_id:id, action:action, latency_ms:42})</code>. Structured logs = queryable logs. You can filter for <code>user_id=42</code> or <code>latency_ms &gt; 100</code> across millions of events.</p>\n      <p>Every modern log aggregator (Datadog, Honeycomb, Elasticsearch) indexes structured fields. Unstructured logs force grep and hope. Structured logs let you answer \"show me all errors for this user across the last 2 hours\" in seconds.</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — distributed tracing with OpenTelemetry",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — distributed tracing with OpenTelemetry</h2></div>\n    <div class=\"prose\">\n      <p>A user request touches 12 services. Which one took 200ms? The answer requires <strong>trace context propagation</strong>: every service call carries a trace ID + parent span ID in HTTP headers. Each service records its work as a span. Aggregated, you see a flame graph of the whole request.</p>\n      <p>Implementation via OpenTelemetry (OTel) — the standard replacing older projects (OpenTracing, OpenCensus):</p>\n      <ul>\n        <li><strong>Instrumentation libraries</strong> for each language auto-inject spans around HTTP calls, DB queries, message publishes.</li>\n        <li><strong>Context propagation</strong> uses W3C Trace Context headers (<code>traceparent</code>). Headers flow through HTTP, gRPC, even message queues.</li>\n        <li><strong>Sampling</strong> at 1% or 10% — you can't afford to store every trace. High-error or high-latency requests sampled at higher rates (\"tail-based sampling\").</li>\n        <li><strong>Backends</strong>: Jaeger (OSS), Honeycomb, Lightstep, AWS X-Ray. All speak OTel.</li>\n      </ul>\n      <p>The payoff: one-click navigation from a slow request → flame graph → exact DB query that took 180ms of the 200ms. No more guessing which service is guilty.</p>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Prometheus + Grafana</div><h4>Metrics</h4><p>Scrape-based metrics. Label-rich queries. Grafana dashboards. The open-source standard for metrics.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">ELK / Loki</div><h4>Logs</h4><p>Elasticsearch + Logstash + Kibana: search and analyze. Loki (Grafana's alternative): cheaper, label-based indexing like Prometheus.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Jaeger / Tempo</div><h4>Traces</h4><p>OpenTelemetry-native. Handles billions of spans. Fast flame-graph UI.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Datadog / Honeycomb</div><h4>Commercial unified platforms</h4><p>All three pillars in one UI. Pricey at scale but one cohesive experience. Honeycomb specifically pioneered \"wide events\" — structured logs used as metric + trace source.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Distributed logging problem literally designs the log-ingest pipeline. Payment gateway uses all three for forensics during charge disputes. Rate limiter exposes metrics for limit decisions so you can tune without code changes.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

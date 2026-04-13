@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Disaster Recovery — RTO &amp; RPO — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 0; --accent-s: 70%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Your entire AWS region goes down. Power failure, fiber cut, malicious actor, hurricane. How long until your service is back? How much data did you lose? These two questions have formal names: <strong>RTO</strong> (Recovery Time Objective) and <strong>RPO</strong> (Recovery Point Objective). Every serious system has explicit numbers for both, agreed with the business, and architecture designed to meet them.</p>
+      <p>"We have backups" is not a DR plan. "Our RTO is 1 hour, RPO is 5 minutes, tested quarterly via region failover" is.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">RTO vs RPO</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>RTO</strong> — Recovery Time Objective. How long until the service is back up after disaster strikes. "Within 1 hour."</li>
+        <li><strong>RPO</strong> — Recovery Point Objective. How much data loss you can tolerate. "At most 5 minutes of writes lost."</li>
+      </ul>
+      <p>They're orthogonal. You can have low RTO + high RPO ("we're back fast but lost a day of orders") or high RTO + low RPO ("we lost zero data but were down 12 hours"). Most businesses want both low — and pay for it.</p>
+    </div>
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-val">RTO &lt; 1 min</div><div class="kv-lbl">multi-region active-active</div></div>
+      <div class="kv-card"><div class="kv-val">RTO ~15 min</div><div class="kv-lbl">warm standby with auto-failover</div></div>
+      <div class="kv-card"><div class="kv-val">RTO 1-4 hr</div><div class="kv-lbl">cold standby with restore from backup</div></div>
+      <div class="kv-card"><div class="kv-val">RPO = 0</div><div class="kv-lbl">synchronous cross-region replication</div></div>
+      <div class="kv-card"><div class="kv-val">RPO &lt; 1 min</div><div class="kv-lbl">async replication, healthy network</div></div>
+      <div class="kv-card"><div class="kv-val">RPO 1-15 min</div><div class="kv-lbl">scheduled snapshot + WAL shipping</div></div>
+      <div class="kv-card"><div class="kv-val">RPO 1-24 hr</div><div class="kv-lbl">nightly backup only</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">The four DR tiers</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Tier</th><th>Cost overhead</th><th>RTO</th><th>RPO</th><th>How</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Backup &amp; restore</td><td>~5%</td><td>4-24 hr</td><td>4-24 hr</td><td>Daily backups to S3 cross-region; restore on disaster</td></tr>
+        <tr><td class="algo-name">Pilot light</td><td>~25%</td><td>1-4 hr</td><td>5-60 min</td><td>Minimal infra running in DR region; scale up on disaster + replay WAL</td></tr>
+        <tr><td class="algo-name">Warm standby</td><td>~50%</td><td>5-30 min</td><td>1-5 min</td><td>Full but downscaled stack in DR region; auto-promote</td></tr>
+        <tr><td class="algo-name">Multi-site active-active</td><td>~100% (2× infra)</td><td>seconds</td><td>0 (or near-0)</td><td>Both regions serving traffic; sync replication; DNS or anycast failover</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Choosing the right tier</h2></div>
+    <div class="prose">
+      <p>Cost scales steeply. Match tier to business impact:</p>
+      <ul>
+        <li><strong>Backup &amp; restore</strong> — internal tools, dev environments, low-stakes apps. Most startups have only this and don't realize.</li>
+        <li><strong>Pilot light</strong> — moderate-importance services where 1-hour downtime is annoying but not lethal.</li>
+        <li><strong>Warm standby</strong> — most B2B SaaS, e-commerce. 15-minute RTO is what enterprise customers expect.</li>
+        <li><strong>Multi-site active-active</strong> — payments, healthcare, financial trading, any system whose downtime makes the news. Pay 2×.</li>
+      </ul>
+      <p>The forcing function: <strong>SLA</strong>. If you sell 99.99% uptime (52 min/year), warm standby barely qualifies. If you sell 99.999% (5 min/year), only active-active works.</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — what real DR plans look like</h2></div>
+    <div class="prose">
+      <p>The plan is a document with these sections:</p>
+      <ol>
+        <li><strong>Service inventory</strong> — every component, its tier, RTO/RPO, dependencies. Everything that's not on this list is implicitly RTO=∞.</li>
+        <li><strong>Trigger conditions</strong> — what events cause DR activation. "Region health-check failure for &gt; 5 min" → declare incident.</li>
+        <li><strong>Decision authority</strong> — who calls the failover. Specific named people + 24/7 contact.</li>
+        <li><strong>Failover runbook</strong> — step-by-step. Tested. The 3am person should not need to think.</li>
+        <li><strong>Communication plan</strong> — status page, customer email templates, leadership escalation.</li>
+        <li><strong>Data validation</strong> — how do we verify the DR region's data is intact post-failover.</li>
+        <li><strong>Failback procedure</strong> — once primary recovers, how to come home. Often more dangerous than the original failover.</li>
+        <li><strong>Test cadence</strong> — quarterly minimum. Annual full-region failover.</li>
+      </ol>
+      <p>Critical: <strong>untested DR doesn't exist</strong>. The first time you fail over should not be in a real disaster. Game-day drills find the broken assumptions before they bite — pair this with <a href="/concepts/chaos-engineering">chaos engineering</a>.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"Our DR tier is warm-standby cross-region: full infra running but downscaled in us-west-2, async replication from us-east-1. RTO 15 min via Route 53 health-check failover; RPO 1 min. We game-day quarterly. Multi-site active-active for payments only — pays its 2× cost via a stricter SLA."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">AWS Aurora Global DB</div><h4>RPO &lt; 1s, RTO &lt; 1 min</h4><p>Cross-region replica with sub-second lag. Promote replica to primary in &lt; 1 min. Backbone of many SaaS DR plans.</p></div>
+      <div class="rw-card"><div class="rw-name">Stripe</div><h4>Multi-region active-active for payments</h4><p>Payments served from multiple regions simultaneously. Region loss is ~zero downtime, ~zero data loss. The most expensive tier; required by SLA.</p></div>
+      <div class="rw-card"><div class="rw-name">Netflix</div><h4>Multi-region streaming</h4><p>Three AWS regions, all active. Region failure is invisible to viewers. Cost: ~3× infra; tradeoff: never goes down.</p></div>
+      <div class="rw-card"><div class="rw-name">Most B2B SaaS</div><h4>Warm standby</h4><p>Realistic compromise. 15-min RTO + 1-min RPO at ~50% extra cost. Meets enterprise customer demands.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Payment gateway demands the strictest RTO/RPO. Stock exchange and trading platforms run multi-region active-active. E-commerce checkout + inventory uses warm standby with sub-minute RPO. Distributed logging trades higher RPO (hourly) for lower cost.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

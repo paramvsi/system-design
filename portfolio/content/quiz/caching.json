@@ -1,0 +1,56 @@
+{
+  "slug": "caching",
+  "cluster": "Caching",
+  "blurb": "TTLs, eviction, stampedes, and write strategies.",
+  "accent": { "h": 200, "s": 70, "l": 50 },
+  "questions": [
+    {
+      "q": "A cached value expires and 10,000 concurrent readers all miss at once, pounding the origin. What's this called?",
+      "choices": ["Cache thrashing", "Cache stampede / thundering herd", "Cache poisoning", "Cache invalidation"],
+      "correct": 1,
+      "explanation": "Cache stampede (a.k.a. thundering herd). Mitigations: per-key request coalescing (one fetch in flight), TTL jitter, XFetch probabilistic early recomputation."
+    },
+    {
+      "q": "Which eviction policy is best for workloads with strong temporal locality (recently-used items likely to be re-used)?",
+      "choices": ["FIFO", "LRU (least recently used)", "Random", "LFU (least frequently used)"],
+      "correct": 1,
+      "explanation": "LRU assumes recency predicts future access. LFU is better when popularity is more stable than recency. Random is surprisingly close to LRU on many workloads."
+    },
+    {
+      "q": "Write-through vs write-back vs write-around. Which gives the fastest write path AND lowest read miss rate for recently-written data?",
+      "choices": ["Write-through", "Write-back", "Write-around", "All equivalent"],
+      "correct": 1,
+      "explanation": "Write-back: writes go to cache first (fast) and flush to DB async (still cached). Write-through is durable but slow. Write-around never caches on write, so reads of just-written data miss."
+    },
+    {
+      "q": "You're caching user profiles at the application tier. A user updates their name. Which approach most reliably keeps reads consistent?",
+      "choices": ["TTL-only expiry", "Cache-aside with explicit invalidate on write", "Write-through", "CDN cache purge"],
+      "correct": 1,
+      "explanation": "Cache-aside: app reads cache-or-DB; on write, app updates DB and explicitly invalidates the cache key. Write-through also works but couples the layers."
+    },
+    {
+      "q": "Why does TTL jitter (±10%) help against cache stampedes?",
+      "choices": ["Increases hit ratio", "Prevents a popular batch of keys from expiring simultaneously", "Lowers memory usage", "Improves write latency"],
+      "correct": 1,
+      "explanation": "If 1000 keys are all cached at T=0 with TTL=60s, they all expire at T=60 → 1000 concurrent stampedes. Jitter spreads expiries across a window."
+    },
+    {
+      "q": "A CDN has tiered cache (edge → regional → origin). Why is this layering valuable?",
+      "choices": ["Higher hit ratio at edge", "Regional tier absorbs edge misses, drastically reducing origin load", "Tiering is just cost optimization", "Regional is for analytics only"],
+      "correct": 1,
+      "explanation": "Edge caches can only hold a subset of content. A regional (mid-tier) cache sees aggregated misses from many edges, hits at much higher rate than any individual edge — cuts origin load ~10×."
+    },
+    {
+      "q": "Redis cluster has a hot key receiving 500K GETs/sec. One shard can't keep up. What's the standard mitigation?",
+      "choices": ["Increase TTL", "Key replication across multiple shards + client-side load balancing", "Use write-back caching", "Switch to Memcached"],
+      "correct": 1,
+      "explanation": "Replicate the hot key across N shards (salt the key with a hash suffix); clients read-load-balance across the replicas. Common at Twitter, Discord for celebrity-key hotspots."
+    },
+    {
+      "q": "What's the Vary header's role in HTTP caching?",
+      "choices": ["Tells CDN to vary TTL", "Declares which request headers affect the response — cache must key by them", "Enables gzip", "Sets cache size"],
+      "correct": 1,
+      "explanation": "Vary: Accept-Encoding means the same URL has different cached versions based on the client's encoding support. Skipping Vary causes serving gzipped content to a client that didn't request it."
+    }
+  ]
+}

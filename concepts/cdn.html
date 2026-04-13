@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>CDN — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 190; --accent-s: 70%; --accent-l: 42%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Your origin server is in Virginia. Your user is in Singapore. A round-trip over the Pacific is <span class="hl">~180ms</span>, minimum, <em>without</em> TLS handshake, TCP slow-start, or any actual work. Serve a page with 40 assets (images, scripts, fonts) and you're looking at a 2–3 second page load before you've computed anything.</p>
+      <p>A CDN copies your static assets to ~300 data centers globally. The Singapore user hits a machine <span class="hl">20ms away</span>. You didn't change your code — you pushed the bytes closer to eyeballs.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Intuition</h2></div>
+    <div class="prose">
+      <p>A global chain like Starbucks doesn't have one central warehouse shipping coffee to every store daily. They have <strong>regional warehouses</strong>. Your local Starbucks restocks from the warehouse 50 miles away, not the roastery in Seattle.</p>
+      <p>The <strong>origin</strong> is the roastery (the source of truth, the place that makes the coffee). The <strong>edge</strong> is the local warehouse (cached copies, close to customers). When demand spikes, the warehouse absorbs it — the roastery never notices.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">How it works</h2></div>
+    <div class="prose">
+      <p>When a request hits the CDN edge (closest PoP to the user):</p>
+      <ol>
+        <li><strong>Cache hit?</strong> Return the cached bytes immediately. ~10–50ms. Done.</li>
+        <li><strong>Cache miss?</strong> Edge fetches from origin (or from a regional "shield" cache upstream), stores the response, returns it. First user pays the latency cost; the next 10,000 don't.</li>
+        <li><strong>Cache keyed by</strong> URL + chosen headers (e.g., <code>Accept-Encoding</code> so gzip vs brotli get separate entries). If you add <code>Cookie</code> to the cache key, you'll have zero hit rate — every user is different.</li>
+        <li><strong>TTL from origin headers</strong> — <code>Cache-Control: max-age=86400</code> means cache for a day. Or set it in the CDN config.</li>
+      </ol>
+      <p>Two pull modes:</p>
+      <ul>
+        <li><strong>Pull CDN</strong> (default): edges fetch on first miss. Zero ops cost, first users are slow. What Cloudflare, Fastly, CloudFront do by default.</li>
+        <li><strong>Push CDN</strong>: you upload assets to edges ahead of time (via API or S3 sync). Zero first-user latency, but you manage invalidation. Video platforms use this.</li>
+      </ul>
+    </div>
+
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-val">~300</div><div class="kv-lbl">PoPs (Cloudflare, 2025)</div></div>
+      <div class="kv-card"><div class="kv-val">~10–50ms</div><div class="kv-lbl">edge hit latency</div></div>
+      <div class="kv-card"><div class="kv-val">90–99%</div><div class="kv-lbl">typical hit rate</div></div>
+      <div class="kv-card"><div class="kv-val">70–90%</div><div class="kv-lbl">origin traffic reduction</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Variants</h2></div>
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">Pull CDN</div>
+        <h4>Lazy, on-miss fetch</h4>
+        <p>What you use for websites, APIs with cacheable responses, public static files. Configure <code>Cache-Control</code> headers at origin and forget. Invalidation via API call or versioned URLs (<code>/app.abc123.js</code>).</p>
+      </div>
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">Push CDN</div>
+        <h4>Proactive upload</h4>
+        <p>What you use for video streaming, game client patches, scheduled content drops. You pay the upload cost once; first viewer gets edge speed. Common with S3 + CloudFront origin-failover.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Tradeoffs</h2></div>
+    <div class="prose">
+      <p><strong>When CDN absolutely wins:</strong> static assets, images, videos, public APIs with long TTLs, HTML for logged-out pages, software downloads. Anything cacheable gives you orders-of-magnitude latency + cost improvement.</p>
+      <p><strong>When CDN doesn't help:</strong></p>
+      <ul>
+        <li>Personalised responses (logged-in HTML) — cache key must include user ID, hit rate ≈ 1 per user, cache is pointless.</li>
+        <li>Mutations (POST/PUT/DELETE) — CDNs pass these straight through to origin.</li>
+        <li>Dynamic data with sub-second freshness needs — short TTLs defeat the purpose.</li>
+      </ul>
+      <div class="callout callout-warn">
+        <div class="callout-label">Cookie trap</div>
+        <p>If your app sets a session cookie on every request (even public pages), and your CDN is configured to vary cache by <code>Cookie</code>, your hit rate drops to 0%. Either scope cookies to authenticated paths (<code>Set-Cookie; Path=/app</code>) or explicitly strip them at the edge.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Deep dive — invalidation & versioning</h2></div>
+    <div class="prose">
+      <p>You deployed a new <code>app.js</code>. Users around the world still have <code>app.js</code> cached at the edge for the next 24 hours (per your TTL). Two ways to fix this:</p>
+      <p><strong>Explicit purge</strong> — call the CDN API: <code>POST /zones/xyz/purge_cache {"files": ["https://cdn.example.com/app.js"]}</code>. Cloudflare: ~30 seconds globally. CloudFront: ~60 seconds. Fastly: <span class="hl">~150ms</span> (industry-leading). Explicit purge is simple but every deploy costs an API call per changed file.</p>
+      <p><strong>Versioned URLs (preferred)</strong> — include a content hash in the filename: <code>/app.abc123.js</code>. The URL <em>changes</em> when the content changes, so the CDN sees a new cacheable object. Old URLs stay in cache forever (harmless) or get evicted by LRU. Zero invalidation API calls. Your HTML references the new versioned URL, users fetch it on next page load.</p>
+      <p>Modern webpack/Vite/Next.js all emit versioned asset URLs by default. <strong>Ship versioning, skip purging.</strong></p>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Cloudflare</div><h4>Global pull CDN + security</h4><p>~300 PoPs. DDoS protection, WAF, edge workers. Free tier handles startup traffic; paid tiers go to enterprise scale.</p></div>
+      <div class="rw-card"><div class="rw-name">AWS CloudFront</div><h4>Pull CDN, S3-native</h4><p>~400 edge locations. Tight integration with S3, ALB, API Gateway. Slightly slower purge (~60s) but cheapest for AWS-native stacks.</p></div>
+      <div class="rw-card"><div class="rw-name">Fastly</div><h4>Programmable edge</h4><p>VCL-based config, instant purge (~150ms). What the NYT, GitHub, and Stripe use. Expensive but unmatched control.</p></div>
+      <div class="rw-card"><div class="rw-name">Akamai</div><h4>The incumbent</h4><p>Biggest network (~400k servers in ~130 countries), used by Apple, Netflix (partly), government sites. Complex to configure; enterprise-only pricing.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">08</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>URL shortener puts redirects on the edge. YouTube/Netflix push encoded video to regional CDN caches. Google Drive caches thumbnails and file metadata. Live streaming pushes HLS segments to the edge.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

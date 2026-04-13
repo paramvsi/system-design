@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Concurrency Models — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 220; --accent-s: 60%; --accent-l: 48%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>"Handle 50k concurrent connections" is an easy requirement to write and a hard one to meet. Every language offers a <em>concurrency model</em> — threads, event loops, actors, coroutines, or some combo. Each has different costs: threads consume memory, event loops can't use multiple cores, actors trade simplicity for message overhead. Picking wrong caps your system's throughput by 10×.</p>
+      <p>Interview answer: "how does your language/runtime handle concurrency?" should be instant, with tradeoffs.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The four models</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Model</th><th>Unit of concurrency</th><th>Memory per unit</th><th>Exemplars</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">OS threads</td><td>Kernel thread</td><td>~1–8 MB stack</td><td>Java (pre-Loom), C++, Python</td></tr>
+        <tr><td class="algo-name">Event loop</td><td>Callback / Promise</td><td>~KB per task</td><td>Node.js, nginx, Redis</td></tr>
+        <tr><td class="algo-name">Coroutines / green threads</td><td>User-space fiber</td><td>~KB stack (growable)</td><td>Go, Python asyncio, Kotlin coroutines, Java Loom</td></tr>
+        <tr><td class="algo-name">Actors</td><td>Mailbox + single-threaded actor</td><td>~KB per actor</td><td>Erlang, Akka, Elixir</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Event loop — Node's choice</h2></div>
+    <div class="prose">
+      <p>One thread. It runs a loop: pick an event from the queue, run its handler, go back. I/O is async — the handler issues <code>read()</code> and returns immediately; the runtime re-queues the continuation when the read completes.</p>
+      <p><strong>Why it's fast</strong>: no thread context switches, no stack allocations per connection. 50k connections = 50k small closures in memory. A single Node process can hold 100k+ WebSocket connections on modest hardware.</p>
+      <p><strong>Why it's fragile</strong>: any blocking CPU work freezes everyone. One <code>JSON.parse</code> of a 10MB string stalls every connection on the loop. Mitigations: worker threads for CPU work, stream-based parsing, never sleep.</p>
+      <p><strong>Limit</strong>: one CPU core. Need more? Run N Node processes behind a load balancer. Each has its own loop.</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Deep dive — why Go eats Java's lunch on servers</h2></div>
+    <div class="prose">
+      <p>Java's traditional model: one thread per request. 10k requests = 10k threads × 2MB stack = 20 GB RAM just for stacks. Context switches dominate. Can't do it.</p>
+      <p>Go's model: <strong>goroutines</strong>. User-space coroutines with ~2 KB starting stack (grows as needed). 10k connections = 10k goroutines × 2 KB = 20 MB. Go's runtime multiplexes them onto a pool of N OS threads (N = CPU count). Each syscall yields the goroutine; the scheduler picks another one.</p>
+      <p>Result: you write synchronous-looking code (<code>conn.Read()</code>, <code>conn.Write()</code>) and get async performance for free. No callback hell, no <code>async/await</code> propagation, no special "blocking = bad" discipline. The language hides the machinery.</p>
+      <p>This is why Go is the default for high-concurrency servers in 2025 — Kubernetes, Docker, Prometheus, CockroachDB, Consul all written in Go. Java 21+ Loom (virtual threads) brings the same model to JVM, retrofitting 30 years of Java apps.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">The rule of thumb</div>
+        <p>For I/O-bound servers (APIs, proxies, chat): Go, async Python, Node, or Java with Loom. For CPU-bound workloads: threads with careful pooling. For fault-tolerant message systems: actors (Erlang, Akka).</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">The actor model</h2></div>
+    <div class="prose">
+      <p>Each actor is a single-threaded computation with a mailbox. Actors communicate by sending messages — they never share mutable state directly. No locks, no data races (by construction).</p>
+      <p>Erlang's killer feature: actors can supervise each other. An actor that crashes doesn't take the process down — its supervisor restarts it. "Let it crash" is a legitimate error-handling strategy. WhatsApp famously scaled to 2M connections per box on Erlang because actor-crashes are cheap and local.</p>
+      <p>Cost: every interaction is a message. Small, fast operations pay overhead vs direct method calls. Most languages don't integrate actors naturally — Akka (JVM) and Orleans (.NET) add them as libraries; Erlang and Elixir bake them in.</p>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">WhatsApp</div><h4>Erlang actors</h4><p>2M+ connections per server. Supervisor trees isolate failures. The platform that made the actor model famous.</p></div>
+      <div class="rw-card"><div class="rw-name">Kubernetes / Docker</div><h4>Go goroutines</h4><p>Every controller watches events in its own goroutine. Thousands of goroutines per process, gracefully multiplexed.</p></div>
+      <div class="rw-card"><div class="rw-name">Nginx / Redis</div><h4>Event loop + processes</h4><p>One loop per process. Run N worker processes. Handles millions of concurrent connections per box.</p></div>
+      <div class="rw-card"><div class="rw-name">Rust (Tokio) / Java Loom</div><h4>Modern async</h4><p>Same goroutine-style model brought to Rust + Java. Synchronous-looking code, async under the hood.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>WhatsApp's scale hinges on Erlang actors. Video conferencing signaling uses Go for goroutine-per-room. Stock exchange matching engines use single-threaded event loops for determinism. PUBG game-servers use actor-like entity models.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

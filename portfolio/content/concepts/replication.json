@@ -1,0 +1,59 @@
+{
+  "slug": "replication",
+  "title": "Replication",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 175,
+    "s": 62,
+    "l": 38
+  },
+  "category": "Databases",
+  "blurb": "One database server holds your data. The disk dies. You lose everything. Replication — keeping copies on multiple servers — solves three problems at once: durability (survive hardware failures), availability (serve reads",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>One database server holds your data. The disk dies. You lose everything. Replication — keeping copies on multiple servers — solves three problems at once: <span class=\"hl\">durability</span> (survive hardware failures), <span class=\"hl\">availability</span> (serve reads when one replica is down), and <span class=\"hl\">read scale</span> (spread reads across replicas).</p>\n      <p>It introduces two hard problems: <strong>when is a write \"done\"</strong> (replica 1? all replicas?) and <strong>what happens when replicas disagree</strong>. Every DB answers these differently.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The three topologies",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The three topologies</h2></div>\n    <div class=\"tradeoff-grid\">\n      <div class=\"tradeoff-option chosen\">\n        <div class=\"tradeoff-label\">Leader-follower (primary-replica)</div>\n        <h4>One writer, N readers</h4>\n        <p>All writes go to one leader. The leader ships the change log to N followers. Reads can go anywhere. Simple, well-understood, works for 90% of systems. Postgres, MySQL, MongoDB, Redis default to this.</p>\n      </div>\n      <div class=\"tradeoff-option\">\n        <div class=\"tradeoff-label\">Multi-leader</div>\n        <h4>Every node accepts writes</h4>\n        <p>Multiple leaders, each in a different datacenter. Writes are eventually reconciled across leaders. Used for multi-region active-active. Conflict resolution is the hard part — last-write-wins, CRDTs, or application-level merging.</p>\n      </div>\n      <div class=\"tradeoff-option\">\n        <div class=\"tradeoff-label\">Leaderless (Dynamo-style)</div>\n        <h4>No designated leader</h4>\n        <p>Writes and reads go to any N nodes. Quorum rules (<code>W + R &gt; N</code>) ensure consistency. Cassandra, DynamoDB. Maximum availability, weakest consistency.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "Sync vs async — the latency/durability dial",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Sync vs async — the latency/durability dial</h2></div>\n    <div class=\"prose\">\n      <p>A write arrives at the leader. The leader can:</p>\n      <ol>\n        <li><strong>Synchronous replication</strong>: wait for at least one replica to confirm, then return success. Durable against leader failure. <span class=\"hl-red\">Costs</span> — every write latency = leader + network + replica. If a replica is slow or down, writes stall.</li>\n        <li><strong>Asynchronous replication</strong>: return success immediately after writing locally. Ship to replicas in the background. Fast. <span class=\"hl-red\">Costs</span> — if the leader crashes before shipping, data is lost. Replicas lag (replica lag).</li>\n        <li><strong>Semi-sync</strong>: wait for ≥1 replica to <em>acknowledge receipt</em> (not commit). Middle ground. MySQL's default.</li>\n      </ol>\n      <p>For money: always sync. For social media: async is usually fine (a second of replica lag is invisible; an outage from a slow replica is catastrophic).</p>\n    </div>\n    <div class=\"kv-grid\">\n      <div class=\"kv-card\"><div class=\"kv-val\">+1–5 ms</div><div class=\"kv-lbl\">sync replication cost (in-region)</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">+70–150 ms</div><div class=\"kv-lbl\">sync replication cost (cross-region)</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">ms–sec</div><div class=\"kv-lbl\">typical async replica lag</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">hours</div><div class=\"kv-lbl\">worst-case lag during replica catch-up</div></div>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — the three eternal replication bugs",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Deep dive — the three eternal replication bugs</h2></div>\n    <div class=\"prose\">\n      <p><strong>1. Read-your-own-writes.</strong> User posts a photo. Write goes to leader. User immediately refreshes — read goes to a lagging replica that doesn't have the photo yet. User panics, re-uploads. Two photos now exist.</p>\n      <p><strong>Mitigation:</strong> route writes and the user's subsequent reads to the same replica for some window (session stickiness). Or force reads-after-writes to hit the leader for a few seconds.</p>\n      <p><strong>2. Monotonic reads.</strong> User refreshes the comment thread: reads from replica A, sees 10 comments. Refreshes again: reads from replica B (more lagged), sees 8. The count went backward.</p>\n      <p><strong>Mitigation:</strong> route each user to a consistent replica (hash by user ID). Or use consistent-read APIs.</p>\n      <p><strong>3. Failover split-brain.</strong> Leader briefly unreachable. Ops promotes a follower to leader. Original leader comes back, still thinks it's leader. Two leaders accept conflicting writes.</p>\n      <p><strong>Mitigation:</strong> fencing tokens (every write includes a monotonically-increasing token; stale leader's writes get rejected). Consensus (Raft/Paxos) picks the unambiguous leader. Never rely on \"if I can't reach the other node, I'm the leader.\"</p>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Postgres streaming replication</div><h4>Async leader-follower, tunable to sync</h4><p>Ships the WAL to followers. Set <code>synchronous_commit=on</code> + <code>synchronous_standby_names</code> for sync. Standard pattern for most apps.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">MySQL group replication</div><h4>Multi-primary optional</h4><p>Plugin that lets any node accept writes. Uses Paxos for conflict resolution. Tricky to run; most shops stick with leader-follower.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Cassandra</div><h4>Leaderless</h4><p><code>W + R &gt; N</code> quorum. Writes to any N replicas; reads from any R. Tunable per query.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">DynamoDB global tables</div><h4>Multi-leader across regions</h4><p>Each region is a leader for local writes. Cross-region conflicts resolved last-write-wins. Under 1 second typical convergence.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>URL shortener uses leader-follower Postgres. Payment gateway uses synchronous replication for the ledger. News feed uses Cassandra's leaderless model for the feed store. WhatsApp uses cross-region multi-primary for message delivery.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Delivery Guarantees — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 25; --accent-s: 85%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>You send a message. The network is flaky. Did it arrive? If you retry, does the consumer see it twice? If you don't retry, did it get lost?</p>
+      <p>Three answers exist: <strong>at-most-once</strong> (may drop), <strong>at-least-once</strong> (may duplicate), <strong>exactly-once</strong> (the elusive unicorn). Every message system's correctness story starts with which one it gives you. Every consumer's correctness story starts with "I assume at-least-once, so I'm idempotent."</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The three guarantees</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Guarantee</th><th>Can lose?</th><th>Can duplicate?</th><th>When acceptable</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">At-most-once</td><td>Yes</td><td>No</td><td>Metrics, telemetry, ephemeral UI updates — losing one sample is invisible</td></tr>
+        <tr><td class="algo-name">At-least-once</td><td>No</td><td>Yes</td><td>Default choice. Everything important. Requires idempotent consumers.</td></tr>
+        <tr><td class="algo-name">Exactly-once</td><td>No</td><td>No</td><td>When duplicates are catastrophic AND loss is catastrophic. Rare; expensive.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">At-most vs at-least — the ACK timing</h2></div>
+    <div class="prose">
+      <p>The difference boils down to <strong>when the consumer acknowledges</strong>:</p>
+      <ul>
+        <li><strong>ACK before processing → at-most-once.</strong> Consumer receives message, acks immediately, then processes. If consumer crashes mid-process, message is already acked (gone from queue) — <em>lost</em>.</li>
+        <li><strong>ACK after processing → at-least-once.</strong> Consumer receives, processes, then acks. If consumer crashes before acking, message stays in queue → redelivered on retry → <em>duplicated</em>.</li>
+      </ul>
+      <p>Everyone picks at-least-once. The solution to duplicates is not a stronger guarantee — it's <strong>idempotent consumers</strong>.</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Deep dive — why exactly-once is (almost) a lie</h2></div>
+    <div class="prose">
+      <p>Exactly-once across independent systems (producer → queue → consumer → downstream) is <strong>provably impossible</strong> without transactional coordination. The proof: generals problem. Any message to the downstream can be lost; any response can be lost. You always have some retry strategy, which means either "don't retry" (at-most-once) or "retry until confirmed" (at-least-once).</p>
+      <p><strong>But Kafka claims exactly-once!</strong> True — <em>within Kafka</em>, with the transactional API. It works because:</p>
+      <ol>
+        <li>Producer and broker share a transaction ID; the broker deduplicates messages with the same producer + sequence number.</li>
+        <li>Consumer reads messages AND commits offset in the <em>same Kafka transaction</em>. Read + offset-commit succeed together or both get rolled back.</li>
+        <li>"Exactly once from Kafka topic → Kafka topic" is the only rigorous claim. Writing to an external DB at the end (side effect) breaks the guarantee unless the external DB is also part of the transaction.</li>
+      </ol>
+      <p><strong>Idempotent consumers are the real answer.</strong> Assign each message a unique ID. The consumer maintains a "seen" set (usually a DB unique constraint). Duplicate message → unique constraint violation → ignore silently. Logically exactly-once with at-least-once delivery underneath.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"We use at-least-once delivery with idempotent consumers. Each message has a unique event ID, and we enforce uniqueness in the DB. This gives us exactly-once semantics end-to-end without needing distributed transactions."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">How to make consumers idempotent</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>Deterministic side effects.</strong> If processing the same message twice produces the same result, you don't need anything special. "Set user X status to active" is idempotent. "Increment user X counter" is not.</li>
+        <li><strong>Unique-key upserts.</strong> INSERT ... ON CONFLICT DO NOTHING. The second delivery of the same message becomes a no-op.</li>
+        <li><strong>Processed-ID table.</strong> Maintain <code>processed_events(event_id)</code>. Start of handler: INSERT; on duplicate-key error → already processed, return. On success, commit business change + INSERT together in one DB transaction.</li>
+        <li><strong>Idempotency keys in APIs.</strong> Client sends <code>Idempotency-Key</code> header; server stores first response by key; retries return the cached response. Stripe's approach.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Stripe payments</div><h4>At-least-once + idempotency keys</h4><p>Clients include <code>Idempotency-Key</code> on charge requests. Retries of the same request return the same charge without double-billing. The industry gold standard.</p></div>
+      <div class="rw-card"><div class="rw-name">Kafka transactional</div><h4>Exactly-once within Kafka</h4><p>Producer-to-consumer exactly-once via transaction IDs + offset commits in the same transaction. Breaks when writing to external systems.</p></div>
+      <div class="rw-card"><div class="rw-name">Email dispatch</div><h4>At-least-once (and accept duplicates)</h4><p>Mail services typically guarantee at-least-once. The occasional double email is preferable to losing password resets.</p></div>
+      <div class="rw-card"><div class="rw-name">Analytics pipelines</div><h4>At-most-once, usually</h4><p>Dropping 0.01% of events barely affects metrics. Operational simplicity wins over correctness.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Payment gateway requires idempotency keys for every charge. WhatsApp message delivery uses at-least-once with client-side deduplication. Notification system uses at-least-once with idempotent hooks. Distributed queue exposes at-least-once semantics by default.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

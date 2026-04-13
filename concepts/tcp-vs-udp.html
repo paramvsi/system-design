@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>TCP vs UDP — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 220; --accent-s: 55%; --accent-l: 48%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>"TCP is reliable, UDP is fast" is the bumper sticker. True, but the interesting question is <em>why you'd ever choose UDP</em>. For decades the answer was niche (DNS, streaming). Now — with QUIC, WebRTC, and modern games — UDP is everywhere under a reliability layer you built yourself. Understanding the tradeoff means understanding what TCP gives you and what it costs.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">What TCP does for you</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Reliability.</strong> Retransmits lost packets. Orders them. No application gets truncated data.</li>
+        <li><strong>Flow control.</strong> Sender slows down if receiver's buffer fills.</li>
+        <li><strong>Congestion control.</strong> Sender slows down if the network shows loss — preventing collapse when everyone is heavy.</li>
+        <li><strong>Connection semantics.</strong> Three-way handshake establishes a session with sequence numbers. Four-way teardown.</li>
+      </ul>
+      <p>UDP offers none of this. It's a thin wrapper around IP: fire and forget, per-packet, no delivery guarantee, no ordering, no session.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">When TCP's guarantees become the problem</h2></div>
+    <div class="prose">
+      <p>Three scenarios where TCP hurts:</p>
+      <p><strong>1. Real-time media.</strong> Voice or video: the packet for frame 42 got lost. TCP insists on retransmitting it before delivering frame 43. By the time frame 42 arrives, it's 300ms late and useless — better to skip it and stay current. UDP lets the application choose "skip" without argument.</p>
+      <p><strong>2. High-frequency small messages.</strong> DNS queries, game server updates at 60 Hz. TCP handshake is 1 round-trip. UDP has zero. For short-lived exchanges, TCP setup is more expensive than the payload.</p>
+      <p><strong>3. Head-of-line blocking across streams.</strong> HTTP/2 multiplexes many streams over one TCP connection. If one packet is lost, ALL streams stall until TCP retransmits it — even streams with no lost packets. HTTP/3 (QUIC over UDP) fixes this.</p>
+      <div class="callout callout-warn">
+        <div class="callout-label">The point</div>
+        <p>"Fast vs reliable" is misleading. TCP's <em>reliability mechanism</em> causes latency spikes you can't control. UDP lets you build your own reliability tuned for your use case.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">The comparison</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Property</th><th>TCP</th><th>UDP</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Delivery</td><td>Guaranteed (or connection errors)</td><td>Best effort — may drop</td></tr>
+        <tr><td class="algo-name">Ordering</td><td>In-order</td><td>No ordering</td></tr>
+        <tr><td class="algo-name">Connection</td><td>Stateful (3-way handshake)</td><td>Stateless (no handshake)</td></tr>
+        <tr><td class="algo-name">Congestion control</td><td>Built-in</td><td>Your responsibility</td></tr>
+        <tr><td class="algo-name">Header overhead</td><td>20 bytes</td><td>8 bytes</td></tr>
+        <tr><td class="algo-name">Setup RTT</td><td>1 (handshake)</td><td>0</td></tr>
+        <tr><td class="algo-name">Head-of-line blocking</td><td>Yes</td><td>No</td></tr>
+        <tr><td class="algo-name">Use for</td><td>Web, email, most APIs</td><td>DNS, video, games, QUIC/HTTP3</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — QUIC and why HTTP/3 is on UDP</h2></div>
+    <div class="prose">
+      <p>HTTP has always run on TCP. HTTP/2 (2015) multiplexed many streams over one TCP connection — great in theory, bad in practice because of <strong>head-of-line blocking</strong>. One lost packet stalled all streams.</p>
+      <p>QUIC (Google, 2012; standardized 2021) solved this by <strong>building a new transport on UDP</strong>:</p>
+      <ul>
+        <li>Each HTTP stream gets its own independent reliable-delivery channel. A lost packet affects only its stream.</li>
+        <li>TLS 1.3 baked into the transport. 0-RTT resumption — repeat connections need no handshake.</li>
+        <li>Connection ID is not tied to IP. Switch WiFi → cellular mid-call without reconnecting.</li>
+        <li>Runs entirely in userspace, so new features ship with the browser/client rather than waiting for OS kernel updates.</li>
+      </ul>
+      <p>Google and Cloudflare deploy QUIC for 30–40% of their traffic today. The ironic summary: <strong>the most important new network transport of the 2020s is UDP-based</strong> — not because TCP is bad, but because rebuilding its reliability in userspace was easier than fixing TCP.</p>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Head-of-Line Blocking — HTTP/2 vs HTTP/3</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg">
+          <g font-family="Geist, system-ui, sans-serif" font-size="11">
+            <!-- HTTP/2 panel -->
+            <text x="180" y="22" text-anchor="middle" font-weight="500" fill="hsl(0,70%,40%)">HTTP/2 over TCP</text>
+            <text x="20" y="60" font-weight="500" fill="#878480">Stream 1</text>
+            <text x="20" y="100" font-weight="500" fill="#878480">Stream 2</text>
+            <text x="20" y="140" font-weight="500" fill="#878480">Stream 3</text>
+            <!-- Stream 1 packets all good -->
+            <rect x="100" y="50" width="20" height="20" fill="hsl(145,55%,42%)"/>
+            <rect x="125" y="50" width="20" height="20" fill="hsl(145,55%,42%)"/>
+            <rect x="150" y="50" width="20" height="20" fill="hsl(145,55%,42%)"/>
+            <rect x="175" y="50" width="20" height="20" fill="hsl(145,55%,42%)"/>
+            <!-- Stream 2 has lost packet -->
+            <rect x="100" y="90" width="20" height="20" fill="hsl(145,55%,42%)"/>
+            <rect x="125" y="90" width="20" height="20" fill="hsl(0,70%,55%)"/>
+            <text x="135" y="84" text-anchor="middle" font-size="9" fill="hsl(0,70%,40%)" font-weight="500">LOST</text>
+            <rect x="150" y="90" width="20" height="20" fill="hsl(145,55%,42%)" opacity="0.4"/>
+            <rect x="175" y="90" width="20" height="20" fill="hsl(145,55%,42%)" opacity="0.4"/>
+            <!-- Stream 3 also blocked despite having packets -->
+            <rect x="100" y="130" width="20" height="20" fill="hsl(145,55%,42%)"/>
+            <rect x="125" y="130" width="20" height="20" fill="hsl(145,55%,42%)" opacity="0.4"/>
+            <rect x="150" y="130" width="20" height="20" fill="hsl(145,55%,42%)" opacity="0.4"/>
+            <rect x="175" y="130" width="20" height="20" fill="hsl(145,55%,42%)" opacity="0.4"/>
+            <text x="240" y="170" font-size="10" fill="hsl(0,70%,40%)" font-weight="500">All streams stall</text>
+            <text x="240" y="184" font-size="10" fill="#878480">until stream 2's packet retransmits</text>
+
+            <!-- HTTP/3 panel -->
+            <text x="540" y="22" text-anchor="middle" font-weight="500" fill="hsl(145,55%,28%)">HTTP/3 over QUIC (UDP)</text>
+            <text x="380" y="220" font-weight="500" fill="#878480">Stream 1</text>
+            <text x="380" y="240" font-weight="500" fill="#878480">Stream 2</text>
+            <text x="380" y="260" font-weight="500" fill="#878480">Stream 3</text>
+            <rect x="460" y="210" width="20" height="14" fill="hsl(145,55%,42%)"/>
+            <rect x="485" y="210" width="20" height="14" fill="hsl(145,55%,42%)"/>
+            <rect x="510" y="210" width="20" height="14" fill="hsl(145,55%,42%)"/>
+            <rect x="535" y="210" width="20" height="14" fill="hsl(145,55%,42%)"/>
+            <rect x="460" y="230" width="20" height="14" fill="hsl(145,55%,42%)"/>
+            <rect x="485" y="230" width="20" height="14" fill="hsl(0,70%,55%)"/>
+            <text x="495" y="241" text-anchor="middle" font-size="8" fill="white" font-weight="700">X</text>
+            <rect x="510" y="230" width="20" height="14" fill="hsl(45,80%,55%)"/>
+            <rect x="535" y="230" width="20" height="14" fill="hsl(45,80%,55%)"/>
+            <rect x="460" y="250" width="20" height="14" fill="hsl(145,55%,42%)"/>
+            <rect x="485" y="250" width="20" height="14" fill="hsl(145,55%,42%)"/>
+            <rect x="510" y="250" width="20" height="14" fill="hsl(145,55%,42%)"/>
+            <rect x="535" y="250" width="20" height="14" fill="hsl(145,55%,42%)"/>
+            <text x="380" y="190" font-size="10" fill="hsl(145,55%,28%)" font-weight="500">Only stream 2 blocked</text>
+            <text x="380" y="204" font-size="10" fill="#878480">streams 1 and 3 keep flowing</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world protocols on each</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">TCP</div><h4>HTTP/1, HTTP/2, SSH, SMTP, most DB protocols</h4><p>Anything where you can't tolerate dropped data. Almost every API.</p></div>
+      <div class="rw-card"><div class="rw-name">UDP direct</div><h4>DNS, DHCP, NTP, SNMP, VoIP, most games</h4><p>Low-latency, small-message, loss-tolerant.</p></div>
+      <div class="rw-card"><div class="rw-name">UDP + custom reliability</div><h4>QUIC, WebRTC, gaming netcode</h4><p>When you want TCP's guarantees but not its policies.</p></div>
+      <div class="rw-card"><div class="rw-name">HTTP/3</div><h4>UDP via QUIC</h4><p>30–40% of Google/Cloudflare traffic. Default in new browsers. On by default at most major CDNs.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>WhatsApp uses UDP for voice/video (tolerates loss). Video conferencing uses UDP + custom jitter buffering. PUBG uses UDP for game-state sync (latency beats reliability). Live streaming uses UDP-based protocols (SRT, QUIC) for low-latency ingest.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

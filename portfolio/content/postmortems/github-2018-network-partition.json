@@ -1,0 +1,64 @@
+{
+  "slug": "github-2018-network-partition",
+  "title": "43-Second Partition",
+  "problemNumber": "10",
+  "difficulty": null,
+  "heroDescription": "A 43-second network partition between GitHub's US East and US West data centers caused MySQL Orchestrator to promote a new primary in the wrong region. 43 seconds of split-brain writes took 24 hours to reconcile. Webhooks, Pages, GraphQL API all impacted.",
+  "tags": [
+    "Split brain",
+    "MySQL Orchestrator",
+    "43s → 24h",
+    "Consensus"
+  ],
+  "accent": {
+    "h": 210,
+    "s": 70,
+    "l": 48
+  },
+  "category": "Coordination + consensus",
+  "blurb": "A 43-second network partition between GitHub's US East and US West data centers caused MySQL Orchestrator to promote a new primary in the wrong region. 43 seconds of split-brain writes took 24 hours to reconcile. Webhook",
+  "sections": [
+    {
+      "id": "tldr",
+      "label": "TL;DR",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">TL;DR</h2></div>\n    <div class=\"prose\">\n      <p>Routine maintenance on a 100G network link caused a 43-second partition between GitHub's US East (primary) and US West (replica) regions. MySQL Orchestrator, using Raft for consensus on which node is primary, decided during the partition that US West should be primary — while US East believed itself still primary. Writes landed in both regions. When the partition healed, conflict resolution took 24 hours of manual + scripted replay; webhooks, Pages, search, and parts of the API remained impacted the entire time.</p>\n    </div>"
+    },
+    {
+      "id": "timeline",
+      "label": "Timeline",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Timeline</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>22:52 UTC Oct 21</strong> — Routine network maintenance causes 43-second connectivity loss between US East and US West.</li>\n        <li><strong>22:52:26 UTC</strong> — Orchestrator (using Raft) in US West loses quorum with East. Initiates failover per config: promotes a US West replica to primary.</li>\n        <li><strong>22:53:09 UTC</strong> — Network heals. Two primaries now exist for the same MySQL cluster. Both receive writes.</li>\n        <li><strong>22:54 UTC</strong> — Orchestrator detects split brain; stops all automated operations. Engineers paged.</li>\n        <li><strong>23:13 UTC</strong> — GitHub public status updated: degraded service.</li>\n        <li><strong>Oct 22, 01:00–23:00 UTC</strong> — Manual reconciliation. East-originating writes during the 43-second window were not replicated cleanly; had to be compared + replayed or discarded per-record. Services kept in degraded mode to prevent more write divergence.</li>\n        <li><strong>Oct 23, ~00:00 UTC</strong> — Full service restored.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "rootcause",
+      "label": "Root cause",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Root cause</h2></div>\n    <div class=\"prose\">\n      <p>Orchestrator was configured to prefer promoting replicas in US West even when the primary was in US East, because the Raft quorum happened to sit more in US West. The automated failover fired before humans could evaluate whether the partition was a brief blip or a real outage. The MySQL topology allowed a brief-blip-driven demotion/promotion to happen safely from a leader-election perspective but NOT from a data-consistency perspective — because writes had been landing in US East right up until the 43-second cut, and those were not yet replicated west at cut-time.</p>\n      <p>Deeper cause: topology assumed a partition always meant a real outage, triggering aggressive auto-failover. For a 43-second blip, auto-failover cost more than doing nothing would have.</p>\n    </div>"
+    },
+    {
+      "id": "impact",
+      "label": "Blast radius",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Blast radius</h2></div>\n    <div class=\"prose\">\n      <p>~24 hours of degraded service affecting all GitHub users. Webhook deliveries delayed by hours. Pages + GraphQL partially unavailable. Pull-request creation, new issue creation, and some repo operations returned errors or inconsistent state. No data was ultimately lost, but reconciliation was painful. Engineers did not enable writes across the cluster until every divergent record had been inspected.</p>\n    </div>"
+    },
+    {
+      "id": "lessons",
+      "label": "Lessons",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Lessons</h2></div>\n    <div class=\"prose\">\n      <ol>\n        <li><strong>Auto-failover during brief partitions is worse than degraded service.</strong> GitHub raised the partition-duration threshold before Orchestrator can promote.</li>\n        <li><strong>Cross-region primary should require human approval.</strong> Promoting across a slow WAN link has expensive consequences on write latency + consistency guarantees. Post-incident, Orchestrator was configured never to promote cross-region without manual approval.</li>\n        <li><strong>Split-brain recovery is not a fast automated process.</strong> Build the runbooks + tooling for manual reconciliation BEFORE you need them.</li>\n        <li><strong>Reduce the auto-failover blast radius.</strong> Automated failover should be limited to within-region replacements where replication lag is microseconds, not cross-region where replication lag is milliseconds.</li>\n      </ol>\n    </div>"
+    },
+    {
+      "id": "concepts-used",
+      "label": "Concepts in play",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Concepts in play</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><a href=\"/concepts/consensus-paxos-raft\">Consensus (Raft)</a> — Orchestrator uses Raft, which guarantees leader election but doesn't guarantee data integrity across old-primary writes.</li>\n        <li><a href=\"/concepts/split-brain\">Split brain</a> — textbook case.</li>\n        <li><a href=\"/concepts/replication-strategies\">Replication</a> — async replication lag is the root of reconciliation pain.</li>\n        <li><a href=\"/concepts/multi-region-deployment\">Multi-region</a> — cross-region primaries trade availability for latency.</li>\n        <li><a href=\"/concepts/heartbeat-failure-detection\">Failure detection</a> — too-aggressive timeouts cause flapping.</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

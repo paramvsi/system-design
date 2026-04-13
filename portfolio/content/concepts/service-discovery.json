@@ -1,0 +1,65 @@
+{
+  "slug": "service-discovery",
+  "title": "Service Discovery",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 200,
+    "s": 65,
+    "l": 45
+  },
+  "category": "Distributed Systems",
+  "blurb": "Service A calls Service B. Where is B? Hard-coding an IP breaks the moment B autoscales, moves to a new host, or deploys to a new region. Hard-coding a hostname helps, but still routes through DNS caches that are slow to",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>Service A calls Service B. Where is B? Hard-coding an IP breaks the moment B autoscales, moves to a new host, or deploys to a new region. Hard-coding a hostname helps, but still routes through DNS caches that are slow to reflect instance changes. At microservice scale — hundreds of services, thousands of instances, constantly churning — you need a <strong>service discovery</strong> mechanism that stays accurate in seconds, not minutes.</p>\n      <p>Every serious production platform has one. Kubernetes, Consul, Eureka, Envoy xDS — same problem, different vocabulary.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The moving parts",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The moving parts</h2></div>\n    <div class=\"prose\">\n      <p>Any service-discovery system has three roles:</p>\n      <ul>\n        <li><strong>Registry</strong> — an authoritative database of \"service X has instances at IPs [a, b, c], each healthy/unhealthy.\"</li>\n        <li><strong>Registration</strong> — how instances announce themselves (self-register on startup, or a sidecar / platform registers on their behalf).</li>\n        <li><strong>Discovery</strong> — how a client finds which instance to call (query the registry, or have instances pushed to you).</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Client-side vs server-side discovery",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Client-side vs server-side discovery</h2></div>\n    <div class=\"tradeoff-grid\">\n      <div class=\"tradeoff-option chosen\">\n        <div class=\"tradeoff-label\">Client-side</div>\n        <h4>Client queries registry, picks instance</h4>\n        <p>Client library fetches instance list from registry (Consul, Eureka, etcd), caches locally, picks one per request with its own <a href=\"/concepts/load-balancer\">load balancing</a> algorithm. Low latency, no extra hop. Every client has to implement discovery logic (or use a library).</p>\n      </div>\n      <div class=\"tradeoff-option\">\n        <div class=\"tradeoff-label\">Server-side</div>\n        <h4>LB / gateway queries registry</h4>\n        <p>Client hits a well-known LB (ALB, Envoy, Istio ingress). LB queries registry + picks instance. Client sees one virtual endpoint. Simpler clients but one extra hop + LB becomes scaling point.</p>\n      </div>\n    </div>\n    <div class=\"callout\">\n      <div class=\"callout-label\">Kubernetes is both</div>\n      <p>K8s Services are server-side (client calls <code>service.namespace.svc</code> → kube-proxy routes via iptables/IPVS). But add a service mesh (Istio, Linkerd) and each pod's sidecar discovers peers directly — client-side.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "How registration stays accurate",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">How registration stays accurate</h2></div>\n    <div class=\"prose\">\n      <p>An instance that crashes or loses network must be removed from the registry <em>fast</em> or clients will keep hitting a black hole. Two strategies:</p>\n      <ul>\n        <li><strong>Heartbeat-based TTL</strong> (Eureka, Consul). Instance registers with a 30s TTL and renews every 10s. Misses renewal → registry expires the entry. Simple; delayed detection.</li>\n        <li><strong>Session-based</strong> (Zookeeper, etcd). Instance opens a session; writes an ephemeral znode / lease. Session expires (heartbeats stop) → znode auto-deleted. Faster; needs connection maintenance.</li>\n        <li><strong>Platform-driven</strong> (Kubernetes). The platform knows which pods are healthy (via readiness probes) and updates Endpoints for you. No registration at all from the service's POV.</li>\n      </ul>\n      <p>Pair any of these with <a href=\"/concepts/heartbeat-failure-detection\">active health checks</a> from the caller side — \"even if registry says healthy, circuit-break if I've seen 10 failures in a row.\"</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — Envoy's xDS, the modern approach",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — Envoy's xDS, the modern approach</h2></div>\n    <div class=\"prose\">\n      <p>Envoy (and by extension Istio, AWS App Mesh, Consul Connect) use the <strong>xDS protocol family</strong> — a set of gRPC streaming APIs where a central control plane pushes service-discovery data to sidecars.</p>\n      <ul>\n        <li><strong>EDS</strong> (Endpoint Discovery Service) — pushes \"service X has these endpoints with these load-balancing weights.\"</li>\n        <li><strong>CDS</strong> (Cluster) — service metadata: timeouts, connection pools, TLS.</li>\n        <li><strong>RDS</strong> (Route) — HTTP routing rules.</li>\n        <li><strong>LDS</strong> (Listener) — which ports to accept on.</li>\n      </ul>\n      <p>Control plane (Istiod, Consul server, etc.) watches the environment — K8s API, Consul catalog, Vault — and streams updates to every sidecar. A new pod spins up → 100ms later every other pod knows about it and can route to it.</p>\n      <p>Net effect: microservice discovery works at the same speed as the underlying orchestrator, with zero service-side library code. The sidecar abstracts everything away.</p>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Kubernetes</div><h4>Platform-native discovery</h4><p>DNS-based (<code>my-service.namespace.svc.cluster.local</code>) + Endpoints objects updated by controller. No explicit registration.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Consul</div><h4>General-purpose registry</h4><p>HashiCorp. Works across VMs, containers, bare metal. Services register via agent; health-checked. DNS and HTTP interfaces.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Netflix Eureka</div><h4>JVM client-side</h4><p>Pioneered by Netflix. Eureka clients register + heartbeat; peers pull the list. Still common in Spring Cloud stacks.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">AWS Cloud Map</div><h4>Managed</h4><p>DNS + HTTP namespace for AWS services. Integrated with ECS, Route 53, App Mesh.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>News feed's microservices rely on service mesh discovery (every service has hundreds of instances). E-commerce checkout calls payment/shipping/inventory services via discovery. Notification system fans out to channel-specific microservices.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

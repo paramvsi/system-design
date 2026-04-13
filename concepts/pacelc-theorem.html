@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>PACELC Theorem — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 275; --accent-s: 60%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p><a href="/concepts/cap-theorem">CAP</a> only describes what happens <em>during</em> a partition — but partitions are rare. Most of your system's life is spent in the <strong>no-partition state</strong>, where CAP has nothing to say. The real everyday tradeoff there is between <span class="hl-accent">latency and consistency</span>. PACELC (Daniel Abadi, 2010) captures both cases: "If Partition then A-or-C; Else L-or-C."</p>
+      <p>If you can explain PACELC in an interview, you demonstrate that you think about distributed systems beyond the pop-CAP version everyone has memorized.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">What the letters mean</h2></div>
+    <div class="prose">
+      <p><strong>P</strong>artition: if the network is broken between nodes…</p>
+      <p><strong>A</strong>vailability: …keep serving reads/writes (may return stale data), OR…</p>
+      <p><strong>C</strong>onsistency: …refuse writes until partition heals.</p>
+      <p><strong>E</strong>lse (no partition): …</p>
+      <p><strong>L</strong>atency: …serve fast, from the nearest replica (eventual consistency), OR…</p>
+      <p><strong>C</strong>onsistency: …coordinate with other replicas to ensure the read is latest (strong consistency, slower).</p>
+      <p>Every distributed database occupies one of four quadrants: PA/EL, PA/EC, PC/EL, PC/EC.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">The four quadrants</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>System</th><th>Under partition</th><th>No partition</th><th>Quadrant</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Cassandra</td><td>Available (AP)</td><td>Latency-first (EL)</td><td>PA/EL — always fast, always available, never strict</td></tr>
+        <tr><td class="algo-name">DynamoDB (default)</td><td>Available</td><td>Latency</td><td>PA/EL</td></tr>
+        <tr><td class="algo-name">DynamoDB (strong reads)</td><td>Available</td><td>Consistent</td><td>PA/EC — pay ~2× for consistent reads</td></tr>
+        <tr><td class="algo-name">MongoDB (replica set)</td><td>Consistent (CP)</td><td>Latency</td><td>PC/EL — writes from primary, reads often from secondaries</td></tr>
+        <tr><td class="algo-name">Postgres (sync replica)</td><td>Consistent</td><td>Consistent</td><td>PC/EC — strictest but slowest</td></tr>
+        <tr><td class="algo-name">Spanner</td><td>Consistent</td><td>Consistent</td><td>PC/EC — uses TrueTime to make EC fast globally</td></tr>
+      </tbody>
+    </table>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">The PACELC Quadrants</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 600 380" xmlns="http://www.w3.org/2000/svg">
+          <g font-family="Geist, system-ui, sans-serif" font-size="11">
+            <!-- Axes -->
+            <line x1="80"  y1="40"  x2="80"  y2="320" stroke="#ccc9c4" stroke-width="1.5"/>
+            <line x1="80"  y1="320" x2="560" y2="320" stroke="#ccc9c4" stroke-width="1.5"/>
+            <text x="80" y="32" text-anchor="middle" font-size="10" fill="#878480">PC (consistency under partition)</text>
+            <text x="80" y="345" text-anchor="middle" font-size="10" fill="#878480">PA (availability under partition)</text>
+            <text x="40" y="180" text-anchor="middle" font-size="10" fill="#878480" transform="rotate(-90 40 180)">EC ← → EL</text>
+
+            <!-- 4 quadrants -->
+            <rect x="80"  y="40"  width="240" height="140" fill="hsl(285,55%,94%)" stroke="hsl(285,55%,75%)"/>
+            <text x="200" y="65"  text-anchor="middle" font-weight="500">PC / EC</text>
+            <text x="200" y="80"  text-anchor="middle" font-size="10" fill="#4a4845">always consistent, slower</text>
+            <text x="200" y="115" text-anchor="middle" font-size="11" fill="hsl(285,55%,30%)" font-weight="500">Spanner</text>
+            <text x="200" y="135" text-anchor="middle" font-size="11" fill="hsl(285,55%,30%)" font-weight="500">Postgres + sync replica</text>
+            <text x="200" y="155" text-anchor="middle" font-size="11" fill="hsl(285,55%,30%)" font-weight="500">CockroachDB</text>
+
+            <rect x="320" y="40"  width="240" height="140" fill="hsl(220,55%,94%)" stroke="hsl(220,55%,75%)"/>
+            <text x="440" y="65"  text-anchor="middle" font-weight="500">PA / EC</text>
+            <text x="440" y="80"  text-anchor="middle" font-size="10" fill="#4a4845">consistent reads, available under partition</text>
+            <text x="440" y="115" text-anchor="middle" font-size="11" fill="hsl(220,55%,30%)" font-weight="500">DynamoDB strong reads</text>
+            <text x="440" y="135" text-anchor="middle" font-size="11" fill="hsl(220,55%,30%)" font-weight="500">MongoDB w/majority</text>
+
+            <rect x="80"  y="180" width="240" height="140" fill="hsl(45,80%,93%)" stroke="hsl(45,75%,75%)"/>
+            <text x="200" y="205" text-anchor="middle" font-weight="500">PC / EL</text>
+            <text x="200" y="220" text-anchor="middle" font-size="10" fill="#4a4845">consistent under partition, fast normally</text>
+            <text x="200" y="255" text-anchor="middle" font-size="11" fill="hsl(45,75%,30%)" font-weight="500">MongoDB replica set</text>
+            <text x="200" y="275" text-anchor="middle" font-size="11" fill="hsl(45,75%,30%)" font-weight="500">(rare combo)</text>
+
+            <rect x="320" y="180" width="240" height="140" fill="hsl(145,55%,93%)" stroke="hsl(145,55%,72%)"/>
+            <text x="440" y="205" text-anchor="middle" font-weight="500">PA / EL</text>
+            <text x="440" y="220" text-anchor="middle" font-size="10" fill="#4a4845">always available, fast, may be stale</text>
+            <text x="440" y="255" text-anchor="middle" font-size="11" fill="hsl(145,55%,28%)" font-weight="500">Cassandra</text>
+            <text x="440" y="275" text-anchor="middle" font-size="11" fill="hsl(145,55%,28%)" font-weight="500">DynamoDB default</text>
+            <text x="440" y="295" text-anchor="middle" font-size="11" fill="hsl(145,55%,28%)" font-weight="500">Riak</text>
+
+            <text x="320" y="365" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#878480">Latency cost of EC across regions: ~180ms (VA ↔ Singapore)</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Deep dive — why the EL/EC choice matters</h2></div>
+    <div class="prose">
+      <p>Even with no partition, multi-region systems face a choice every single read: <strong>serve from the local replica (fast, maybe stale)</strong> or <strong>round-trip to the leader (correct, slow)</strong>?</p>
+      <p>Numbers make this concrete. Your user is in Singapore. Your leader is in Virginia. Round-trip = ~180ms. If you pick EC (consistent reads from leader), every read costs 180ms minimum. If you pick EL (eventual, from Singapore replica), reads cost 1ms — <span class="hl">180× faster</span> — but the replica may be a few milliseconds behind the leader.</p>
+      <p>A user's "Settings" page probably needs EC (they just changed their password, the next page must show the new state). A user's news feed needs EL (15ms of staleness is invisible; 180ms per read is a disaster). <strong>Real systems often pick per-query, not per-system.</strong></p>
+      <div class="callout callout-good">
+        <div class="callout-label">The interview sentence</div>
+        <p>"Cassandra is PA/EL: during a partition we prefer availability; in the steady state we prefer low latency by reading from any replica. We accept eventual consistency — acceptable for our feed use case."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Spanner</div><h4>PC/EC the hard way</h4><p>Google built TrueTime (globally-synchronized clocks via GPS + atomic clocks) so that consistent reads don't require a cross-region round-trip. Most engineering ever put into avoiding the EL/EC compromise.</p></div>
+      <div class="rw-card"><div class="rw-name">Cassandra</div><h4>PA/EL with tunable C</h4><p>Per-query consistency: <code>ONE</code> for EL speed, <code>QUORUM</code> for read-your-writes, <code>ALL</code> for EC at the cost of availability if any replica is down.</p></div>
+      <div class="rw-card"><div class="rw-name">Read replicas everywhere</div><h4>EL hiding behind EC</h4><p>MySQL and Postgres often run with multiple read replicas. Writes go to primary (EC for writes); reads go to any replica (EL). Most apps tolerate this — unless a user writes then immediately reads.</p></div>
+      <div class="rw-card"><div class="rw-name">Session stickiness</div><h4>Pragmatic EC for one user</h4><p>Route a user's reads to the replica that received their latest write. Pseudo-EC without the global coordination cost. Works until the replica fails.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>News feed picks PA/EL for massive read scale. Typeahead suggestions tolerate milliseconds of staleness (EL) for latency. Google Docs picks PC/EC for collaborative edits — correctness is non-negotiable.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Cache Stampede — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 5; --accent-s: 75%; --accent-l: 48%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Your homepage is served from Redis. TTL 5 minutes. At T = 0, the cache expires. At T = 0.001s, 10,000 concurrent requests all miss the cache and all query the origin database at the same time. The DB, designed for 100 RPS, now handles 10,000 RPS. It dies. Every request fails. The cache can't be filled because the DB is down. Outage cascade.</p>
+      <p>This is a <strong>cache stampede</strong> (a.k.a. thundering herd, dog-pile). It happens whenever a hot cache entry expires or is invalidated. Mitigation is not optional at scale.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Why the stampede happens</h2></div>
+    <div class="prose">
+      <p>Normal cache-aside: check cache → miss → read DB → fill cache → return. When one request misses, 100ms later the cache is warm and every subsequent request hits it.</p>
+      <p>The stampede: at the moment of expiry, <em>every in-flight request</em> sees a miss simultaneously. They all read the DB (which is slow — that's why you cached). Each succeeds eventually and fills the cache, but the DB is briefly asked to serve full load. Repeat every time the hottest keys expire.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Five mitigations</h2></div>
+    <div class="prose">
+      <p><strong>1. Request coalescing (single-flight).</strong> First miss locks the key; other concurrent misses wait for the first to fill the cache and read the result. Only one DB call per miss window. Works great in a single process (Go's <code>singleflight</code> package). Across servers, needs distributed coordination — Redis Lua script or per-key lock.</p>
+      <p><strong>2. Probabilistic early expiry.</strong> Before the TTL actually expires, some requests randomly decide "close enough, let me re-fetch." Spreads the refresh across many requests instead of a cliff. A few requests pay the cost; the cache is always warm.</p>
+      <p><strong>3. Jittered TTL.</strong> Instead of all keys expiring at exactly T+300s, set TTL to <code>random(280, 320)s</code>. Spreads expirations across a 40-second window. No cliff = no stampede.</p>
+      <p><strong>4. Background refresh.</strong> A cron job or dedicated worker refreshes hot keys before they expire. Users never see a miss on hot keys — they always return from cache. Good for predictable hot keys (homepage, celebrity profiles).</p>
+      <p><strong>5. Serve stale while revalidating.</strong> When a request sees a slightly-expired entry, return the stale value immediately AND kick off a background refresh. No request waits. Most CDNs support this (<code>stale-while-revalidate</code> directive).</p>
+    
+      <div class="code-caption" data-code-snippet="1">XFetch — probabilistic early recomputation</div>
+      <pre><code class="lang-python">import random, time, math
+
+def xfetch(key, ttl, beta=1.0, recompute_fn=None):
+    """Probabilistically recompute before expiry; prevents stampedes."""
+    value, delta, expiry = cache_get(key)  # delta = last recompute time
+    now = time.time()
+    if value is None or now - delta * beta * math.log(random.random()) &gt;= expiry:
+        value = recompute_fn()
+        cache_set(key, value, ttl=ttl)
+    return value
+
+# Without XFetch: at TTL=T+0, all concurrent requests miss → thundering herd.
+# With XFetch: probability of early recompute rises smoothly as expiry nears;
+# one request wins, others keep serving the stale value until it rotates.</code></pre>
+  </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Stampede vs Mitigated — DB Load at Cache Expiry</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 720 240" xmlns="http://www.w3.org/2000/svg">
+          <g font-family="Geist, system-ui, sans-serif" font-size="11">
+            <!-- Naive panel -->
+            <text x="180" y="22" text-anchor="middle" font-weight="500" fill="hsl(0,70%,40%)">Naive — at T=300s, cliff</text>
+            <line x1="40" y1="180" x2="320" y2="180" stroke="#ccc9c4" stroke-width="1"/>
+            <text x="40" y="195" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">0s</text>
+            <text x="316" y="195" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace" text-anchor="end">TTL=300s</text>
+            <!-- Background flat (cache hits) -->
+            <rect x="40" y="170" width="240" height="10" fill="hsl(145,55%,75%)"/>
+            <!-- Spike at TTL -->
+            <rect x="280" y="50" width="20" height="130" fill="hsl(0,70%,55%)"/>
+            <text x="290" y="44" text-anchor="middle" font-size="10" font-weight="500" fill="hsl(0,70%,40%)">10k QPS</text>
+            <text x="160" y="160" text-anchor="middle" font-size="10" fill="#878480">cache hits ~5/sec</text>
+
+            <!-- Mitigated panel -->
+            <text x="540" y="22" text-anchor="middle" font-weight="500" fill="hsl(145,55%,28%)">XFetch + Jitter — smooth</text>
+            <line x1="400" y1="180" x2="680" y2="180" stroke="#ccc9c4" stroke-width="1"/>
+            <text x="400" y="195" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">0s</text>
+            <text x="676" y="195" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace" text-anchor="end">TTL=300s</text>
+            <!-- Steady refresh trickle -->
+            <rect x="400" y="170" width="280" height="10" fill="hsl(145,55%,75%)"/>
+            <!-- Tiny refresh bumps spreading toward end -->
+            <rect x="540" y="160" width="6" height="20" fill="hsl(145,55%,42%)"/>
+            <rect x="580" y="155" width="6" height="25" fill="hsl(145,55%,42%)"/>
+            <rect x="610" y="148" width="6" height="32" fill="hsl(145,55%,42%)"/>
+            <rect x="640" y="140" width="6" height="40" fill="hsl(145,55%,42%)"/>
+            <rect x="660" y="132" width="6" height="48" fill="hsl(145,55%,42%)"/>
+            <text x="540" y="120" font-size="10" fill="#878480">peak ~5/sec spread over last 60s</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-val">10 000×</div><div class="kv-lbl">DB load spike (naive)</div></div>
+      <div class="kv-card"><div class="kv-val">~5 /sec</div><div class="kv-lbl">DB load (XFetch + jitter)</div></div>
+      <div class="kv-card"><div class="kv-val">±20 s</div><div class="kv-lbl">jittered TTL window</div></div>
+      <div class="kv-card"><div class="kv-val">β = 1.0</div><div class="kv-lbl">XFetch aggressiveness default</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Deep dive — probabilistic early expiry</h2></div>
+    <div class="prose">
+      <p>Also called "XFetch" (Vattani, Chierichetti, Lowenstein, 2015). On every cache read, compute a probability that this request should refresh, based on how close to expiry the entry is.</p>
+      <pre style="background:#f4f3f0;padding:12px;border-radius:6px;font-size:12px;font-family:var(--font-mono);overflow-x:auto">def get(key):
+  value, fetch_time, ttl = cache.get(key)
+  now = time.time()
+  delta = now - fetch_time
+  # Recompute early with small probability, growing as we near TTL
+  if delta * beta * log(random()) &gt; ttl - now + fetch_time:
+    value = compute_fresh()
+    cache.set(key, value, now, ttl)
+  return value</pre>
+      <p>Near the start of TTL: probability of refresh ≈ 0. Near the end: probability approaches 1. Parameter <code>beta</code> (typically 1.0) controls aggressiveness. The math ensures only a small fraction of requests pay the refresh cost, but the expected number refreshing rises smoothly to 1 exactly at TTL. No cliff.</p>
+      <p>Tiny code change, eliminates stampedes for any reasonably-hot key. Combined with jittered TTL and stale-while-revalidate, cache stampedes become unreachable.</p>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Facebook memcached (2013 paper)</div><h4>Leases</h4><p>First miss gets a "lease" to fill the cache. Concurrent misses wait for the lease holder. Famous for eliminating stampedes at FB scale.</p></div>
+      <div class="rw-card"><div class="rw-name">Cloudflare / Fastly</div><h4>stale-while-revalidate</h4><p>Serve stale value to user; refresh in background. Zero user-visible cache miss on hot content. Standard HTTP cache-control directive.</p></div>
+      <div class="rw-card"><div class="rw-name">Go singleflight</div><h4>In-process coalescing</h4><p>Standard library package. Concurrent calls for the same key collapse into one. Every Go cache should wrap origin calls in <code>singleflight.Group</code>.</p></div>
+      <div class="rw-card"><div class="rw-name">Spring @Cacheable</div><h4>sync=true for coalescing</h4><p>JVM: Spring's cache abstraction has a sync flag that prevents stampedes at the method level.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>News feed jitters TTL across user feed caches. E-commerce uses request coalescing for product detail pages. Ticketmaster uses stale-while-revalidate for event availability (stale by 100ms is fine; stampede is not).</p></div>
+  </section>
+
+</main>
+</body>
+</html>

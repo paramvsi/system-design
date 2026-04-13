@@ -1,0 +1,65 @@
+{
+  "slug": "gdpr-right-to-be-forgotten",
+  "title": "GDPR — Right to Be Forgotten",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 145,
+    "s": 55,
+    "l": 38
+  },
+  "category": "Observability & Security",
+  "blurb": "EU GDPR Article 17: a user can request all of their personal data be deleted. You have 30 days. \"Delete a row\" sounds simple. The problem: that user's data is in the live DB, in 7 read replicas, in 30 days of database ba",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>EU GDPR Article 17: a user can request all of their personal data be deleted. You have <span class=\"hl\">30 days</span>. \"Delete a row\" sounds simple. The problem: that user's data is in the live DB, in 7 read replicas, in 30 days of database backups, in Kafka topic retention, in the data warehouse, in Elasticsearch search indices, in S3 logs, in cache layers, in third-party services (Stripe, Mailchimp, Datadog), and in offline BigQuery snapshots used for ML training.</p>\n      <p>Architectures that <em>can</em> delete this completely look very different from those that just <code>UPDATE users SET deleted = true</code>. GDPR (and CCPA, LGPD, and similar laws spreading globally) forces an architectural reckoning that most teams discover only after the first regulator letter.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "Soft delete is not enough",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Soft delete is not enough</h2></div>\n    <div class=\"prose\">\n      <p>The naive approach: <code>UPDATE users SET deleted = true</code>. Hide from queries via <code>WHERE NOT deleted</code>. Done?</p>\n      <p>No. The data is still there. Backups still have it. Read replicas still have it. The user's name in the orders table still exists. Your search index returns hits. The data warehouse still trains ML models on it. <strong>None of this satisfies GDPR.</strong></p>\n      <p>GDPR requires <em>actual deletion</em> — the data must be gone in a reasonable timeframe (typically 30 days) from every system, with documented evidence.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "Three architectural patterns",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Three architectural patterns</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Pattern</th><th>How deletion works</th><th>Tradeoff</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Hard delete propagated</td><td>DELETE from primary; <a href=\"/concepts/cdc-change-data-capture\">CDC</a> propagates DELETE to every downstream</td><td>Conceptually clean; many places to coordinate; backups still have data</td></tr>\n        <tr><td class=\"algo-name\">Crypto-shredding</td><td>Each user's PII encrypted with a per-user key; deleting the key makes all ciphertext useless</td><td>Most elegant; data persists but is unreadable; works across backups + warehouses</td></tr>\n        <tr><td class=\"algo-name\">Pseudonymization</td><td>Replace PII with anonymous IDs in analytics/warehouse; mapping table the only place with real data; delete from mapping table</td><td>Excellent for analytics; doesn't help with operational data</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — crypto-shredding, the elegant answer",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Deep dive — crypto-shredding, the elegant answer</h2></div>\n    <div class=\"prose\">\n      <p>The pattern: every user's PII fields are encrypted with a per-user symmetric key. Master KMS holds the per-user keys (or encrypts them). To \"forget\" the user: delete their key. The encrypted bytes still exist everywhere — in the DB, in backups, in the warehouse, in S3 archives — but nobody can ever decrypt them again. They're cryptographically equivalent to noise.</p>\n      <p>Why this works:</p>\n      <ul>\n        <li>You don't have to chase data across 30 systems. Backups can keep the ciphertext forever — it's gibberish.</li>\n        <li>Deletion completes in seconds (one KMS key delete) regardless of how much data you have for the user.</li>\n        <li>Audit-friendly: KMS logs the key deletion; you have proof.</li>\n        <li>Reversible operationally if the user changes their mind within a grace window (don't actually delete the key for 30 days).</li>\n      </ul>\n      <p>Catches:</p>\n      <ul>\n        <li>Search indices: encrypted values aren't searchable. Use <a href=\"/concepts/field-level-encryption\">blind indexes</a> for lookups; those need explicit invalidation too.</li>\n        <li>References from other users (e.g., user A's order that was placed by user B) need pseudonymization, not crypto-shredding.</li>\n        <li>Aggregates (\"user X spent $1500\") aren't PII once aggregated. Crypto-shredding doesn't unwind them; that's fine.</li>\n      </ul>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">The interview answer</div>\n        <p>\"For GDPR-grade deletion we use crypto-shredding. Every user's PII fields are encrypted with a per-user key managed in KMS. On a deletion request we delete the key — backups, warehouse, search indices keep the ciphertext, but it's now permanently undecryptable. One operation, complete deletion, with audit log proof.\"</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "The realistic implementation checklist",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">The realistic implementation checklist</h2></div>\n    <div class=\"prose\">\n      <p>What a GDPR-compliant deletion actually involves:</p>\n      <ol>\n        <li><strong>Catalog</strong> every system that touches user data. Primary DB, replicas, caches, queues, warehouse, search, logs, third parties (Stripe, Mailchimp). Most companies discover 20+ systems.</li>\n        <li><strong>Tag PII vs non-PII fields</strong> in each system. \"User name\" — PII. \"Aggregated revenue\" — not.</li>\n        <li><strong>Retention policies per system</strong>. Logs auto-rotate; backups expire. Set retention so old data falls off naturally.</li>\n        <li><strong>Deletion workflow</strong>. User requests deletion → workflow fans out: delete from primary (cascades via CDC) + invalidate caches + crypto-shred backups + DELETE from warehouse + delete from third parties via their APIs + invalidate search indices.</li>\n        <li><strong>30-day grace period</strong>. User can change their mind. Soft-mark for deletion; actual hard-delete on day 30.</li>\n        <li><strong>Audit log</strong>. Track each step. Be ready to prove to regulators.</li>\n        <li><strong>Test</strong>: have a real \"delete me\" button. Verify across all systems. Don't discover gaps in production.</li>\n      </ol>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Stripe</div><h4>Crypto-shredding for PII</h4><p>Documented their crypto-shredding pattern publicly. Per-account encryption keys; key deletion is the deletion event. Audit-trailed.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Slack</div><h4>Workspace-level pseudonymization</h4><p>For deleted accounts, name + email replaced with pseudonyms in messages. Original PII deleted from primary; messages remain readable to other workspace members.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Google Takeout / Account Delete</div><h4>Cross-product orchestration</h4><p>Account deletion flows through every Google product (Mail, Photos, YouTube, Drive). Documented pipeline; regulatory-required.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Most startups</div><h4>Soft-delete with manual sweep</h4><p>Realistic state. Soft-delete in primary; quarterly cleanup job on warehouse + caches. Often gets a regulator warning before they upgrade.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>News feed must support user deletion across feed-cache + post DB + interaction logs + ML training pipelines. E-commerce deletes customer PII while preserving anonymized order analytics. WhatsApp's E2EE makes \"forget\" automatic for content but profile data still needs explicit handling.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 4
+}

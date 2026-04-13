@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-google-drive",
+  "title": "Google Drive / Dropbox",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 215,
+    "s": 75,
+    "l": 48
+  },
+  "category": "Storage & Data",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>Design Google Drive. Files up to 100 GB, folder hierarchy, sharing ACLs, cross-device sync, 1B+ users.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n      \n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Chunked content-addressable storage (4 MB blocks, SHA-256 keyed). Delta sync = upload only missing blocks.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Metadata (tree, versions, ACLs) in transactional DB. Bytes in blob store. Don't conflate.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Offline-first client: local SQLite + operation queue; sync engine reconciles.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Chunked CAS: files split into 4 MB blocks, SHA-256-keyed; cross-user dedup of identical blocks</li>\n      <li><span class=\"rubric-points\">+2</span> Metadata in Postgres (sharded by user_id) — file tree + versions + ACLs; transactional</li>\n      <li><span class=\"rubric-points\">+2</span> Blocks in object store (S3-like); deduplicated by hash; erasure-coded for durability</li>\n      <li><span class=\"rubric-points\">+1</span> Delta sync: /blocks/check returns missing hashes; client uploads only those</li>\n      <li><span class=\"rubric-points\">+1</span> Offline-first client: SQLite local + operation queue; reconciles via vector clocks</li>\n      <li><span class=\"rubric-points\">+1</span> Conflict resolution: save both versions as foo.txt + foo (conflicted copy).txt (not merge)</li>\n      <li><span class=\"rubric-points\">+1</span> Sharing via ACLs on metadata node; not file content; propagate via permission event</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Uploads whole file on every change (no chunking)</li>\n        <li>Tries CRDT / OT merge on file content (file systems don't have semantic awareness)</li>\n        <li>Stores byte content in Postgres</li>\n        <li>Single ACL check at upload (doesn't propagate when folder-shared)</li>\n        <li>No client-side sync engine; assumes always-online</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 1
+}

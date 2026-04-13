@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-uber",
+  "title": "Uber / Lyft — Ride Dispatch",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 200,
+    "s": 70,
+    "l": 45
+  },
+  "category": "Marketplace & Booking",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>Design Uber. Riders request; nearby driver assigned; live tracking; dynamic pricing; payments. ~10M rides/day; dispatch latency &lt; 3s; ETA accuracy ±3 min p90.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n      \n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Dispatch is not nearest-driver. It's a batched (1–2s window) assignment problem optimizing multiple objectives.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Geospatial index (H3 / geohash / quadtree) for 'nearby drivers' queries at high QPS.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>ETA + routing is ML, not distance-over-speed. Features include time-of-day, traffic, driver profile, historical data.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+1</span> BoE: ~116 rides/sec avg, ~300K active drivers, ~150K location-pings/sec baseline</li>\n      <li><span class=\"rubric-points\">+2</span> Dispatch as batched (~2s window) assignment problem; Hungarian algorithm over (driver, ride) scores</li>\n      <li><span class=\"rubric-points\">+2</span> H3 hexagonal cells for geo-index; ring queries for nearby drivers; Redis GEO as implementation</li>\n      <li><span class=\"rubric-points\">+1</span> Saga pattern for trip lifecycle: request → assign → pickup → drop → pay — each idempotent step</li>\n      <li><span class=\"rubric-points\">+1</span> ML-based ETA: GBDT model with distance, traffic, time-of-day, driver speed; not simple distance/speed</li>\n      <li><span class=\"rubric-points\">+1</span> Surge pricing: real-time feature of demand/supply ratio per region; enforced at quote time, locked for N min</li>\n      <li><span class=\"rubric-points\">+1</span> Discusses how driver location pings are downsampled (every 4s, not every 100ms) + stored tiered</li>\n      <li><span class=\"rubric-points\">+1</span> Failure handling: dispatch fallback to nearest-driver on ML outage; payment held on auth before assign</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Proposes nearest-driver-wins greedy assignment (doesn't discuss batching)</li>\n        <li>SQL table for driver locations with no geospatial index</li>\n        <li>ETA is 'distance / avg_speed' with no ML</li>\n        <li>2-phase commit across driver / rider / payment (should be saga)</li>\n        <li>Ignores surge pricing complexity</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 1
+}

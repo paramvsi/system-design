@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DoorDash / Uber Eats — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+
+    :root { --accent-h: 15; --accent-s: 80%; --accent-l: 50%;
+      --accent: hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light: hsl(var(--accent-h), 80%, 94%);
+      --accent-mid: hsl(var(--accent-h), 70%, 88%);
+      --accent-text: hsl(var(--accent-h), var(--accent-s), 38%);
+      --accent-border: hsl(var(--accent-h), 60%, 78%);
+      --hl-yellow:#fff0a0; --hl-yellow-dark:#a07a00;
+      --hl-accent: hsl(var(--accent-h), 90%, 88%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 32%);
+      --bg:#fff; --bg-subtle:#f7f7f5; --bg-raised:#f0eeeb; --bg-code:#f4f3f0;
+      --border:#e4e2de; --border-strong:#ccc9c4;
+      --text-primary:#111110; --text-secondary:#4a4845; --text-muted:#878480;
+      --font-serif:'Instrument Serif',Georgia,serif;
+      --font-sans:'Geist',system-ui,sans-serif;
+      --font-mono:'JetBrains Mono','Fira Code',monospace;
+      --radius-sm:4px; --radius-md:8px; --radius-lg:12px;
+    }
+    .req-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px; }
+    .req-box { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 20px; }
+    .req-box-head { display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size: 12px; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent-text); margin-bottom:10px; font-weight:500; }
+    .req-box-head.nonfunc { color:hsl(38,80%,30%); }
+    .req-list { padding-left:20px; font-size: 15px; color:var(--text-secondary); }
+    .req-list li { margin-bottom:6px; }
+    .endpoint { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px 18px; margin-bottom:10px; }
+    .endpoint-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+    .method { font-family:var(--font-mono); font-size: 11px; font-weight:600; padding:2px 8px; border-radius:3px; letter-spacing:0.05em; }
+    .method.get { background:hsl(190,70%,90%); color:hsl(190,70%,28%); }
+    .method.post { background:hsl(145,55%,90%); color:hsl(145,55%,28%); }
+    .method.delete { background:hsl(0,70%,92%); color:hsl(0,70%,38%); }
+    .ep-path { font-family:var(--font-mono); font-size: 15px; color:var(--text-primary); font-weight:500; }
+    .ep-desc { font-size: 15px; color:var(--text-secondary); margin:6px 0 0; }
+    .failure { display:flex; gap:14px; padding:14px 18px; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); margin-bottom:10px; }
+    .failure-icon { font-size:18px; flex-shrink:0; margin-top:2px; }
+    .failure-title { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .failure-desc { font-size: 15px; color:var(--text-secondary); margin-bottom:4px; }
+    .mitigation { font-family:var(--font-mono); font-size: 12px; color:hsl(145,55%,28%); }
+    .similar-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+    .similar-card { display:block; text-decoration:none; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 18px; transition:all 0.15s; }
+    .similar-card:hover { border-color:var(--accent-border); background:var(--accent-light); }
+    .similar-card h4 { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .similar-card p { font-size: 13.5px; color:var(--text-muted); margin:0; }
+    .evolution-step { display:flex; gap:14px; margin-bottom:18px; }
+    .evolution-marker { width:32px; height:32px; border-radius:50%; background:var(--accent-light); border:2px solid var(--accent-border); display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size: 12px; font-weight:600; color:var(--accent-text); flex-shrink:0; }
+    .evolution-content h4 { font-size: 16px; font-weight:600; margin-bottom:4px; }
+    .evolution-content p { font-size: 15px; color:var(--text-secondary); margin:0; }
+  </style>
+</head>
+<body>
+
+<main>
+
+  <div class="hero" id="problem">
+    <div class="hero-kicker">System Design — Food Delivery Marketplace</div>
+    <h1 class="hero-title">Design <em>DoorDash / Uber Eats</em></h1>
+    <p class="hero-desc">
+      A three-sided marketplace: <strong>eaters</strong> order, <strong>merchants</strong> prepare, <strong>Dashers</strong> deliver. The hard parts:
+      a <span class="hl">dispatch engine</span> that assigns the right Dasher to the right order in real-time optimizing for ETA, efficiency, and driver earnings; a <span class="hl-accent">live ETA system</span> updating predictions every few seconds based on traffic, restaurant prep time, and Dasher position;
+      and a <span class="hl-accent">transactional order lifecycle</span> that doesn't lose your $47 burrito when the payment processor burps. DoorDash does ~2B orders/year; ~6M orders/day.
+    </p>
+    <div class="hero-tags">
+      <span class="tag accent">⚡ Core: Dispatch + ETA + Transactions</span>
+      <span class="tag">~6M orders/day</span>
+      <span class="tag">~300k daily Dashers</span>
+      <span class="tag">Multi-party SLA</span>
+      <span class="tag">Location-heavy</span>
+    </div>
+  </div>
+
+  <section class="section" id="requirements">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Requirements</h2></div>
+    <div class="req-grid">
+      <div class="req-box">
+        <div class="req-box-head">Functional</div>
+        <ul class="req-list">
+          <li>Eater browses local <span class="hl-accent">restaurant menus</span>; places an order with customizations</li>
+          <li>Order routes to restaurant; kitchen accepts/rejects/adjusts prep time</li>
+          <li><span class="hl-accent">Dispatch engine</span> picks a nearby Dasher and offers the order; Dasher accepts/declines</li>
+          <li>Live <span class="hl-accent">order tracking</span> map showing Dasher location + ETA updates</li>
+          <li>Payment charged on order; tips added/modified post-delivery; refunds for issues</li>
+          <li>Ratings + tips; dispute resolution; scheduled orders</li>
+        </ul>
+      </div>
+      <div class="req-box">
+        <div class="req-box-head nonfunc">Non-Functional</div>
+        <ul class="req-list">
+          <li>Order placement &lt; <span class="hl">500 ms</span> p99; live tracking &lt; 2 s update latency</li>
+          <li>Dispatch decision &lt; <span class="hl">3 seconds</span> — balance of quality vs. latency</li>
+          <li>ETA accuracy within ~<span class="hl">3 min</span> on 90th percentile</li>
+          <li>Strong consistency on orders + payments; eventual on search / browse</li>
+          <li>99.99% availability on order placement (revenue-critical)</li>
+          <li>Scale to ~6M orders/day = ~70/sec avg, ~600/sec peak (Friday dinner)</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="scale">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Scale Estimation</h2></div>
+    <div class="kv-grid">
+      <div class="kv-card">
+        <div class="kv-k">Orders / sec (peak)</div>
+        <div class="kv-v">~600</div>
+        <div class="kv-sub">6M/day × ~10× peak-to-avg; concentrated 6–8 pm local time</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Active Dashers / sec</div>
+        <div class="kv-v">~300K</div>
+        <div class="kv-sub">sending location pings every 4 s = ~75K pings/sec baseline</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Geospatial queries / sec</div>
+        <div class="kv-v">~10K</div>
+        <div class="kv-sub">"nearby Dashers", "nearby restaurants" — hot QPS on the geo index</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Dispatch latency budget</div>
+        <div class="kv-v">~3 s</div>
+        <div class="kv-sub">eater waits for "assigning Dasher"; longer feels broken</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Order storage</div>
+        <div class="kv-v">~60 GB / day</div>
+        <div class="kv-sub">6M orders × ~10 KB each incl. line items + events; ~22 TB/yr hot</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Live tracking sessions</div>
+        <div class="kv-v">~500K</div>
+        <div class="kv-sub">concurrent during dinner peak; each gets Dasher location pushed every ~4 s</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="api">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">API Design</h2></div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/restaurants?lat=X&amp;lng=Y&amp;radius=3km</span></div>
+      <p class="ep-desc">Geo-indexed restaurant search. Returns <code>{restaurants: [{id, name, cuisine, eta_range, fee, rating}], hot_tiles}</code>. Served from a read replica with restaurants clustered by H3/geohash cell.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/orders</span></div>
+      <p class="ep-desc">Create order with idempotency key. Body: <code>{restaurant_id, items[], address, payment_token, tip_amount}</code>. Returns <code>{order_id, total, estimated_eta, status: 'pending_restaurant'}</code>. Strongly consistent; wrapped in a transaction with payment auth.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/orders/{id}/track</span></div>
+      <p class="ep-desc">Live order status + Dasher location. Eater clients poll this every 4 s (or WebSocket push). Returns current <code>{state, dasher_location, eta, elapsed}</code>.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/dasher/location</span></div>
+      <p class="ep-desc">Dasher app posts GPS ping every 4 s when active. Goes to the geo index + the live-tracking push bus. Fire-and-forget; retry on failure.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/dasher/offers/{id}/respond</span></div>
+      <p class="ep-desc">Dasher accepts/declines a dispatched offer. Response window is ~30 s; server auto-rejects and re-dispatches after timeout.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/merchants/{id}/orders/{oid}/prep-time</span></div>
+      <p class="ep-desc">Restaurant POS integration or tablet app updates ready-by-time. Critical signal for dispatch timing.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/orders/{id}/tips</span></div>
+      <p class="ep-desc">Post-delivery tip modification. Hits payment service; updates order ledger. Idempotent.</p>
+    </div>
+  </section>
+
+  <section class="section" id="architecture">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Architecture</h2></div>
+    <div class="prose">
+      <p>Three primary domains: <strong>Marketplace</strong> (restaurants, menus, browse), <strong>Order</strong> (checkout, lifecycle, payments), and <strong>Logistics</strong> (dispatch, ETAs, live tracking). Each is an independent service with its own datastore. They communicate via events on Kafka.</p>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Marketplace / Order / Logistics Services</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 840 490" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="DoorDash architecture">
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="hsl(15,30%,40%)"/>
+            </marker>
+          </defs>
+          <style>
+/* ux-v2-bumped */
+
+            .lbl { font-family:'Geist',sans-serif; font-size: 12px; fill:#111; }
+            .sub { font-family:'JetBrains Mono',monospace; font-size: 10.5px; fill:#555; }
+            .box { fill:#fff; stroke:hsl(15,40%,70%); stroke-width:1.2; rx:6; }
+            .box-accent { fill:hsl(15,80%,94%); stroke:hsl(15,80%,50%); stroke-width:1.5; rx:6; }
+            .box-data { fill:hsl(38,70%,94%); stroke:hsl(38,60%,60%); stroke-width:1.2; rx:6; }
+            .box-kafka { fill:hsl(270,60%,94%); stroke:hsl(270,60%,55%); stroke-width:1.4; rx:6; }
+            .edge { stroke:hsl(15,30%,40%); stroke-width:1.2; fill:none; }
+          </style>
+
+          <rect x="20" y="20" width="110" height="50" class="box"/>
+          <text x="75" y="42" text-anchor="middle" class="lbl">Eater app</text>
+          <text x="75" y="57" text-anchor="middle" class="sub">browse + order</text>
+
+          <rect x="20" y="110" width="110" height="50" class="box"/>
+          <text x="75" y="132" text-anchor="middle" class="lbl">Merchant POS</text>
+          <text x="75" y="147" text-anchor="middle" class="sub">tablet / API</text>
+
+          <rect x="20" y="200" width="110" height="50" class="box"/>
+          <text x="75" y="222" text-anchor="middle" class="lbl">Dasher app</text>
+          <text x="75" y="237" text-anchor="middle" class="sub">GPS + offers</text>
+
+          <rect x="180" y="90" width="110" height="50" class="box-accent"/>
+          <text x="235" y="112" text-anchor="middle" class="lbl">API Gateway</text>
+          <text x="235" y="127" text-anchor="middle" class="sub">auth + routing</text>
+
+          <rect x="340" y="20" width="140" height="55" class="box-accent"/>
+          <text x="410" y="42" text-anchor="middle" class="lbl">Marketplace svc</text>
+          <text x="410" y="58" text-anchor="middle" class="sub">restaurants, menus</text>
+
+          <rect data-tooltip="Saga orchestrator: payment auth → restaurant accept → dispatch → delivery. Idempotent steps." data-concept-link="/concepts/event-sourcing-cqrs" x="340" y="95" width="140" height="55" class="box-accent"/>
+          <text x="410" y="117" text-anchor="middle" class="lbl">Order svc</text>
+          <text x="410" y="133" text-anchor="middle" class="sub">checkout + lifecycle</text>
+
+          <rect x="340" y="170" width="140" height="55" class="box-accent"/>
+          <text x="410" y="192" text-anchor="middle" class="lbl">Payment svc</text>
+          <text x="410" y="208" text-anchor="middle" class="sub">auth/capture/refund</text>
+
+          <rect data-tooltip="2-sec batched window; Hungarian algorithm assigns Dashers to orders optimally." data-concept-link="/concepts/geospatial-indexes" x="340" y="245" width="140" height="55" class="box-accent"/>
+          <text x="410" y="267" text-anchor="middle" class="lbl">Dispatch svc</text>
+          <text x="410" y="283" text-anchor="middle" class="sub">Dasher ↔ order match</text>
+
+          <rect data-tooltip="GBDT with distance + traffic + restaurant prep-time + historical. Padded for UX asymmetry." data-concept-link="/concepts/model-serving-online-vs-batch" x="340" y="320" width="140" height="55" class="box-accent"/>
+          <text x="410" y="342" text-anchor="middle" class="lbl">ETA / Routing svc</text>
+          <text x="410" y="358" text-anchor="middle" class="sub">ML + map tiles</text>
+
+          <rect data-tooltip="H3 hex cells keyed in Redis for hot; Cassandra for history. 75K location pings/sec baseline." data-concept-link="/concepts/geospatial-indexes" x="340" y="395" width="140" height="55" class="box-accent"/>
+          <text x="410" y="417" text-anchor="middle" class="lbl">Location svc</text>
+          <text x="410" y="433" text-anchor="middle" class="sub">H3 geo-index</text>
+
+          <rect x="530" y="120" width="110" height="55" class="box-kafka"/>
+          <text x="585" y="142" text-anchor="middle" class="lbl">Kafka</text>
+          <text x="585" y="157" text-anchor="middle" class="sub">order events</text>
+
+          <rect x="530" y="245" width="110" height="55" class="box-kafka"/>
+          <text x="585" y="267" text-anchor="middle" class="lbl">Kafka</text>
+          <text x="585" y="282" text-anchor="middle" class="sub">dispatch events</text>
+
+          <rect x="690" y="20" width="130" height="50" class="box-data"/>
+          <text x="755" y="42" text-anchor="middle" class="lbl">Postgres (orders)</text>
+          <text x="755" y="57" text-anchor="middle" class="sub">sharded by user_id</text>
+
+          <rect x="690" y="85" width="130" height="50" class="box-data"/>
+          <text x="755" y="107" text-anchor="middle" class="lbl">Postgres (catalog)</text>
+          <text x="755" y="122" text-anchor="middle" class="sub">menus + restaurants</text>
+
+          <rect x="690" y="150" width="130" height="50" class="box-data"/>
+          <text x="755" y="172" text-anchor="middle" class="lbl">Redis (sessions)</text>
+          <text x="755" y="187" text-anchor="middle" class="sub">live tracking state</text>
+
+          <rect x="690" y="215" width="130" height="50" class="box-data"/>
+          <text x="755" y="237" text-anchor="middle" class="lbl">Cassandra</text>
+          <text x="755" y="252" text-anchor="middle" class="sub">location history</text>
+
+          <rect x="690" y="280" width="130" height="50" class="box-data"/>
+          <text x="755" y="302" text-anchor="middle" class="lbl">Elasticsearch</text>
+          <text x="755" y="317" text-anchor="middle" class="sub">restaurant search</text>
+
+          <rect x="690" y="345" width="130" height="50" class="box-data"/>
+          <text x="755" y="367" text-anchor="middle" class="lbl">S3</text>
+          <text x="755" y="382" text-anchor="middle" class="sub">ML features + logs</text>
+
+          <path class="edge" d="M130,45 L180,105" marker-end="url(#arr)"/>
+          <path class="edge" d="M130,135 L180,120" marker-end="url(#arr)"/>
+          <path class="edge" d="M130,225 L180,135" marker-end="url(#arr)"/>
+
+          <path class="edge" d="M290,100 L340,45" marker-end="url(#arr)"/>
+          <path class="edge" d="M290,115 L340,120" marker-end="url(#arr)"/>
+          <path class="edge" d="M290,130 L340,195" marker-end="url(#arr)"/>
+          <path class="edge" d="M290,145 L340,270" marker-end="url(#arr)"/>
+
+          <path class="edge" d="M480,45 L690,45" marker-end="url(#arr)"/>
+          <path class="edge" d="M480,120 L690,110" marker-end="url(#arr)"/>
+          <path class="edge" d="M480,120 L530,140" marker-end="url(#arr)"/>
+          <path class="edge" d="M480,270 L530,270" marker-end="url(#arr)"/>
+          <path class="edge" d="M480,345 L690,240" marker-end="url(#arr)"/>
+          <path class="edge" d="M480,420 L690,305" marker-end="url(#arr)"/>
+          <path class="edge" d="M480,420 L690,165" marker-end="url(#arr)"/>
+          <path class="edge" d="M640,150 L690,370" marker-end="url(#arr)"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Deep Dive — Dispatch Engine</h2></div>
+    <div class="prose">
+      <p>Dispatch is the heart of the system. An order ready (or soon-to-be ready) needs matching to a Dasher with the best tradeoff across: <strong>pickup distance</strong>, <strong>estimated total trip time</strong>, <strong>driver earnings fairness</strong>, <strong>batching potential</strong> (combine with nearby orders), and <strong>restaurant prep synchronization</strong>. This is a combinatorial assignment problem at scale.</p>
+
+      <p>Naive approach: nearest Dasher wins. Good enough for small markets, terrible at scale — you'd leave Dashers idle on one side of the map while orders pile up on the other.</p>
+
+      <p><strong>Modern dispatch algorithm (simplified):</strong></p>
+      <ol>
+        <li><strong>Candidate generation.</strong> Query H3 geo-index for Dashers within ~3 km of restaurant. Typically 10–50 candidates.</li>
+        <li><strong>Feature extraction.</strong> For each (Dasher, order) pair compute: pickup distance, Dasher current queue length, restaurant prep time, historical Dasher acceptance rate, current traffic on route.</li>
+        <li><strong>Score each pair</strong> with an ML model predicting "delivery quality" — likelihood of on-time + Dasher acceptance + CS-call-free outcome.</li>
+        <li><strong>Solve as assignment problem.</strong> For N open orders × M candidate Dashers, run the Hungarian algorithm (or approximation) to maximize total score subject to "each Dasher gets at most 1 order." Batch every ~2 s to give multiple orders a chance to co-optimize.</li>
+        <li><strong>Offer to winning Dasher.</strong> Send push notification; 30 s response window. If declined, re-run assignment with remaining candidates.</li>
+        <li><strong>Consider batching.</strong> Two orders at the same restaurant or two orders on the same route → offer both to one Dasher; cut cost per delivery ~30%.</li>
+      </ol>
+
+      <div class="diagram-wrap">
+        <div class="diagram-head">
+          <span class="diagram-label">Dispatch Flow — Order Placed → Dasher Assigned</span>
+          <span class="diagram-type">Mermaid</span>
+        </div>
+        <div class="diagram-body">
+          <div class="mermaid">
+sequenceDiagram
+    participant E as Eater
+    participant O as Order svc
+    participant M as Merchant
+    participant D as Dispatch
+    participant GEO as Location svc
+    participant DSR as Dasher
+
+    E->>O: POST /orders
+    O->>M: forward + prep-time request
+    M-->>O: accept + 12 min
+    O->>D: OrderReady @ T+10 min event
+    D->>GEO: nearby Dashers within 3 km
+    GEO-->>D: candidates [D1..D25]
+    Note over D: score candidates<br/>ML + Hungarian
+    D->>DSR: offer to best Dasher
+    alt accepted
+        DSR-->>D: accept
+        D->>O: AssignmentCommitted
+        O-->>E: ETA + Dasher info
+    else declined / timeout 30s
+        D->>D: remove + reassign
+    end
+          </div>
+        </div>
+      </div>
+
+      <p><strong>Why not run dispatch on every order immediately?</strong> Because the optimal assignment often looks 60–120 s into the future. Running a batched window lets "order A places at T, order B places at T+30 s near the same restaurant" be offered as a batch. Pure first-come-first-served leaves money on the table.</p>
+
+      <p><strong>Location service.</strong> Every Dasher pings location every ~4 s. The service maintains a live H3 geo-index: H3 cell → set of Dasher IDs. Lookups are <em>ring queries</em> — "give me Dashers in this cell and its 18 neighbors." Stored in Redis for speed; bulk location history archived to Cassandra for ML training.</p>
+
+      <p><strong>ETA.</strong> A separate ML service with features: distance, time-of-day traffic, historical restaurant prep time, Dasher speed profile, weather. Runs a GBDT model every time an eater loads the tracking page. P90 error target: ~3 minutes.</p>
+
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"Dispatch runs in ~2 s windows as a batched assignment problem. Query H3 geo-index for Dashers within 3 km, score each (order, Dasher) pair with an ML model on distance + prep time + historical signals, solve with Hungarian algorithm to maximize global score. Batch two nearby orders to one Dasher when possible. Offer sent via push with 30 s response window; on reject, re-dispatch. ETA served by a separate GBDT model refreshed on every tracking-page open. Location service uses H3 cells + ring queries, hot data in Redis, history in Cassandra."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Tradeoffs &amp; Design Choices</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Batched dispatch vs instant.</strong> Batching (every 2 s) improves global efficiency but adds latency per order. Instant feels faster but is locally greedy and wasteful. The 2-second window is the sweet spot — imperceptible to eater, big marketplace-efficiency win.</li>
+        <li><strong>Order-as-saga, not a single transaction.</strong> Create order → auth payment → confirm with restaurant → dispatch Dasher — each step can fail. Saga pattern with compensating actions (auto-refund on restaurant decline, re-dispatch on Dasher timeout) beats trying to do it as one distributed transaction.</li>
+        <li><strong>ETA accuracy vs pessimism.</strong> A promised 25 min ETA delivered in 23 min delights the user; a promised 25 min delivered in 28 min makes them angry even though it's "close." ETAs are intentionally padded ~2 min for this UX asymmetry.</li>
+        <li><strong>H3 cells vs quadtree vs geohash.</strong> H3 (Uber's hex grid) beats square grids because hex neighbors are all equidistant, simplifying ring queries. Geohash has edge-of-cell artifacts. DoorDash adopted H3 (originally Uber's library) for dispatch lookups.</li>
+        <li><strong>Strong consistency where it matters.</strong> Order state transitions are sagas with idempotent steps in Postgres; payments are 2-phase (auth + capture); dispatch assignments are Cassandra-style writes with dedup. Browse/search can be eventually consistent (cached menus are fine for 60 s).</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="failures">
+    <div class="section-head"><span class="section-n">08</span><h2 class="section-title">Failure Modes</h2></div>
+    <div class="failure">
+      <div class="failure-icon">🍔</div>
+      <div>
+        <div class="failure-title">Restaurant accepts, then realizes it's out of a dish</div>
+        <div class="failure-desc">Eater waits 10 min; then gets "item unavailable" and has to pick a substitute or cancel. Broken promise.</div>
+        <div class="mitigation">→ Mitigation: menu inventory integration with POS so out-of-stock items are auto-hidden; pre-order availability check before confirm; in-app substitution flow with partial refund.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🚗</div>
+      <div>
+        <div class="failure-title">Dasher GPS ping goes dark mid-delivery</div>
+        <div class="failure-desc">Tunnel, dead battery, bad signal → eater's tracking map freezes; CS complaints spike.</div>
+        <div class="mitigation">→ Mitigation: client-side UI gracefully shows "Dasher is approaching" without exact position after N seconds of stale data. Don't show the last-known dot forever — it's creepy and misleading.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">💳</div>
+      <div>
+        <div class="failure-title">Payment auth fails after order committed</div>
+        <div class="failure-desc">Order saved; payment processor declines. Restaurant started cooking.</div>
+        <div class="mitigation">→ Mitigation: payment auth is the <em>first</em> step of the saga, not last. No order state written before auth success. If capture fails later (rare), order proceeds and we collect on retry or debt channel.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🌧️</div>
+      <div>
+        <div class="failure-title">Weather surge — 3× order volume, half the Dashers</div>
+        <div class="failure-desc">Snow storm. Orders spike, Dashers stay home. Wait times balloon; dispatch queue backs up.</div>
+        <div class="mitigation">→ Mitigation: surge pricing incentives to Dashers; ETA inflation visible to eater at checkout so expectations match reality; temporary caps on ordering in the most impacted areas to prevent total collapse.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🧨</div>
+      <div>
+        <div class="failure-title">Dispatch service regional outage</div>
+        <div class="failure-desc">Dispatch goes down in a region. Orders pile up in "pending assignment"; restaurants cook food with no one to deliver it.</div>
+        <div class="mitigation">→ Mitigation: automatic fallback to nearest-Dasher heuristic in-region (no ML model required); circuit-breaker from Order svc to Dispatch so eaters see realistic ETA extensions; graceful degradation better than full failure.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🔁</div>
+      <div>
+        <div class="failure-title">Duplicate order on network retry</div>
+        <div class="failure-desc">Eater taps "place order" twice during a spinner; phone retries on 504 → two orders.</div>
+        <div class="mitigation">→ Mitigation: client-generated idempotency key per tap; Order service rejects duplicate keys within 10 minutes; charge once.</div>
+      </div>
+    </div>
+  </section>
+
+  
+  <section class="section" id="antipatterns">
+    <div class="section-head"><span class="section-n">⚠</span><h2 class="section-title">Anti-patterns</h2></div>
+    <div class="prose">
+      
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Dispatch every order instantly on arrival</div>
+        <p class="why">Greedy assignment misses batching opportunities; Dashers deadhead.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> 2-second batched window; Hungarian assignment with batching bonus.</div>
+    </div>
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Poll for order status every second</div>
+        <p class="why">Millions of clients × 1/sec = DDoS on your own API.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> WebSocket push or long-poll; status delta events; client pulls on wake.</div>
+    </div>
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">One `orders` table with everything</div>
+        <p class="why">Merchant / Dasher / Rider / Payments all fight over this hot row.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Split into Marketplace / Order / Logistics / Payment services with their own stores.</div>
+    </div>
+    </div>
+  </section>
+
+  <section class="section" id="interview-tips">
+    <div class="section-head"><span class="section-n">09</span><h2 class="section-title">Interview Tips</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>Lead with dispatch, not with search.</strong> The marketplace is boring; dispatch is where the interesting engineering is. Interviewers expect you to pick dispatch as the deep-dive.</li>
+        <li><strong>Explicitly call out "three-sided."</strong> Eaters, merchants, Dashers each have their own app, their own SLA, their own failure modes. Many candidates forget the merchant surface entirely.</li>
+        <li><strong>Saga over distributed transactions.</strong> Don't try to "2PC across restaurant + payment + dispatch." Saga with idempotent compensations is the production pattern.</li>
+        <li><strong>H3 over geohash.</strong> Mention H3 by name — Uber popularized it, DoorDash uses it, Yelp uses it. Shows domain fluency.</li>
+        <li><strong>ETA is ML, not "nearest(restaurant, address)/avg_speed."</strong> Frame it as a model trained on millions of historical deliveries. Distance is one feature among many.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="similar">
+    <div class="section-head"><span class="section-n">10</span><h2 class="section-title">Similar Problems</h2></div>
+    <div class="similar-grid">
+      <a href="../uber-system-design/index.html" class="similar-card"><h4>Uber / Lyft</h4><p>Same dispatch core; no merchant tier; passenger not package</p></a>
+      <a href="../009-yelp-google-places/index.html" class="similar-card"><h4>Yelp / Places</h4><p>Restaurant discovery + reviews; the marketplace half of DoorDash</p></a>
+      <a href="../google-maps/index.html" class="similar-card"><h4>Google Maps</h4><p>ETA + routing underlies delivery time predictions</p></a>
+      <a href="../payment-gateway/index.html" class="similar-card"><h4>Payment Gateway</h4><p>Order saga with payment auth + capture</p></a>
+      <a href="../ecommerce-system-design/index.html" class="similar-card"><h4>E-commerce</h4><p>Checkout / order lifecycle without the real-time logistics</p></a>
+    </div>
+  </section>
+
+  <section class="section" id="evolution">
+    <div class="section-head"><span class="section-n">11</span><h2 class="section-title">Evolution</h2></div>
+    <div class="evolution-step">
+      <div class="evolution-marker">1</div>
+      <div class="evolution-content">
+        <h4>MVP — single city, one PostgreSQL, human dispatcher</h4>
+        <p>Orders into Postgres; ops team manually calls Dashers. Works for ~1000 orders/day. DoorDash's first year-ish.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">2</div>
+      <div class="evolution-content">
+        <h4>Rule-based auto-dispatch + Dasher app</h4>
+        <p>Nearest-available with basic filters. Sharded DB by region. Carries to ~100K orders/day.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">3</div>
+      <div class="evolution-content">
+        <h4>Batched assignment + H3 geo-index</h4>
+        <p>Shift to 2-second dispatch windows with Hungarian-algorithm assignment. H3 cells for fast nearest-Dasher queries. ~1M orders/day.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">4</div>
+      <div class="evolution-content">
+        <h4>ML-driven dispatch + ETAs</h4>
+        <p>GBDT models on historical delivery data replace heuristics for both assignment scoring and ETA prediction. Acceptance rates up, CS contacts down.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">5</div>
+      <div class="evolution-content">
+        <h4>Multi-order batching + vertical expansion</h4>
+        <p>One Dasher carries multiple orders on overlapping routes; cost per delivery drops ~30%. Platform extends to groceries, convenience, returns.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const FLOW_NODES = [
+  { label: 'Eater',         sub: 'taps place order' },
+  { label: 'Order svc',     sub: 'saga: create' },
+  { label: 'Payment',       sub: 'auth before confirm' },
+  { label: 'Merchant',      sub: 'accept + prep time' },
+  { label: 'Dispatch',      sub: '2s batched window' },
+  { label: 'Dasher',        sub: 'push offer / accept' },
+  { label: 'Tracking',      sub: 'GPS ping + ETA' },
+];
+const FLOW_DESCS = [
+  'Eater checks out with idempotency key; order svc enters pending state',
+  'Saga step 1: create order row in Postgres with pending_payment',
+  'Saga step 2: authorize card via payment processor (hold funds)',
+  'Saga step 3: push order to restaurant POS; wait for accept + prep time',
+  'Dispatch receives OrderReady event; waits until current 2s window closes',
+  'Hungarian algorithm picks best Dasher; push offer w/ 30s response window',
+  'Dasher accepts; eater sees live GPS + ML ETA updated on map every 4s',
+];
+</script>
+
+</body>
+</html>

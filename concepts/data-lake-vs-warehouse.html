@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Data Lake vs Warehouse — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 195; --accent-s: 65%; --accent-l: 40%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>"Where do analytics queries run?" If you say "Postgres," you've never had real analytics needs. Running aggregations over 10 TB of order history on your transactional DB tanks every API. Analytics belongs in a separate stack entirely — historically a <strong>data warehouse</strong>, more recently a <strong>data lake</strong>, and now a hybrid <strong>lakehouse</strong>. Picking wrong burns months and millions.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The three architectures</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Pattern</th><th>Storage</th><th>Schema</th><th>Query</th><th>Cost</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Data warehouse</td><td>Columnar, proprietary</td><td>On write (ETL transforms before load)</td><td>SQL, very fast</td><td>$$$ — storage + compute coupled</td></tr>
+        <tr><td class="algo-name">Data lake</td><td>Object store (S3, GCS), open formats (Parquet)</td><td>On read (raw JSON / CSV / events)</td><td>Spark, Athena, Trino — slower</td><td>$ — storage cheap, compute on demand</td></tr>
+        <tr><td class="algo-name">Lakehouse</td><td>Object store + transactional metadata layer (Delta, Iceberg, Hudi)</td><td>On write OR read; ACID transactions</td><td>Both SQL and Spark</td><td>$$ — best of both, more setup</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Why warehouses exist</h2></div>
+    <div class="prose">
+      <p>OLTP databases (Postgres, MySQL) store rows. Reading "SUM(revenue) by product over 2 years" reads every byte of every row to extract one column. Awful.</p>
+      <p>Warehouses store <strong>columnar</strong>: all values of column X stored together. Reading the revenue column scans only those bytes — 10-100× less I/O. Plus columnar compresses well (similar values cluster) and SIMD-vectorizes (one CPU instruction operates on many values).</p>
+      <p>Combine columnar storage with massively parallel processing (MPP), and you get sub-second queries over terabytes. Snowflake, BigQuery, Redshift, ClickHouse all do this.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Why data lakes appeared</h2></div>
+    <div class="prose">
+      <p>Warehouses force schema-on-write — you ETL data into a star schema before it lands. Painful when:</p>
+      <ul>
+        <li>You don't know what queries you'll run later (data scientists exploring).</li>
+        <li>Data is semi-structured (JSON event blobs, ML features, images).</li>
+        <li>Storage cost matters at petabyte scale (warehouses charge per TB-month).</li>
+      </ul>
+      <p>Data lakes flip it: dump raw data into S3 in open formats (Parquet, JSON, Avro). Schema lives in a metastore (Hive Metastore, AWS Glue Catalog). Query engines (Spark, Athena, Trino, Presto) read the files at query time. Storage cheap; compute pay-per-query.</p>
+      <p><strong>Trade-offs</strong>: queries slower than warehouse (data sits in S3, not loaded into a fast engine). No transactions until lakehouse formats arrived. Schema drift can corrupt downstream.</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — Iceberg, Delta, Hudi (the lakehouse wave)</h2></div>
+    <div class="prose">
+      <p>Around 2018, three table formats appeared to add transactional semantics on top of S3-based lakes:</p>
+      <ul>
+        <li><strong>Apache Iceberg</strong> (Netflix-originated) — most widely supported, open standard.</li>
+        <li><strong>Delta Lake</strong> (Databricks) — best Spark integration; now open-sourced.</li>
+        <li><strong>Apache Hudi</strong> (Uber) — incremental processing, optimized for upsert-heavy workloads.</li>
+      </ul>
+      <p>All three: maintain a metadata layer (manifest files, transaction log) on top of Parquet data files in S3. Provide:</p>
+      <ul>
+        <li><strong>ACID transactions</strong> over object-store data — concurrent writes don't corrupt each other.</li>
+        <li><strong>Time travel</strong> — query the table as of yesterday/last week. Snapshot isolation.</li>
+        <li><strong>Schema evolution</strong> — add/drop columns without rewriting every file.</li>
+        <li><strong>Compaction + Z-ordering</strong> — physical layout optimization for query speed.</li>
+        <li><strong>UPSERT / DELETE</strong> — features warehouses had, lakes lacked.</li>
+      </ul>
+      <p>Result: a "lakehouse" — lake's cheap storage + warehouse's transactional + analytical guarantees. Snowflake, Databricks, BigQuery all support reading Iceberg directly. Many teams now skip dedicated warehouses, query S3+Iceberg directly with Trino / Athena / Snowflake.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">Modern stack</div>
+        <p>"Operational data in Postgres. <a href="/concepts/cdc-change-data-capture">CDC</a> to Kafka. Streaming jobs land into Iceberg tables on S3. Analysts query via Trino. ML pipelines read Parquet directly via Spark. One source of truth, multiple consumers."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Snowflake / BigQuery / Redshift</div><h4>Cloud warehouses</h4><p>Decoupled storage + compute (mostly). SQL-only interface. Pay per query or per second of compute.</p></div>
+      <div class="rw-card"><div class="rw-name">Databricks</div><h4>Lakehouse pioneer</h4><p>Spark + Delta Lake. Strong for ML + analytics combined. Increasingly competing with Snowflake.</p></div>
+      <div class="rw-card"><div class="rw-name">Trino / Presto + S3</div><h4>Open-source query engine</h4><p>Federated SQL across S3 + Postgres + Mongo. What Netflix and Airbnb run for ad-hoc analytics.</p></div>
+      <div class="rw-card"><div class="rw-name">ClickHouse</div><h4>Real-time columnar</h4><p>Self-hosted; sub-second on billions of rows. Used by Uber for real-time analytics, Cloudflare for log analytics.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Recommendation algorithm trains models on warehouse data. Leaderboard precomputes from warehouse aggregates. Count active users runs analytics on data lake (raw event blobs). Distributed logging tier-2 storage IS a data lake.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

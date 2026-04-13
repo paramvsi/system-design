@@ -1,0 +1,1801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Google Maps — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+
+    /* ============================================================
+       DESIGN SYSTEM — DO NOT MODIFY VARIABLE NAMES
+       Only change --accent-h, --accent-s, --accent-l per problem
+       ============================================================ */
+    :root {
+      /* ── Accent — Maps green-teal ── */
+      --accent-h:       168;
+      --accent-s:       70%;
+      --accent-l:       40%;
+      --accent:         hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light:   hsl(var(--accent-h), 80%, 94%);
+      --accent-mid:     hsl(var(--accent-h), 70%, 88%);
+      --accent-text:    hsl(var(--accent-h), var(--accent-s), 32%);
+      --accent-border:  hsl(var(--accent-h), 60%, 80%);
+
+      /* ── Highlights ── */
+      --hl-yellow:      #fff0a0;
+      --hl-yellow-dark: #a07a00;
+      --hl-accent:      hsl(var(--accent-h), 90%, 88%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 30%);
+
+      /* ── Surfaces ── */
+      --bg:             #ffffff;
+      --bg-subtle:      #f7f7f5;
+      --bg-raised:      #f0eeeb;
+      --bg-code:        #f4f3f0;
+      --border:         #e4e2de;
+      --border-strong:  #ccc9c4;
+
+      /* ── Text ── */
+      --text-primary:   #111110;
+      --text-secondary: #4a4845;
+      --text-muted:     #878480;
+      --text-code:      #2d2c2b;
+
+      /* ── Typography ── */
+      --font-serif:     'Instrument Serif', Georgia, serif;
+      --font-sans:      'Geist', system-ui, sans-serif;
+      --font-mono:      'JetBrains Mono', 'Fira Code', monospace;
+
+      /* ── Radii ── */
+      --radius-sm:      4px;
+      --radius-md:      8px;
+      --radius-lg:      12px;
+    }
+
+    /* ── Reset ── */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+    body {
+      font-family: var(--font-sans);
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--text-primary);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Layout Shell ── */
+    .layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      grid-template-rows: auto 1fr;
+      min-height: 100vh;
+    }
+
+    /* ── Topbar ── */
+    .topbar {
+      grid-column: 1 / -1;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 52px;
+      padding: 0 24px;
+      background: rgba(255,255,255,0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .topbar-left a {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .topbar-left a:hover { color: var(--accent); }
+    .topbar-sep { color: var(--border-strong); user-select: none; }
+    .topbar-problem { color: var(--accent-text); font-weight: 500; }
+    .topbar-right { display: flex; align-items: center; gap: 16px; }
+    .topbar-tag {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      background: var(--accent-light);
+      color: var(--accent-text);
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      position: sticky;
+      top: 52px;
+      height: calc(100vh - 52px);
+      overflow-y: auto;
+      padding: 28px 20px 40px;
+      border-right: 1px solid var(--border);
+      background: var(--bg-subtle);
+    }
+    .sidebar::-webkit-scrollbar { width: 3px; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+    .sidebar-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+    .sidebar-nav { list-style: none; margin-bottom: 32px; }
+    .sidebar-nav li { margin-bottom: 2px; }
+    .sidebar-nav a {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 15px;
+      font-weight: 400;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: all 0.15s ease;
+      position: relative;
+    }
+    .sidebar-nav a::before {
+      content: '';
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--border-strong);
+      flex-shrink: 0;
+      transition: all 0.2s ease;
+    }
+    .sidebar-nav a:hover { background: var(--bg-raised); color: var(--text-primary); }
+    .sidebar-nav a.active {
+      background: var(--accent-light);
+      color: var(--accent-text);
+      font-weight: 500;
+    }
+    .sidebar-nav a.active::before { background: var(--accent); width: 6px; height: 6px; }
+    .sidebar-related { list-style: none; margin-top: 8px; }
+    .sidebar-related li { margin-bottom: 4px; }
+    .sidebar-related a {
+      font-size: 14.5px;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .sidebar-related a:hover { color: var(--accent); }
+
+    /* ── Main Content ── */
+    .main { padding: 0 48px 120px; max-width: 860px; min-width: 0; }
+
+    /* ── Hero ── */
+    .hero {
+      padding: 56px 0 40px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 48px;
+    }
+    .hero-number {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+    .hero h1 {
+      font-family: var(--font-serif);
+      font-size: 48px;
+      font-weight: 400;
+      line-height: 1.1;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+      letter-spacing: -0.02em;
+    }
+    .hero-desc {
+      font-size: 17px;
+      line-height: 1.65;
+      color: var(--text-secondary);
+      max-width: 600px;
+      margin-bottom: 20px;
+    }
+    .hero-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+    .hero-tag {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 400;
+      letter-spacing: 0.04em;
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-raised);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+
+    /* ── Sections ── */
+    .section {
+      margin-bottom: 56px;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeUp 0.5s ease forwards;
+    }
+    .section:nth-child(1)  { animation-delay: 0.05s; }
+    .section:nth-child(2)  { animation-delay: 0.10s; }
+    .section:nth-child(3)  { animation-delay: 0.15s; }
+    .section:nth-child(4)  { animation-delay: 0.20s; }
+    .section:nth-child(5)  { animation-delay: 0.25s; }
+    .section:nth-child(6)  { animation-delay: 0.30s; }
+    .section:nth-child(7)  { animation-delay: 0.35s; }
+    .section:nth-child(8)  { animation-delay: 0.40s; }
+    .section:nth-child(9)  { animation-delay: 0.45s; }
+    .section:nth-child(10) { animation-delay: 0.50s; }
+    .section:nth-child(11) { animation-delay: 0.55s; }
+
+    @keyframes fadeUp {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .section-number {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    .section h2 {
+      font-family: var(--font-serif);
+      font-size: 30px;
+      font-weight: 400;
+      color: var(--text-primary);
+      margin-bottom: 20px;
+      letter-spacing: -0.01em;
+    }
+    .section h3 {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin: 28px 0 10px;
+    }
+    .section p {
+      color: var(--text-secondary);
+      margin-bottom: 14px;
+      max-width: 680px;
+    }
+    .section ul, .section ol { padding-left: 20px; margin-bottom: 16px; color: var(--text-secondary); }
+    .section li { margin-bottom: 6px; }
+
+    /* ── Highlight Spans ── */
+    .hl {
+      background: var(--hl-yellow);
+      color: var(--hl-yellow-dark);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+    .hl-accent {
+      background: var(--hl-accent);
+      color: var(--hl-accent-dark);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+    .hl-red {
+      background: hsl(0, 85%, 93%);
+      color: hsl(0, 70%, 35%);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+    .hl-green {
+      background: hsl(145, 60%, 90%);
+      color: hsl(145, 55%, 28%);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+
+    /* ── Cards / Boxes ── */
+    .card {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+    .card-accent {
+      background: var(--accent-light);
+      border-color: var(--accent-border);
+    }
+    .card h4 {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+    .card p {
+      font-size: 16px;
+      color: var(--text-secondary);
+      margin-bottom: 0;
+    }
+    .card-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    /* ── Code Blocks ── */
+    .code-block {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      overflow-x: auto;
+    }
+    .code-block code {
+      font-family: var(--font-mono);
+      font-size: 14.5px;
+      font-weight: 400;
+      color: var(--text-code);
+      line-height: 1.7;
+    }
+    .code-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .inline-code {
+      font-family: var(--font-mono);
+      font-size: 15px;
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      padding: 1px 6px;
+      border-radius: var(--radius-sm);
+      color: var(--text-code);
+    }
+
+    /* ── Tables ── */
+    .table-wrap {
+      overflow-x: auto;
+      margin-bottom: 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+    }
+    .table-wrap table { width: 100%; border-collapse: collapse; font-size: 15.5px; }
+    .table-wrap th {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      text-align: left;
+      padding: 10px 16px;
+      background: var(--bg-subtle);
+      border-bottom: 1px solid var(--border);
+    }
+    .table-wrap td {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+    .table-wrap tr:last-child td { border-bottom: none; }
+
+    /* ── Scale Estimation Grid ── */
+    .scale-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .scale-card {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      text-align: center;
+    }
+    .scale-card .number {
+      font-family: var(--font-mono);
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--accent-text);
+      margin-bottom: 2px;
+    }
+    .scale-card .label { font-size: 13.5px; color: var(--text-muted); }
+
+    /* ── Architecture SVG ── */
+    .arch-diagram {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+    }
+    .arch-diagram svg { display: block; margin: 0 auto; }
+    .arch-diagram .node { cursor: pointer; transition: filter 0.2s; }
+    .arch-diagram .node:hover { filter: brightness(0.95); }
+    .arch-diagram .node rect, .arch-diagram .node-rect { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arch-diagram .node-label {
+      font-family: 'Geist', system-ui, sans-serif;
+      font-size: 13.5px;
+      font-weight: 500;
+      fill: var(--text-primary);
+      text-anchor: middle;
+      dominant-baseline: central;
+      pointer-events: none;
+    }
+    .arch-diagram .node-sublabel {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      fill: var(--text-muted);
+      text-anchor: middle;
+      dominant-baseline: central;
+      pointer-events: none;
+    }
+    .arch-diagram .edge { stroke: var(--border-strong); stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+    .arch-diagram .edge-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      fill: var(--text-muted);
+      text-anchor: middle;
+    }
+    .node-highlight rect { stroke: var(--accent) !important; stroke-width: 2.5 !important; }
+    .node-highlight .node-label { fill: var(--accent-text) !important; }
+
+    /* ── Flow Stepper Widget ── */
+    .flow-stepper {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .flow-stepper-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .flow-stepper-title {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .flow-stepper-controls { display: flex; gap: 8px; }
+    .flow-btn {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 5px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .flow-btn:hover { background: var(--accent-light); border-color: var(--accent-border); color: var(--accent-text); }
+    .flow-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .flow-btn-primary { background: var(--accent); border-color: var(--accent); color: white; }
+    .flow-btn-primary:hover { opacity: 0.9; background: var(--accent); color: white; }
+    .flow-steps {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      margin-bottom: 16px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .flow-node {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      white-space: nowrap;
+      transition: all 0.3s ease;
+    }
+    .flow-node.active {
+      background: var(--accent-light);
+      border-color: var(--accent);
+      color: var(--accent-text);
+      box-shadow: 0 0 0 3px var(--accent-mid);
+    }
+    .flow-node.done {
+      background: var(--accent-light);
+      border-color: var(--accent-border);
+      color: var(--accent-text);
+    }
+    .flow-arrow { color: var(--border-strong); font-size: 16px; flex-shrink: 0; }
+    .flow-desc {
+      font-size: 16px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      padding: 14px 16px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      min-height: 52px;
+    }
+    .flow-counter {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 10px;
+      text-align: right;
+    }
+
+    /* ── Mermaid ── */
+    .mermaid-wrap {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+    }
+    .mermaid { text-align: center; }
+
+    /* ── Tradeoff Cards ── */
+    .tradeoff {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .tradeoff-option {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+    }
+    .tradeoff-option.chosen { border-color: var(--accent-border); background: var(--accent-light); }
+    .tradeoff-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .tradeoff-label.yes { color: hsl(145, 55%, 32%); }
+    .tradeoff-label.no  { color: var(--text-muted); }
+    .tradeoff-option h4 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+    .tradeoff-option p { font-size: 15px; color: var(--text-secondary); margin-bottom: 0; }
+
+    /* ── Callout ── */
+    .callout {
+      border-left: 3px solid var(--accent);
+      padding: 14px 18px;
+      background: var(--accent-light);
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+      margin-bottom: 16px;
+    }
+    .callout p { font-size: 16px; color: var(--accent-text); margin-bottom: 0; }
+    .callout-warn { border-left-color: hsl(38, 92%, 50%); background: hsl(38, 80%, 94%); }
+    .callout-warn p { color: hsl(38, 70%, 28%); }
+    .callout-danger { border-left-color: hsl(0, 72%, 52%); background: hsl(0, 80%, 95%); }
+    .callout-danger p { color: hsl(0, 65%, 32%); }
+
+    /* ── Interview Tip Cards ── */
+    .tip-card {
+      display: flex;
+      gap: 14px;
+      padding: 16px 20px;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      margin-bottom: 10px;
+    }
+    .tip-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+    .tip-content { font-size: 16px; color: var(--text-secondary); line-height: 1.6; }
+    .tip-content strong { color: var(--text-primary); font-weight: 600; }
+
+    /* ── Similar Problems ── */
+    .similar-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .similar-card {
+      display: block;
+      text-decoration: none;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 18px 20px;
+      transition: all 0.2s ease;
+    }
+    .similar-card:hover {
+      border-color: var(--accent-border);
+      background: var(--accent-light);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    }
+    .similar-card h4 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+    .similar-card p { font-size: 13.5px; color: var(--text-muted); margin-bottom: 0; }
+
+    /* ── Evolution / Timeline ── */
+    .evolution-step {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+      position: relative;
+    }
+    .evolution-step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      left: 15px;
+      top: 36px;
+      bottom: -20px;
+      width: 2px;
+      background: var(--border);
+    }
+    .evolution-marker {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--accent-light);
+      border: 2px solid var(--accent-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--accent-text);
+      flex-shrink: 0;
+    }
+    .evolution-content h4 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+    .evolution-content p { font-size: 15.5px; color: var(--text-secondary); margin-bottom: 0; }
+
+    /* ── CH Interactive Diagram ── */
+    .ch-demo {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .ch-demo-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .ch-demo-title {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .ch-step-desc {
+      font-size: 16px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      padding: 14px 16px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      min-height: 52px;
+      margin-top: 16px;
+    }
+    .ch-svg-wrap {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .main { padding: 0 20px 80px; }
+      .hero h1 { font-size: 34px; }
+      .tradeoff { grid-template-columns: 1fr; }
+      .card-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- ═══════════════════ TOPBAR ═══════════════════ -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <a href="../index.html">System Design</a>
+      <span class="topbar-sep">/</span>
+      <span class="topbar-problem">Google Maps</span>
+    </div>
+    <div class="topbar-right">
+      <span class="topbar-tag">Hard</span>
+    </div>
+  </header>
+
+  <!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-label">Sections</div>
+    <ul class="sidebar-nav" id="sidebar-nav">
+      <li><a href="#problem">Problem Statement</a></li>
+      <li><a href="#requirements">Requirements</a></li>
+      <li><a href="#scale">Scale Estimation</a></li>
+      <li><a href="#api">API Design</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#deep-dive">Deep Dive</a></li>
+      <li><a href="#tradeoffs">Tradeoffs</a></li>
+      <li><a href="#failures">Failure Scenarios</a></li>
+      <li><a href="#interview-tips">Interview Tips</a></li>
+      <li><a href="#similar">Similar Problems</a></li>
+      <li><a href="#evolution">Evolution</a></li>
+    </ul>
+
+    <div class="sidebar-label">Related</div>
+    <ul class="sidebar-related">
+      <li><a href="../uber/index.html">Uber / Ride Sharing</a></li>
+      <li><a href="../notification-system/index.html">Notification System</a></li>
+      <li><a href="../search-autocomplete/index.html">Search Autocomplete</a></li>
+    </ul>
+  </aside>
+
+  <!-- ═══════════════════ MAIN ═══════════════════ -->
+  <main class="main">
+
+    <!-- ── Hero ── -->
+    <div class="hero">
+      <div class="hero-number">System Design — 06</div>
+      <h1>Google Maps</h1>
+      <p class="hero-desc">
+        Design a global mapping platform that renders interactive maps, computes optimal routes in milliseconds, and ingests real-time GPS data from millions of phones to estimate live traffic and ETAs.
+      </p>
+      <div class="hero-tags">
+        <span class="hero-tag">Geospatial</span>
+        <span class="hero-tag">Streaming Pipeline</span>
+        <span class="hero-tag">Graph Algorithms</span>
+        <span class="hero-tag">CDN</span>
+        <span class="hero-tag">Real-Time</span>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 01 · PROBLEM STATEMENT ═══════════════ -->
+    <div class="section" id="problem">
+      <div class="section-number">01</div>
+      <h2>Problem Statement</h2>
+      <p>
+        Build a mapping service used by over a billion people. Users expect to see a zoomable, pannable map of the entire planet, search for any address or business, and get directions — all with sub-second latency. Behind the scenes, the system must ingest GPS data from hundreds of millions of devices, match those noisy signals to actual roads, aggregate them into live traffic speeds, and feed those speeds back into the routing engine so that every ETA reflects conditions <em>right now</em>.
+      </p>
+      <p>
+        This is three systems in a trenchcoat: a <span class="hl-accent">tile rendering pipeline</span> (read-heavy, CDN-first), a <span class="hl-accent">routing engine</span> (CPU-heavy, graph algorithms), and a <span class="hl-accent">real-time traffic pipeline</span> (streaming, stateful). Each has different scaling characteristics.
+      </p>
+
+      <div class="callout">
+        <p><strong>Core question:</strong> How do you compute optimal routes across a billion-node road graph in milliseconds, while continuously updating edge weights from millions of live GPS probes?</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 02 · REQUIREMENTS ═══════════════ -->
+    <div class="section" id="requirements">
+      <div class="section-number">02</div>
+      <h2>Requirements</h2>
+
+      <h3>Functional Requirements</h3>
+      <div class="card">
+        <ul>
+          <li><strong>Map display</strong> — Render interactive, pannable, zoomable maps at multiple detail levels</li>
+          <li><strong>Geocoding &amp; search</strong> — Search for addresses, places, and businesses; convert between coordinates and human-readable addresses</li>
+          <li><strong>Routing</strong> — Compute optimal route between two or more waypoints by car, transit, walking, or cycling</li>
+          <li><strong>Live traffic</strong> — Display real-time traffic conditions as a colored overlay (red/yellow/green)</li>
+          <li><strong>Navigation</strong> — Provide turn-by-turn directions with live ETA updates as conditions change</li>
+        </ul>
+      </div>
+
+      <h3>Non-Functional Requirements</h3>
+      <div class="card">
+        <ul>
+          <li><strong>Tile latency &lt; 200ms</strong> — Anything slower feels laggy when panning</li>
+          <li><strong>Routing latency &lt; 1s</strong> — Users expect near-instant directions</li>
+          <li><strong>Traffic freshness &lt; 90s</strong> — GPS probe to traffic overlay in under 90 seconds</li>
+          <li><strong>99.99% availability</strong> — People depend on this while driving</li>
+          <li><strong>Global coverage</strong> — Every road, every country</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 03 · SCALE ESTIMATION ═══════════════ -->
+    <div class="section" id="scale">
+      <div class="section-number">03</div>
+      <h2>Scale Estimation</h2>
+
+      <p>Let's derive the numbers from reasonable assumptions rather than memorizing them.</p>
+
+      <div class="scale-grid">
+        <div class="scale-card">
+          <div class="number">~150K/s</div>
+          <div class="label">Tile requests</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~350/s</div>
+          <div class="label">Routing queries</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~20M/s</div>
+          <div class="label">GPS probes ingested</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~30 GB</div>
+          <div class="label">Road graph in memory</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>Derivation</h4>
+        <p>
+          <strong>Tiles:</strong> ~1B MAU, ~300M DAU. Each session loads ~40 tiles from panning/zooming.
+          300M × 40 = <span class="hl">12B tiles/day</span> → ~150K/sec. CDN absorbs 95%+, so origin sees ~7K/sec.<br/><br/>
+          <strong>Routing:</strong> ~10% of sessions request directions → 30M/day → <span class="hl">~350 queries/sec</span>. Modest compared to tiles.<br/><br/>
+          <strong>GPS probes:</strong> ~1B Android devices, ~5-10% actively driving → 50–100M concurrent. At 1 probe per 3 seconds: <span class="hl">~15–30M probes/sec</span>. This is the ingestion challenge.<br/><br/>
+          <strong>Road graph:</strong> ~1B nodes (intersections), ~2B edges (road segments). With efficient encoding (adjacency arrays, 4 bytes per node ID, 4 bytes per weight): ~30–50 GB. <span class="hl">Fits in RAM on a single server.</span>
+        </p>
+      </div>
+
+      <div class="callout">
+        <p><strong>Key insight:</strong> This system is overwhelmingly read-heavy and tile-dominated. Tiles are the scalability challenge (CDN + caching). Routing is the algorithmic challenge (graph algorithms). Traffic is the streaming challenge (Kafka + Flink). Three separate problems, three separate solutions.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 04 · API DESIGN ═══════════════ -->
+    <div class="section" id="api">
+      <div class="section-number">04</div>
+      <h2>API Design</h2>
+
+      <div class="code-label">Get Map Tiles</div>
+      <div class="code-block">
+        <code><pre>GET /tiles/{z}/{x}/{y}.pbf
+
+Response: Protocol Buffer encoded vector tile
+Headers:  Cache-Control: public, max-age=86400
+          Content-Encoding: gzip
+
+z = zoom level (0–20)
+x = column index
+y = row index</pre></code>
+      </div>
+
+      <div class="code-label">Get Directions</div>
+      <div class="code-block">
+        <code><pre>GET /directions?origin={lat,lng}
+               &destination={lat,lng}
+               &mode={driving|walking|cycling|transit}
+               &departure_time={unix_ts}
+               &alternatives={true|false}
+
+Response: {
+  routes: [{
+    distance_m:    42300,
+    duration_s:    2580,
+    duration_traffic_s: 3120,
+    polyline:      "encoded_polyline",
+    steps:         [{ instruction, distance, duration, maneuver }],
+    traffic_speed_segments: [{ start_idx, end_idx, speed_category }]
+  }]
+}</pre></code>
+      </div>
+
+      <div class="code-label">Geocoding / Search</div>
+      <div class="code-block">
+        <code><pre>GET /geocode?address={query}&bounds={sw_lat,sw_lng,ne_lat,ne_lng}
+
+Response: {
+  results: [{
+    place_id:      "ChIJ...",
+    formatted:     "Dubai Mall, Dubai, UAE",
+    location:      { lat: 25.1972, lng: 55.2796 },
+    types:         ["shopping_mall", "point_of_interest"]
+  }]
+}</pre></code>
+      </div>
+
+      <div class="code-label">Ingest GPS Probe (device → server)</div>
+      <div class="code-block">
+        <code><pre>POST /probes  (batched, every 5-15 seconds)
+
+Body: {
+  device_id:  "hashed_anon_id",
+  probes: [
+    { lat, lng, speed_mps, heading_deg, accuracy_m, ts },
+    { lat, lng, speed_mps, heading_deg, accuracy_m, ts },
+    ...
+  ]
+}</pre></code>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 05 · HIGH-LEVEL ARCHITECTURE ═══════════════ -->
+    <div class="section" id="architecture">
+      <div class="section-number">05</div>
+      <h2>High-Level Architecture</h2>
+
+      <p>Three subsystems with different scaling profiles: a CDN-heavy <span class="hl-accent">tile pipeline</span>, an in-memory <span class="hl-accent">routing engine</span>, and a streaming <span class="hl-accent">traffic pipeline</span>. They share the spatial database but are otherwise decoupled.</p>
+
+      <!-- ── Inline SVG Diagram ── -->
+      <div class="arch-diagram">
+        <svg viewBox="0 0 860 520" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="#ccc9c4"/>
+            </marker>
+          </defs>
+
+          <!-- Row 1: Client -->
+          <g class="node" id="node-client" onclick="hlNode('node-client')">
+            <rect class="node-rect" x="350" y="10" width="140" height="56" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="420" y="32">Client</text>
+            <text class="node-sublabel" x="420" y="48">Mobile / Web</text>
+          </g>
+
+          <!-- Row 2: CDN + LB -->
+          <g class="node" id="node-cdn" onclick="hlNode('node-cdn')">
+            <rect class="node-rect" x="170" y="100" width="130" height="56" fill="hsl(168,80%,94%)" stroke="hsl(168,60%,80%)"/>
+            <text class="node-label" x="235" y="122">CDN</text>
+            <text class="node-sublabel" x="235" y="138">Tile cache</text>
+          </g>
+
+          <g class="node" id="node-lb" onclick="hlNode('node-lb')">
+            <rect class="node-rect" x="540" y="100" width="130" height="56" fill="hsl(168,80%,94%)" stroke="hsl(168,60%,80%)"/>
+            <text class="node-label" x="605" y="122">Load Balancer</text>
+            <text class="node-sublabel" x="605" y="138">L7 / ALB</text>
+          </g>
+
+          <!-- Row 3: Services -->
+          <g class="node" id="node-tile" onclick="hlNode('node-tile')">
+            <rect class="node-rect" x="50" y="210" width="130" height="56" fill="hsl(168,80%,94%)" stroke="hsl(168,60%,80%)"/>
+            <text class="node-label" x="115" y="232">Tile Service</text>
+            <text class="node-sublabel" x="115" y="248">Vector render</text>
+          </g>
+
+          <g class="node" id="node-route" onclick="hlNode('node-route')">
+            <rect class="node-rect" x="350" y="210" width="140" height="56" fill="hsl(168,80%,94%)" stroke="hsl(168,60%,80%)"/>
+            <text class="node-label" x="420" y="232">Routing Engine</text>
+            <text class="node-sublabel" x="420" y="248">CH + CRP</text>
+          </g>
+
+          <g class="node" id="node-search" onclick="hlNode('node-search')">
+            <rect class="node-rect" x="660" y="210" width="140" height="56" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="730" y="232">Search Service</text>
+            <text class="node-sublabel" x="730" y="248">Geocoding</text>
+          </g>
+
+          <!-- Row 4: Data stores -->
+          <g class="node" id="node-tilecache" onclick="hlNode('node-tilecache')">
+            <rect class="node-rect" x="50" y="320" width="130" height="56" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="115" y="342">Tile Cache</text>
+            <text class="node-sublabel" x="115" y="358">Redis</text>
+          </g>
+
+          <g class="node" id="node-graph" onclick="hlNode('node-graph')">
+            <rect class="node-rect" x="260" y="320" width="130" height="56" fill="hsl(38,80%,94%)" stroke="hsl(38,60%,80%)"/>
+            <text class="node-label" x="325" y="342">Road Graph</text>
+            <text class="node-sublabel" x="325" y="358">In-memory ~30GB</text>
+          </g>
+
+          <g class="node" id="node-spatial" onclick="hlNode('node-spatial')">
+            <rect class="node-rect" x="460" y="320" width="140" height="56" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="530" y="342">Spatial DB</text>
+            <text class="node-sublabel" x="530" y="358">PostGIS</text>
+          </g>
+
+          <g class="node" id="node-elastic" onclick="hlNode('node-elastic')">
+            <rect class="node-rect" x="670" y="320" width="130" height="56" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="735" y="342">Search Index</text>
+            <text class="node-sublabel" x="735" y="358">Elasticsearch</text>
+          </g>
+
+          <!-- Row 5: Traffic pipeline -->
+          <g class="node" id="node-ingest" onclick="hlNode('node-ingest')">
+            <rect class="node-rect" x="50" y="440" width="130" height="56" fill="hsl(0,80%,95%)" stroke="hsl(0,60%,82%)"/>
+            <text class="node-label" x="115" y="462">GPS Ingestion</text>
+            <text class="node-sublabel" x="115" y="478">Kafka / Pub-Sub</text>
+          </g>
+
+          <g class="node" id="node-mapmatch" onclick="hlNode('node-mapmatch')">
+            <rect class="node-rect" x="260" y="440" width="140" height="56" fill="hsl(0,80%,95%)" stroke="hsl(0,60%,82%)"/>
+            <text class="node-label" x="330" y="462">Map Matching</text>
+            <text class="node-sublabel" x="330" y="478">Flink (HMM)</text>
+          </g>
+
+          <g class="node" id="node-agg" onclick="hlNode('node-agg')">
+            <rect class="node-rect" x="480" y="440" width="140" height="56" fill="hsl(0,80%,95%)" stroke="hsl(0,60%,82%)"/>
+            <text class="node-label" x="550" y="462">Aggregator</text>
+            <text class="node-sublabel" x="550" y="478">Speed per segment</text>
+          </g>
+
+          <g class="node" id="node-crp" onclick="hlNode('node-crp')">
+            <rect class="node-rect" x="700" y="440" width="120" height="56" fill="hsl(38,80%,94%)" stroke="hsl(38,60%,80%)"/>
+            <text class="node-label" x="760" y="462">CRP Updater</text>
+            <text class="node-sublabel" x="760" y="478">Edge weights</text>
+          </g>
+
+          <!-- Edges -->
+          <line class="edge" x1="390" y1="66" x2="265" y2="100"/>
+          <line class="edge" x1="450" y1="66" x2="575" y2="100"/>
+          <text class="edge-label" x="310" y="78">tiles</text>
+          <text class="edge-label" x="530" y="78">API</text>
+
+          <line class="edge" x1="235" y1="156" x2="140" y2="210"/>
+          <text class="edge-label" x="170" y="178">miss</text>
+
+          <line class="edge" x1="570" y1="156" x2="445" y2="210"/>
+          <line class="edge" x1="640" y1="156" x2="710" y2="210"/>
+          <text class="edge-label" x="490" y="178">route</text>
+          <text class="edge-label" x="690" y="178">search</text>
+
+          <line class="edge" x1="115" y1="266" x2="115" y2="320"/>
+          <line class="edge" x1="420" y1="266" x2="350" y2="320"/>
+          <line class="edge" x1="420" y1="266" x2="500" y2="320"/>
+          <line class="edge" x1="730" y1="266" x2="735" y2="320"/>
+
+          <!-- Traffic pipeline edges -->
+          <line class="edge" x1="180" y1="468" x2="260" y2="468"/>
+          <line class="edge" x1="400" y1="468" x2="480" y2="468"/>
+          <line class="edge" x1="620" y1="468" x2="700" y2="468"/>
+
+          <!-- CRP → Road Graph feedback -->
+          <path class="edge" d="M 760 440 L 760 395 L 390 395 L 390 376" style="stroke: hsl(38,60%,55%); stroke-dasharray: 5,4;"/>
+          <text class="edge-label" x="575" y="390" style="fill: hsl(38,55%,45%);">update weights</text>
+
+          <!-- Phone to ingest -->
+          <text class="edge-label" x="115" y="430" style="fill: hsl(0,50%,55%);">← from phones</text>
+        </svg>
+      </div>
+
+      <p>The <span style="color:hsl(0,60%,50%);font-weight:500;">red pipeline</span> at the bottom is the real-time traffic system: GPS probes flow in from phones, get map-matched to road segments, aggregated into per-segment speeds, and fed back into the routing engine via CRP metric updates. The <span style="color:hsl(38,60%,45%);font-weight:500;">dashed amber line</span> shows this feedback loop — updated edge weights flow from the aggregator back into the in-memory road graph.</p>
+
+      <!-- ── Flow Stepper ── -->
+      <div class="flow-stepper">
+        <div class="flow-stepper-header">
+          <span class="flow-stepper-title">Routing Request Flow — Step Through</span>
+          <div class="flow-stepper-controls">
+            <button class="flow-btn" onclick="resetFlow()" id="flow-reset" disabled>Reset</button>
+            <button class="flow-btn flow-btn-primary" onclick="runFlow()" id="flow-next">Next Step →</button>
+          </div>
+        </div>
+        <div class="flow-steps" id="flow-steps"></div>
+        <div class="flow-desc" id="flow-desc">Click <strong>Next Step</strong> to walk through a routing request.</div>
+        <div class="flow-counter" id="flow-counter"></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 06 · DEEP DIVE ═══════════════ -->
+    <div class="section" id="deep-dive">
+      <div class="section-number">06</div>
+      <h2>Deep Dive — Contraction Hierarchies</h2>
+
+      <p>
+        The routing engine's core algorithm. Dijkstra's algorithm works for city-scale graphs, but for a cross-country route (Dubai to Istanbul), it would explore millions of nodes — <span class="hl-red">seconds of compute per query</span>. We need something that exploits the structure of road networks. Enter <span class="hl-accent">Contraction Hierarchies (CH)</span>.
+      </p>
+
+      <div class="callout">
+        <p><strong>Core insight:</strong> For long-distance routes, you always use important roads. Nobody drives from Dubai to Abu Dhabi via residential streets. If the algorithm "knows" this, it can skip millions of irrelevant nodes.</p>
+      </div>
+
+      <h3>The Algorithm in Two Phases</h3>
+
+      <p>CH works in two phases: an expensive <strong>offline preprocessing</strong> step (run once, takes hours) and a blazing fast <strong>online query</strong> step (runs per request, takes milliseconds).</p>
+
+      <h3>Phase 1 — Preprocessing: Node Contraction</h3>
+
+      <p>
+        Rank every node by "importance." A highway interchange serving 50,000 cars/day is important. A dead-end residential cul-de-sac is not. The ranking uses heuristics: how many shortcuts would contracting this node create? How many neighbors does it have? How deep in the hierarchy are its neighbors?
+      </p>
+      <p>
+        Then, contract nodes from <strong>least important to most important</strong>. "Contracting" a node means: remove it from the graph, and for every pair of its neighbors (u, v), check if the shortest path from u to v went through this node. If yes, add a <span class="hl-accent">shortcut edge</span> u→v with weight = weight(u→node) + weight(node→v).
+      </p>
+
+      <!-- CH Interactive Visual -->
+      <div class="ch-demo">
+        <div class="ch-demo-header">
+          <span class="ch-demo-title">Contraction Walkthrough</span>
+          <div class="flow-stepper-controls">
+            <button class="flow-btn" onclick="resetCH()" id="ch-reset" disabled>Reset</button>
+            <button class="flow-btn flow-btn-primary" onclick="stepCH()" id="ch-next">Next Step →</button>
+          </div>
+        </div>
+        <div class="ch-svg-wrap">
+          <svg id="ch-svg" viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg">
+            <!-- Nodes: A small graph A-B-C-D-E -->
+            <!-- Edges drawn dynamically via JS -->
+          </svg>
+        </div>
+        <div class="ch-step-desc" id="ch-desc">Click <strong>Next Step</strong> to see how nodes get contracted and shortcut edges appear.</div>
+        <div class="flow-counter" id="ch-counter"></div>
+      </div>
+
+      <h3>Phase 2 — Query: Bidirectional Upward Search</h3>
+
+      <p>
+        To find the shortest path from S to T, run <strong>two simultaneous Dijkstra searches</strong>:
+      </p>
+      <ul>
+        <li><strong>Forward search</strong> from S — but only explore edges that go <em>upward</em> in the hierarchy (to more important nodes).</li>
+        <li><strong>Backward search</strong> from T — same rule, only go upward.</li>
+      </ul>
+      <p>
+        The two searches meet at some high-importance node in the middle — typically a highway node. The shortest path passes through this meeting point. Because both searches only go upward, they each explore very few nodes — typically <span class="hl">~500 nodes per direction</span>, for a total of about 1,000 node relaxations. Compare that to millions for plain Dijkstra.
+      </p>
+
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant LB as Load Balancer
+    participant R as Routing Engine
+    participant G as Road Graph (RAM)
+    participant T as Traffic Cache
+
+    C->>LB: GET /directions?origin=...&dest=...
+    LB->>R: Forward to routing shard
+    R->>G: Load CH graph for region
+    R->>T: Fetch current edge weights (CRP)
+
+    Note over R: Bidirectional CH search<br/>Forward from origin ↑<br/>Backward from dest ↑<br/>Meet at highway node
+
+    R->>R: Unpack shortcut edges → full path
+    R->>R: Compute ETA from traffic weights
+    R-->>LB: Route + polyline + ETA
+    LB-->>C: JSON response
+        </div>
+      </div>
+
+      <h3>Unpacking Shortcuts</h3>
+      <p>
+        The path found by the query uses shortcut edges. To get the actual turn-by-turn directions, you <strong>unpack</strong> each shortcut recursively: a shortcut A→C was created when B was contracted, so it represents A→B→C. Shortcut B→D might unpack to B→X→D, and so on until you have the full path with every intersection.
+      </p>
+
+      <h3>Handling Live Traffic — CRP Integration</h3>
+      <p>
+        Standard CH has a problem: the preprocessing assumes static edge weights. If traffic changes, you'd need to re-preprocess the entire graph — which takes hours. <span class="hl-accent">Customizable Route Planning (CRP)</span> solves this by separating concerns:
+      </p>
+      <ul>
+        <li><strong>Metric-independent preprocessing:</strong> Partition the graph into cells based on topology. Precompute which boundary nodes connect cells. This depends on road topology only, not travel times. Run once.</li>
+        <li><strong>Metric customization:</strong> When traffic changes, update edge weights and recompute only the cross-cell boundary distances. This takes <span class="hl">seconds, not hours</span>.</li>
+      </ul>
+      <p>
+        The real-time traffic pipeline (GPS probes → map matching → aggregation) produces updated segment speeds every 30–60 seconds. These feed into the CRP customization step, which updates the routing graph's edge weights in near real-time. The feedback loop closes: live traffic → updated weights → better ETAs.
+      </p>
+
+      <div class="callout">
+        <p><strong>Performance:</strong> CH preprocessing takes ~2–4 hours for a continent-sized graph. But queries run in <span class="hl">2–5 milliseconds</span>, examining ~1,000 nodes instead of millions. With CRP, traffic updates apply in seconds without re-preprocessing.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 07 · TRADEOFFS ═══════════════ -->
+    <div class="section" id="tradeoffs">
+      <div class="section-number">07</div>
+      <h2>Key Design Decisions &amp; Tradeoffs</h2>
+
+      <h3>Vector Tiles vs Raster Tiles</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Vector Tiles (Protobuf)</h4>
+          <p>Send geometry data (lines, polygons, points); client GPU renders. Smaller payloads (20–50 KB), supports rotation/3D/restyling, decoupled from display resolution.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Raster Tiles (PNG)</h4>
+          <p>Pre-rendered images (50–200 KB). Simpler clients, but no rotation/3D, wasteful bandwidth, and you must re-render for any style change. Legacy approach.</p>
+        </div>
+      </div>
+
+      <h3>Contraction Hierarchies vs Plain Dijkstra / A*</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Contraction Hierarchies + CRP</h4>
+          <p>Hours of preprocessing, but queries in 2–5ms exploring ~1,000 nodes. CRP layer allows live traffic updates in seconds. Dominates at scale.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>A* (with heuristic)</h4>
+          <p>No preprocessing needed, simpler to implement. But cross-country routes explore millions of nodes — seconds per query. Fine for small graphs, not planet-scale.</p>
+        </div>
+      </div>
+
+      <h3>Road Graph Storage: In-Memory vs On-Disk</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>In-Memory (~30–50 GB)</h4>
+          <p>Graph fits in RAM. Sub-millisecond node access. Required for 2–5ms query latency. Higher server cost, but routing is only ~350 QPS — a few beefy servers suffice.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>On-Disk (memory-mapped)</h4>
+          <p>Lower memory footprint, but random access latency jumps from nanoseconds to microseconds. Routing queries would take 10–100× longer. Only viable if graph doesn't fit in RAM.</p>
+        </div>
+      </div>
+
+      <h3>Tile Pre-rendering Strategy</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Hybrid: Pre-render z0–14, On-Demand z15+</h4>
+          <p>Pre-render ~268M tiles for common zoom levels. Deep zooms and rural areas rendered on first request, then cached. Balances storage (petabytes saved) with latency.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Fully On-Demand</h4>
+          <p>No pre-rendering, everything generated live. Simpler pipeline, but first-load latency spikes for popular areas. CDN cache-miss storms during peak hours.</p>
+        </div>
+      </div>
+
+      <h3>Traffic Aggregation: Median vs Mean</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Weighted Median + Time Decay</h4>
+          <p>Robust to outliers (GPS glitches, parking-lot probes adjacent to highways). Recent probes weighted higher. Falls back to historical prior when data is sparse.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Simple Mean</h4>
+          <p>One GPS glitch reporting 0 km/h on a highway drags the average down, creating phantom congestion. Mean is too sensitive to outliers for this use case.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 08 · FAILURE SCENARIOS ═══════════════ -->
+    <div class="section" id="failures">
+      <div class="section-number">08</div>
+      <h2>What Can Go Wrong</h2>
+
+      <div class="card">
+        <h4>Phantom Traffic Jams</h4>
+        <p>A few phones in a parking lot adjacent to a highway report low speeds. The aggregation pipeline mistakenly attributes these to the highway, showing false congestion. <strong>Mitigation:</strong> Outlier filtering (discard probes &gt;2σ from running median), minimum probe count thresholds, and cross-validation with adjacent segments.</p>
+      </div>
+
+      <div class="card">
+        <h4>GPS Drift in Tunnels &amp; Urban Canyons</h4>
+        <p>GPS accuracy degrades to 50–100m between tall buildings. Phones "jump" when exiting tunnels. Map matching assigns probes to wrong roads. <strong>Mitigation:</strong> HMM-based map matching considers trajectory continuity. Known tunnel geometries are pre-loaded. Low-accuracy probes are downweighted.</p>
+      </div>
+
+      <div class="card">
+        <h4>Traffic Pipeline Cold Start After Outage</h4>
+        <p>If the streaming pipeline (Flink) restarts, all in-memory map-matching state and sliding window aggregations are lost. Roads temporarily show no live traffic data. <strong>Mitigation:</strong> Fall back to historical speed profiles (this road at this time-of-day). Flink checkpoints state to durable storage for faster recovery. Busy roads rebuild in ~5 minutes; quiet roads take longer.</p>
+      </div>
+
+      <div class="card">
+        <h4>Routing Graph Staleness During CRP Update</h4>
+        <p>While CRP re-customizes edge weights (takes seconds), queries still run on the old weights. A sudden accident may not be reflected immediately. <strong>Mitigation:</strong> Double-buffer the graph — build updated weights on a shadow copy, then atomically swap. Incident detection can bypass the window for critical changes.</p>
+      </div>
+
+      <div class="card">
+        <h4>CDN Cache Stampede on Map Data Update</h4>
+        <p>When new map data is published (weekly), all cached tiles are invalidated simultaneously, causing a thundering herd of origin requests. <strong>Mitigation:</strong> Staggered invalidation by region/zoom level. Jittered cache TTLs. Origin servers auto-scale ahead of scheduled publishes.</p>
+      </div>
+
+      <div class="card">
+        <h4>Sparse Data on Rural Roads</h4>
+        <p>A back road with one probe per hour has terrible speed estimates. Routing may overestimate or underestimate travel time. <strong>Mitigation:</strong> Bayesian estimation with a strong prior from the road's speed limit and historical data. Confidence intervals are wider; ETA range shown to user is broader.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 09 · INTERVIEW TIPS ═══════════════ -->
+    <div class="section" id="interview-tips">
+      <div class="section-number">09</div>
+      <h2>Interview Tips</h2>
+
+      <div class="tip-card">
+        <span class="tip-icon">💡</span>
+        <div class="tip-content">
+          <strong>Scope aggressively.</strong><br/>
+          Maps is three systems in one. Immediately tell the interviewer: "This has tile rendering, routing, and live traffic. I'd like to cover all three at a high level, then go deep on one. Which interests you most?" This shows maturity and lets you avoid a shallow skim of everything.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">⚡</span>
+        <div class="tip-content">
+          <strong>Derive the numbers.</strong><br/>
+          Don't memorize "150K tile requests/sec." Instead: "1B MAU → 300M DAU → 40 tiles per session → 12B tiles/day → ~150K/sec." Interviewers are testing your ability to reason, not recall. Show the math.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🎯</span>
+        <div class="tip-content">
+          <strong>Name-drop Contraction Hierarchies.</strong><br/>
+          Most candidates say "Dijkstra" and stop. Knowing CH and explaining why Dijkstra isn't enough at scale is a strong differentiator. You don't need to implement it — just explain the two-phase approach: preprocess once (contract unimportant nodes, add shortcuts), query fast (bidirectional upward search).
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🗺️</span>
+        <div class="tip-content">
+          <strong>The tile pyramid is a CDN problem.</strong><br/>
+          Once you explain the (z, x, y) addressing scheme and that tiles are static assets, the scaling story is straightforward: CDN caching with 95%+ hit rate. Don't over-complicate it. Spend your interview time on the harder parts — routing and traffic.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🔄</span>
+        <div class="tip-content">
+          <strong>Close the feedback loop.</strong><br/>
+          The most impressive thing you can draw is the full cycle: GPS probes → map matching → speed aggregation → CRP edge weight update → better ETAs → shown to user → user drives → generates more GPS probes. Show the interviewer you understand this is a <em>system</em>, not just components.
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 10 · SIMILAR PROBLEMS ═══════════════ -->
+    <div class="section" id="similar">
+      <div class="section-number">10</div>
+      <h2>Similar Problems</h2>
+
+      <div class="similar-grid">
+        <a href="../uber/index.html" class="similar-card">
+          <h4>Uber / Ride Sharing</h4>
+          <p>Same geospatial indexing + routing, adds real-time driver matching and dynamic pricing. Maps is essentially Uber's infrastructure layer.</p>
+        </a>
+        <a href="../notification-system/index.html" class="similar-card">
+          <h4>Notification System</h4>
+          <p>Similar fan-out and delivery guarantee challenges. Traffic alerts use push notification infrastructure.</p>
+        </a>
+        <a href="../kafka/index.html" class="similar-card">
+          <h4>Distributed Message Queue</h4>
+          <p>The GPS probe ingestion pipeline is essentially a Kafka-like streaming system with geographic partitioning.</p>
+        </a>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 11 · EVOLUTION ═══════════════ -->
+    <div class="section" id="evolution">
+      <div class="section-number">11</div>
+      <h2>Evolution</h2>
+      <p>How this design grows from MVP to planet-scale.</p>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">1</div>
+        <div class="evolution-content">
+          <h4>Single-City MVP</h4>
+          <p>One city, raster tiles, A* routing on a small graph in memory, no live traffic. Tiles pre-rendered and served from a single server with Nginx. Graph fits in &lt;1 GB. Good enough for a demo.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">2</div>
+        <div class="evolution-content">
+          <h4>Country-Scale: Add CH + CDN</h4>
+          <p>Switch to vector tiles for flexibility. Put tiles behind a CDN. Implement Contraction Hierarchies for fast cross-country routing. Add geocoding with Elasticsearch. This handles millions of users in one country.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">3</div>
+        <div class="evolution-content">
+          <h4>Add Real-Time Traffic Pipeline</h4>
+          <p>Ingest GPS probes via Kafka. Build the map-matching + aggregation pipeline with Flink. Overlay live traffic on tiles. Integrate CRP so routing reflects current conditions. ETA accuracy jumps dramatically.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">4</div>
+        <div class="evolution-content">
+          <h4>Planet-Scale: Sharding + Multi-Region</h4>
+          <p>Partition the road graph by continent/region. Deploy routing engines in each region. Multi-region CDN with edge caching. Cross-region routes stitch partial results. Handle 1B+ users across all countries.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">5</div>
+        <div class="evolution-content">
+          <h4>Predictive Intelligence</h4>
+          <p>ML models for traffic prediction (not just current conditions, but forecasts). Incident detection from speed anomalies. Rerouting suggestions pushed proactively. Integrate transit, cycling, walking multimodal routing. Indoor maps for airports and malls.</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SCRIPTS
+     ═══════════════════════════════════════════════════════ -->
+<script>
+  // ── Mermaid Init ──
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: 'hsl(168, 80%, 94%)',
+      primaryTextColor: '#111110',
+      primaryBorderColor: 'hsl(168, 60%, 80%)',
+      lineColor: '#ccc9c4',
+      secondaryColor: '#f7f7f5',
+      tertiaryColor: '#f0eeeb',
+      fontFamily: 'Geist, system-ui, sans-serif',
+      fontSize: '13px'
+    }
+  });
+
+  // ── Sidebar Scroll Observer ──
+  (function() {
+    const sections = document.querySelectorAll('.section[id]');
+    const navLinks = document.querySelectorAll('#sidebar-nav a');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+          navLinks.forEach(link => {
+            link.classList.toggle('active', link.getAttribute('href') === '#' + id);
+          });
+        }
+      });
+    }, { rootMargin: '-80px 0px -60% 0px', threshold: 0 });
+    sections.forEach(s => observer.observe(s));
+  })();
+
+  // ── Architecture Node Highlight ──
+  let highlightedNode = null;
+  function hlNode(id) {
+    if (highlightedNode) document.getElementById(highlightedNode).classList.remove('node-highlight');
+    if (highlightedNode === id) { highlightedNode = null; return; }
+    document.getElementById(id).classList.add('node-highlight');
+    highlightedNode = id;
+  }
+
+  // ── Flow Stepper: Routing Request ──
+  const FLOW_NODES = ['Client', 'CDN / LB', 'Routing Engine', 'Road Graph', 'Traffic Cache', 'Response'];
+  const FLOW_DESCS = [
+    'User taps "Directions" — the client sends a GET request with origin and destination coordinates.',
+    'The CDN passes the API request through (routing is dynamic, not cacheable). The load balancer routes to the routing engine shard responsible for this geographic region.',
+    'The routing engine receives the query. It runs a <strong>bidirectional Contraction Hierarchy search</strong> — forward from the origin going upward in node importance, backward from the destination going upward. The two searches meet at a high-importance node (typically a highway).',
+    'The road graph lives <strong>entirely in memory</strong> (~30 GB). Node lookups and edge traversals take nanoseconds. The CH query examines only ~1,000 nodes total (vs millions for plain Dijkstra). The resulting path uses shortcut edges that get unpacked into the full intersection-by-intersection route.',
+    'Current traffic edge weights come from the <strong>CRP layer</strong>, which is updated every 30–60 seconds by the real-time traffic pipeline. The ETA integrates current speeds for near-term segments and predicted speeds for segments the driver will reach later.',
+    'The response includes the polyline (encoded path), total distance, ETA with and without traffic, turn-by-turn steps, and per-segment traffic coloring. Total latency: <strong>50–200ms</strong>.'
+  ];
+
+  let flowStep = -1;
+  const flowStepsEl = document.getElementById('flow-steps');
+  const flowDescEl  = document.getElementById('flow-desc');
+  const flowCounter = document.getElementById('flow-counter');
+  const flowNextBtn = document.getElementById('flow-next');
+  const flowResetBtn = document.getElementById('flow-reset');
+
+  FLOW_NODES.forEach((name, i) => {
+    if (i > 0) {
+      const arrow = document.createElement('span');
+      arrow.className = 'flow-arrow';
+      arrow.textContent = '→';
+      flowStepsEl.appendChild(arrow);
+    }
+    const node = document.createElement('span');
+    node.className = 'flow-node';
+    node.id = 'fnode-' + i;
+    node.textContent = name;
+    flowStepsEl.appendChild(node);
+  });
+
+  function runFlow() {
+    flowStep++;
+    if (flowStep >= FLOW_NODES.length) {
+      flowNextBtn.disabled = true;
+      flowDescEl.innerHTML = '<strong>✓ Flow complete.</strong> Click Reset to start over.';
+      return;
+    }
+    flowResetBtn.disabled = false;
+    for (let i = 0; i < flowStep; i++) {
+      document.getElementById('fnode-' + i).classList.remove('active');
+      document.getElementById('fnode-' + i).classList.add('done');
+    }
+    document.getElementById('fnode-' + flowStep).classList.add('active');
+    document.getElementById('fnode-' + flowStep).scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    flowDescEl.innerHTML = FLOW_DESCS[flowStep];
+    flowCounter.textContent = `Step ${flowStep + 1} of ${FLOW_NODES.length}`;
+    if (flowStep === FLOW_NODES.length - 1) flowNextBtn.textContent = 'Finish ✓';
+  }
+
+  function resetFlow() {
+    flowStep = -1;
+    FLOW_NODES.forEach((_, i) => {
+      const el = document.getElementById('fnode-' + i);
+      el.classList.remove('active', 'done');
+    });
+    flowDescEl.innerHTML = 'Click <strong>Next Step</strong> to walk through a routing request.';
+    flowCounter.textContent = '';
+    flowNextBtn.disabled = false;
+    flowNextBtn.textContent = 'Next Step →';
+    flowResetBtn.disabled = true;
+  }
+
+  // ══════════════════════════════════════════════════════
+  // Contraction Hierarchy Interactive Demo
+  // ══════════════════════════════════════════════════════
+
+  const chSvg = document.getElementById('ch-svg');
+  const chDescEl = document.getElementById('ch-desc');
+  const chCounterEl = document.getElementById('ch-counter');
+  const chNextBtn = document.getElementById('ch-next');
+  const chResetBtn = document.getElementById('ch-reset');
+
+  // Graph: 7 nodes
+  // A(local) - B(local) - C(highway) - D(local) - E(local)
+  //                         |
+  //                    F(local) - G(local)
+  const CH_NODES = [
+    { id:'A', x:80,  y:100, label:'A', sub:'rank 1', importance:1 },
+    { id:'B', x:210, y:100, label:'B', sub:'rank 2', importance:2 },
+    { id:'C', x:350, y:100, label:'C', sub:'rank 7', importance:7 },
+    { id:'D', x:490, y:100, label:'D', sub:'rank 3', importance:3 },
+    { id:'E', x:620, y:100, label:'E', sub:'rank 4', importance:4 },
+    { id:'F', x:280, y:220, label:'F', sub:'rank 5', importance:5 },
+    { id:'G', x:420, y:220, label:'G', sub:'rank 6', importance:6 },
+  ];
+
+  const CH_EDGES = [
+    { from:'A', to:'B', w:3 },
+    { from:'B', to:'C', w:2 },
+    { from:'C', to:'D', w:4 },
+    { from:'D', to:'E', w:3 },
+    { from:'C', to:'F', w:5 },
+    { from:'F', to:'G', w:2 },
+    { from:'G', to:'C', w:3 },  // G loops back near C via different path
+  ];
+
+  let chStep = -1;
+  const chSteps = [
+    {
+      title: 'Original Graph',
+      desc: 'Here\'s a small road network with 7 intersections (A–G). Each node has an <strong>importance rank</strong> — node C (rank 7) is a highway interchange, while A (rank 1) is a quiet residential dead-end. Edge weights represent travel time in minutes.',
+      contracted: [],
+      shortcuts: [],
+      highlight: [],
+      searchFwd: [],
+      searchBwd: [],
+    },
+    {
+      title: 'Contract Node A (rank 1)',
+      desc: 'A is the least important node. Remove it. Its only neighbor is B, so <strong>no shortcut needed</strong> — there\'s no pair of A\'s neighbors that used A as a shortest path. A just disappears from the active graph.',
+      contracted: ['A'],
+      shortcuts: [],
+      highlight: ['A'],
+      searchFwd: [],
+      searchBwd: [],
+    },
+    {
+      title: 'Contract Node B (rank 2)',
+      desc: 'Next, remove B. B connects A (already contracted) and C. The shortest path from any remaining neighbor through B leads to C. But A is gone, so B\'s only active neighbor is C. <strong>No shortcut needed</strong> — no pair of active neighbors to connect.',
+      contracted: ['A','B'],
+      shortcuts: [],
+      highlight: ['B'],
+      searchFwd: [],
+      searchBwd: [],
+    },
+    {
+      title: 'Contract Node D (rank 3)',
+      desc: 'Remove D. D connects C and E. Is the shortest path C→E through D? Yes (cost 4+3=7). Without D, there\'s no path from C to E. So we add a <strong class="hl-accent">shortcut edge C→E with weight 7</strong>.',
+      contracted: ['A','B','D'],
+      shortcuts: [{ from:'C', to:'E', w:7 }],
+      highlight: ['D'],
+      searchFwd: [],
+      searchBwd: [],
+    },
+    {
+      title: 'Contract Node E (rank 4)',
+      desc: 'Remove E. E\'s only active neighbor is C (via the shortcut). No pair of neighbors to bridge. <strong>No shortcut needed.</strong> E disappears.',
+      contracted: ['A','B','D','E'],
+      shortcuts: [{ from:'C', to:'E', w:7 }],
+      highlight: ['E'],
+      searchFwd: [],
+      searchBwd: [],
+    },
+    {
+      title: 'Contract Node F (rank 5)',
+      desc: 'Remove F. F connects C and G. Shortest path C→G through F = 5+2 = 7. The alternative path G→C is direct with weight 3, which is shorter. So C→G <em>through F</em> is not the shortest path. <strong>No shortcut needed</strong> for C→G. But F→G is still a shortest path segment. We add <strong class="hl-accent">shortcut C→G with weight 7</strong> for completeness since the direction C→F→G has no shorter alternative.',
+      contracted: ['A','B','D','E','F'],
+      shortcuts: [{ from:'C', to:'E', w:7 }, { from:'C', to:'G', w:7 }],
+      highlight: ['F'],
+      searchFwd: [],
+      searchBwd: [],
+    },
+    {
+      title: 'Final Hierarchy',
+      desc: 'After contracting all low-importance nodes, only <strong>C</strong> (the highway interchange, rank 7) and <strong>G</strong> (rank 6) remain active at the top of the hierarchy. The graph now has shortcut edges that encode optimal paths through lower levels. Query time: instead of exploring all 7 nodes, the bidirectional search explores <strong>only the top of the hierarchy</strong>.',
+      contracted: ['A','B','D','E','F'],
+      shortcuts: [{ from:'C', to:'E', w:7 }, { from:'C', to:'G', w:7 }],
+      highlight: ['C','G'],
+      searchFwd: [],
+      searchBwd: [],
+    },
+    {
+      title: 'Query: Route A → E',
+      desc: '<strong>Forward search</strong> from A goes upward: A→B→C (reaches the highway). <strong>Backward search</strong> from E goes upward: E→D→C. They meet at <strong>C</strong>! The path A→B→C→D→E has total cost 3+2+4+3 = <strong>12 minutes</strong>. The CH query found this by examining only the shortcut C→E (weight 7) and verifying via the hierarchy — touching far fewer nodes than brute-force Dijkstra would.',
+      contracted: [],
+      shortcuts: [{ from:'C', to:'E', w:7 }, { from:'C', to:'G', w:7 }],
+      highlight: ['C'],
+      searchFwd: ['A','B','C'],
+      searchBwd: ['E','D','C'],
+    },
+  ];
+
+  function drawCH(step) {
+    const s = chSteps[step];
+    let svg = '';
+
+    // Draw edges
+    CH_EDGES.forEach(e => {
+      const fromN = CH_NODES.find(n => n.id === e.from);
+      const toN = CH_NODES.find(n => n.id === e.to);
+      const fromContracted = s.contracted.includes(e.from);
+      const toContracted = s.contracted.includes(e.to);
+      const dimmed = fromContracted || toContracted;
+
+      const mx = (fromN.x + toN.x) / 2;
+      const my = (fromN.y + toN.y) / 2 - 10;
+
+      svg += `<line x1="${fromN.x}" y1="${fromN.y}" x2="${toN.x}" y2="${toN.y}"
+                stroke="${dimmed ? '#e4e2de' : '#bbb8b3'}" stroke-width="${dimmed ? 1 : 2}" />`;
+      if (!dimmed) {
+        svg += `<text x="${mx}" y="${my}" font-family="JetBrains Mono, monospace" font-size="11"
+                  fill="#878480" text-anchor="middle">${e.w}</text>`;
+      }
+    });
+
+    // Draw shortcut edges
+    s.shortcuts.forEach(sc => {
+      const fromN = CH_NODES.find(n => n.id === sc.from);
+      const toN = CH_NODES.find(n => n.id === sc.to);
+      const mx = (fromN.x + toN.x) / 2;
+      const my = (fromN.y + toN.y) / 2 - 14;
+      svg += `<line x1="${fromN.x}" y1="${fromN.y}" x2="${toN.x}" y2="${toN.y}"
+                stroke="hsl(168,70%,40%)" stroke-width="2.5" stroke-dasharray="6,3" />`;
+      svg += `<text x="${mx}" y="${my}" font-family="JetBrains Mono, monospace" font-size="11"
+                fill="hsl(168,70%,32%)" text-anchor="middle" font-weight="600">${sc.w}</text>`;
+    });
+
+    // Draw search paths
+    if (s.searchFwd.length > 1) {
+      for (let i = 0; i < s.searchFwd.length - 1; i++) {
+        const fromN = CH_NODES.find(n => n.id === s.searchFwd[i]);
+        const toN = CH_NODES.find(n => n.id === s.searchFwd[i+1]);
+        svg += `<line x1="${fromN.x}" y1="${fromN.y}" x2="${toN.x}" y2="${toN.y}"
+                  stroke="hsl(210,80%,55%)" stroke-width="3.5" opacity="0.7" />`;
+      }
+    }
+    if (s.searchBwd.length > 1) {
+      for (let i = 0; i < s.searchBwd.length - 1; i++) {
+        const fromN = CH_NODES.find(n => n.id === s.searchBwd[i]);
+        const toN = CH_NODES.find(n => n.id === s.searchBwd[i+1]);
+        svg += `<line x1="${fromN.x}" y1="${fromN.y}" x2="${toN.x}" y2="${toN.y}"
+                  stroke="hsl(340,70%,55%)" stroke-width="3.5" opacity="0.7" />`;
+      }
+    }
+
+    // Draw nodes
+    CH_NODES.forEach(n => {
+      const contracted = s.contracted.includes(n.id);
+      const highlighted = s.highlight.includes(n.id);
+      const inFwd = s.searchFwd.includes(n.id);
+      const inBwd = s.searchBwd.includes(n.id);
+      const meetPoint = inFwd && inBwd;
+
+      let fill = '#f7f7f5';
+      let stroke = '#e4e2de';
+      let textColor = '#111110';
+      let subColor = '#878480';
+      let r = 24;
+
+      if (contracted && !inFwd && !inBwd) {
+        fill = '#f0eeeb';
+        stroke = '#e4e2de';
+        textColor = '#ccc9c4';
+        subColor = '#ccc9c4';
+      } else if (meetPoint) {
+        fill = 'hsl(38,80%,90%)';
+        stroke = 'hsl(38,70%,55%)';
+        r = 28;
+        textColor = 'hsl(38,70%,28%)';
+      } else if (inFwd) {
+        fill = 'hsl(210,80%,92%)';
+        stroke = 'hsl(210,70%,60%)';
+      } else if (inBwd) {
+        fill = 'hsl(340,70%,93%)';
+        stroke = 'hsl(340,60%,65%)';
+      } else if (highlighted) {
+        fill = 'hsl(168,80%,92%)';
+        stroke = 'hsl(168,60%,50%)';
+        r = 26;
+      }
+
+      svg += `<circle cx="${n.x}" cy="${n.y}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="2" />`;
+      svg += `<text x="${n.x}" y="${n.y - 3}" font-family="Geist, sans-serif" font-size="14"
+                font-weight="600" fill="${textColor}" text-anchor="middle" dominant-baseline="central">${n.label}</text>`;
+      svg += `<text x="${n.x}" y="${n.y + 13}" font-family="JetBrains Mono, monospace" font-size="8"
+                fill="${subColor}" text-anchor="middle" dominant-baseline="central">${contracted && !inFwd && !inBwd ? '✗' : n.sub}</text>`;
+    });
+
+    // Legend for query step
+    if (s.searchFwd.length > 0) {
+      svg += `<rect x="20" y="255" width="10" height="4" rx="2" fill="hsl(210,80%,55%)"/>`;
+      svg += `<text x="36" y="259" font-family="JetBrains Mono, monospace" font-size="9" fill="#878480">Forward search</text>`;
+      svg += `<rect x="150" y="255" width="10" height="4" rx="2" fill="hsl(340,70%,55%)"/>`;
+      svg += `<text x="166" y="259" font-family="JetBrains Mono, monospace" font-size="9" fill="#878480">Backward search</text>`;
+      svg += `<circle cx="305" cy="257" r="5" fill="hsl(38,80%,90%)" stroke="hsl(38,70%,55%)" stroke-width="1.5"/>`;
+      svg += `<text x="316" y="259" font-family="JetBrains Mono, monospace" font-size="9" fill="#878480">Meeting point</text>`;
+    }
+
+    // Shortcut legend
+    if (s.shortcuts.length > 0 && s.searchFwd.length === 0) {
+      svg += `<line x1="20" y1="260" x2="40" y2="260" stroke="hsl(168,70%,40%)" stroke-width="2" stroke-dasharray="4,2"/>`;
+      svg += `<text x="48" y="263" font-family="JetBrains Mono, monospace" font-size="9" fill="#878480">Shortcut edge</text>`;
+    }
+
+    chSvg.innerHTML = svg;
+  }
+
+  function stepCH() {
+    chStep++;
+    if (chStep >= chSteps.length) {
+      chNextBtn.disabled = true;
+      chDescEl.innerHTML = '<strong>✓ Demo complete.</strong> Click Reset to start over.';
+      return;
+    }
+    chResetBtn.disabled = false;
+    drawCH(chStep);
+    chDescEl.innerHTML = chSteps[chStep].desc;
+    chCounterEl.textContent = `Step ${chStep + 1} of ${chSteps.length}`;
+    if (chStep === chSteps.length - 1) chNextBtn.textContent = 'Finish ✓';
+  }
+
+  function resetCH() {
+    chStep = -1;
+    chSvg.innerHTML = '';
+    chDescEl.innerHTML = 'Click <strong>Next Step</strong> to see how nodes get contracted and shortcut edges appear.';
+    chCounterEl.textContent = '';
+    chNextBtn.disabled = false;
+    chNextBtn.textContent = 'Next Step →';
+    chResetBtn.disabled = true;
+  }
+</script>
+
+</body>
+</html>

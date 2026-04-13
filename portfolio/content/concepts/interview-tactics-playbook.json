@@ -1,0 +1,71 @@
+{
+  "slug": "interview-tactics-playbook",
+  "title": "Interview Tactics Playbook",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 217,
+    "s": 91,
+    "l": 50
+  },
+  "category": "Interview Tactics",
+  "blurb": "You know the technical material cold. You walk into the interview anyway — and ramble for 20 minutes about load balancers, never reach the deep dive, get flagged as \"unfocused\" in the debrief. Knowing system design is ha",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>You know the technical material cold. You walk into the interview anyway — and ramble for 20 minutes about load balancers, never reach the deep dive, get flagged as \"unfocused\" in the debrief. <strong>Knowing system design is half the battle.</strong> The other half is performing it under time pressure, navigating ambiguity, knowing when to push back, knowing what to drop.</p>\n      <p>This page is the operating manual for the 60-minute window: what to say in the first 5 minutes, how to time-box, when to admit \"I don't know,\" what scoring rubric interviewers actually use. The technical pages teach the material. This page teaches how to deliver it.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The first 5 minutes — frame the problem",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The first 5 minutes — frame the problem</h2></div>\n    <div class=\"prose\">\n      <p>The single most-failed phase. Candidates jump to architecture; interviewers think \"no rigor.\"</p>\n      <p>What to actually do:</p>\n      <ol>\n        <li><strong>Restate the problem in your own words.</strong> \"So you want me to design Twitter — specifically the home feed reading and posting flows. Is that right?\" Confirms scope.</li>\n        <li><strong>Ask about scale.</strong> \"Roughly how many users are we designing for? 1M, 100M, 1B?\" The answer changes everything.</li>\n        <li><strong>Ask about features.</strong> \"Should I focus on posting + reading, or also include search, DMs, ads?\" Most interviewers want you to scope down.</li>\n        <li><strong>State assumptions out loud.</strong> \"I'll assume 100M DAU, mostly mobile, read-heavy 100:1, eventual consistency on feeds is OK.\" Get them to nod or correct.</li>\n      </ol>\n      <p>By minute 5, you've earned credibility and bounded the problem. Now you can build.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "The 60-minute time-box",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">The 60-minute time-box</h2></div>\n    <div class=\"prose\">\n      <p>Successful candidates run an internal clock and announce phase transitions. Approximate breakdown for a 60-minute interview:</p>\n    </div>\n    <div class=\"kv-grid\">\n      <div class=\"kv-card\"><div class=\"kv-val\">5 min</div><div class=\"kv-lbl\">Requirements + scope</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">5 min</div><div class=\"kv-lbl\">Scale estimation</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">15 min</div><div class=\"kv-lbl\">High-level architecture</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">20 min</div><div class=\"kv-lbl\">Deep dive (ONE topic)</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">10 min</div><div class=\"kv-lbl\">Tradeoffs / failure modes / scaling</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">5 min</div><div class=\"kv-lbl\">Buffer + Q&amp;A</div></div>\n    </div>\n    <div class=\"prose\">\n      <p>Say out loud \"I have about 30 minutes left, let me move to the deep dive.\" Interviewers love this — it shows self-awareness. If they want you to spend longer somewhere, they'll redirect.</p>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "The \"I don't know\" playbook",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">The \"I don't know\" playbook</h2></div>\n    <div class=\"prose\">\n      <p>The interviewer asks: \"How does Cassandra handle anti-entropy at the partition level when ring rebalancing happens mid-repair?\" You don't actually know.</p>\n      <p>Three responses, ranked:</p>\n      <ol>\n        <li><strong>Worst: bluff.</strong> \"Yeah so it uses a Merkle tree thing and it just kind of works it out...\" — interviewer instantly notices. Hard signal: this candidate fakes when uncertain.</li>\n        <li><strong>OK: surrender.</strong> \"I don't know that off the top of my head.\" — neutral but flat. No partial credit.</li>\n        <li><strong>Best: think out loud.</strong> \"I don't know the exact mechanism, but here's how I'd reason about it: Cassandra uses Merkle trees for anti-entropy. If the ring rebalances mid-repair, the token ranges have shifted, so the comparison has to handle the new ownership... I'd guess Cassandra either pauses repair during rebalance, or it re-computes the Merkle tree on the new owner. I'd verify in the docs.\" — This is the senior-engineer answer. Reasoning from first principles + admission of uncertainty + plan for resolution.</li>\n      </ol>\n      <p>Bluffing is the single most common reason candidates fail at staff+ levels. Senior interviewers can spot it instantly. They respect \"I don't know but here's how I'd find out.\"</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "The actual scoring rubric",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">The actual scoring rubric</h2></div>\n    <div class=\"prose\">\n      <p>Interviewers at most FAANG companies use a rubric like this. Candidates who know it perform measurably better.</p>\n      <table class=\"algo-table\">\n        <thead><tr><th>Dimension</th><th>What earns \"Strong Hire\"</th><th>What earns \"No Hire\"</th></tr></thead>\n        <tbody>\n          <tr><td class=\"algo-name\">Problem solving</td><td>Asks great clarifying questions; pushes back on bad requirements; recognizes when scope creeps</td><td>Jumps to architecture; doesn't ask about scale; over-engineers</td></tr>\n          <tr><td class=\"algo-name\">Technical depth</td><td>Deep on at least one component; cites real systems + numbers; knows tradeoffs of every choice</td><td>Surface-level on everything; uses buzzwords without justification</td></tr>\n          <tr><td class=\"algo-name\">Tradeoff reasoning</td><td>Every choice has \"because X, accepting Y\"; alternatives considered + rejected with reasons</td><td>\"Just use Kafka\" with no reasoning; defends choices without acknowledging downsides</td></tr>\n          <tr><td class=\"algo-name\">Communication</td><td>Drives the hour; clear diagrams; phase transitions called out; listens to interviewer signals</td><td>Rambles; doesn't notice interviewer cues; defensive when challenged</td></tr>\n          <tr><td class=\"algo-name\">Scale / production thinking</td><td>Considers failure modes, monitoring, deployment, on-call, cost</td><td>\"It works\" is the bar; never thinks about what happens at 3am</td></tr>\n        </tbody>\n      </table>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">The senior+ differentiator</div>\n        <p>What separates senior from staff candidates: senior candidates can <em>describe</em> a great design. Staff+ candidates make <em>tradeoffs visible</em> (\"we picked this; here's what we gave up; in 6 months when we hit X, we'll need to do Y\"). They sound like they've owned production systems, not just read about them.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "Common failure modes",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Common failure modes</h2></div>\n    <div class=\"prose\">\n      <ol>\n        <li><strong>Skipping requirements.</strong> Diving straight into \"I'll use a load balancer...\" Interviewer immediately downgrades.</li>\n        <li><strong>Over-engineering for hypothetical scale.</strong> \"I'll use Cassandra and Kafka\" for a problem that fits in one Postgres. Show you can match design to actual scale.</li>\n        <li><strong>Going deep on everything.</strong> Burning 30 minutes on the API design; never reaching the deep dive. Pick ONE rabbit hole.</li>\n        <li><strong>No numbers.</strong> \"We'll cache it\" — how big a cache? \"We'll shard it\" — how many shards? The numbers prove you're not hand-waving.</li>\n        <li><strong>Defensive when challenged.</strong> Interviewer says \"what if X?\" — they're testing flexibility, not attacking. Engage: \"Good point, I hadn't considered that. Let me think...\"</li>\n        <li><strong>Ignoring interviewer hints.</strong> They keep asking about consistency. They want you to discuss CAP. Take the hint.</li>\n        <li><strong>No production thinking.</strong> Beautiful diagram; no thought to deploys, monitoring, oncall. \"How would you debug this at 3am?\" should always have an answer.</li>\n        <li><strong>Time mismanagement.</strong> 50 minutes in, just starting the deep dive. Game over.</li>\n      </ol>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Practice tactics",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Practice tactics</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Out loud, with a timer</div><h4>Solo practice</h4><p>Pick a problem (use the 31 in this portfolio). Set 60-min timer. Talk through end-to-end out loud. Record yourself. Watch back. Cringe. Improve.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Mock interviews</div><h4>Realistic feedback</h4><p>Practice with peers + paid services (interviewing.io, exponent.com). Real mock interviewer = catches subtle issues you can't self-diagnose.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Write designs as documents</div><h4>Forces structure</h4><p>For each problem, write a 1-page design doc the way Amazon does. Forces clarity that informal talking never does.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Read post-mortems</div><h4>Learn from real failures</h4><p>Cloudflare, GitHub, AWS publish detailed incident write-ups. Each is a free advanced lesson in distributed systems failure.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Apply to every problem",
+      "number": "08",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">08</span><h2 class=\"section-title\">Apply to every problem</h2></div>\n    <div class=\"prose\"><p>Use the framework on every problem in this portfolio. The 11 sections of each problem page mirror the 60-minute interview shape. Practice driving through them in order, with time discipline. Every concept page is the depth-on-one-thing you'd reach for in the deep dive.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 5
+}

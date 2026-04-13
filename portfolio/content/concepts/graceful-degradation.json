@@ -1,0 +1,65 @@
+{
+  "slug": "graceful-degradation",
+  "title": "Graceful Degradation",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 170,
+    "s": 55,
+    "l": 40
+  },
+  "category": "Reliability",
+  "blurb": "Your recommendation service is down. Does your homepage return a 500, or does it just skip the \"Recommended for you\" section and still render? The first is a hard failure; the second is graceful degradation. Same failure",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>Your recommendation service is down. Does your homepage return a 500, or does it just skip the \"Recommended for you\" section and still render? The first is a hard failure; the second is <strong>graceful degradation</strong>. Same failure, dramatically different user experience.</p>\n      <p>Graceful degradation is the discipline of designing so that partial-system failure produces partial-feature loss rather than total outage. Pairs tightly with <a href=\"/concepts/circuit-breaker\">circuit breakers</a>.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The fallback ladder",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The fallback ladder</h2></div>\n    <div class=\"prose\">\n      <p>When a downstream call fails, pick the best still-available response:</p>\n      <ol>\n        <li><strong>Cached stale data.</strong> \"Here's yesterday's recommendations.\" User doesn't notice.</li>\n        <li><strong>Computed default.</strong> \"Here's the trending list instead.\" Non-personalized but useful.</li>\n        <li><strong>Simpler feature.</strong> \"Search still works; filters disabled.\"</li>\n        <li><strong>Empty-but-valid response.</strong> Component renders blank, rest of page works.</li>\n        <li><strong>Friendly error.</strong> \"Can't show this right now\" + a retry button.</li>\n        <li><strong>Hard failure.</strong> Last resort. Only for unrecoverable dependencies.</li>\n      </ol>\n      <p>Each step down the ladder trades user experience for keeping the system responsive. The art is mapping each dependency to an appropriate fallback <em>before</em> it fails.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "Patterns in practice",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Patterns in practice</h2></div>\n    <div class=\"prose\">\n      <p><strong>Feature flags for hot-disable.</strong> When a downstream starts misbehaving, flip a feature flag off instantly. The caller short-circuits to the fallback without deploying code. Stripe, LinkedIn, and Netflix all wire critical features this way.</p>\n      <p><strong>Timeout-first, not retry-first.</strong> Every downstream call has a tight deadline (200ms, not 30s). If it's not back in time, skip it and use fallback. Don't let slow dependencies cascade into slow users.</p>\n      <p><strong>Fallback is also tested.</strong> Most outages happen when the primary fails AND the fallback was never rehearsed. Chaos engineering (force-fail dependency X; verify fallback engages correctly) is how you keep fallbacks real.</p>\n      <p><strong>Degrade cheap, not expensive.</strong> Serving trending-for-all to a million users is cheap; recomputing personalized recs synchronously is not. If the recs service is down, the fallback must be a pre-warmed global ranking, not a synchronous emergency calculation.</p>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Service-level example — Amazon product page",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Service-level example — Amazon product page</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Component</th><th>Normal</th><th>Fallback</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Product title &amp; price</td><td>DB lookup</td><td>Hard requirement — fail page if unavailable</td></tr>\n        <tr><td class=\"algo-name\">Customer reviews</td><td>Reviews service</td><td>Cached; if &gt; 24h old show anyway</td></tr>\n        <tr><td class=\"algo-name\">\"Frequently bought together\"</td><td>Recs service</td><td>Hide the widget</td></tr>\n        <tr><td class=\"algo-name\">Inventory / shipping ETA</td><td>Inventory service</td><td>\"Usually ships in 1-2 days\" static</td></tr>\n        <tr><td class=\"algo-name\">User's order history link</td><td>Account service</td><td>Show link anyway; user clicks → handle failure there</td></tr>\n      </tbody>\n    </table>\n    <div class=\"prose\">\n      <p>Only <em>title + price</em> is a hard dependency. Everything else has a fallback. Why Amazon rarely shows a blank product page even during outages.</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — the static-fallback trick",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — the static-fallback trick</h2></div>\n    <div class=\"prose\">\n      <p>For top-of-funnel pages (homepage, category browse), Amazon famously generates a static HTML fallback every few minutes. If the dynamic tier is overwhelmed, CDN/edge serves the static version — no personalization, but the site stays up. Users see <em>something</em> instead of 503.</p>\n      <p>Generalized: every dynamic page should have a stale-OK story.</p>\n      <ul>\n        <li><strong>Product pages</strong> — cached HTML with default recs. User sees the product; recs widget may be empty.</li>\n        <li><strong>Search</strong> — cached popular-query results. \"Exact query didn't complete; here's what most people searched today.\"</li>\n        <li><strong>Checkout</strong> — no fallback. Payment flow must be exact; if it can't complete, show \"try again.\"</li>\n      </ul>\n      <p>Identify which pages <em>must</em> be fresh vs can survive staleness. Usually the answer is: most pages can. The hard real-time requirement lives only in transactional flows.</p>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">Production rule</div>\n        <p>\"For every synchronous call to another service, answer: if this fails, what do we show the user?\" If the answer is \"a 500 page,\" you haven't designed the degradation. If the answer is \"we hide that widget and log the incident,\" you have.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Netflix</div><h4>Hundreds of fallbacks</h4><p>If recs down → show trending. If artwork down → show default poster. If titles down → show 503 (rare; title metadata is replicated heavily).</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Amazon static fallback</div><h4>Pre-generated pages</h4><p>Top-N product and category pages snapshot every few minutes to S3. CDN serves them when origin is overloaded.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">LinkedIn</div><h4>Feature flags for every dependency</h4><p>Each feature has a kill switch. When a service misbehaves, an on-call engineer flips the flag and the feature disables cluster-wide in seconds.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Google Search</div><h4>Progressive fallback</h4><p>If spellcheck down → skip \"did you mean.\" If personalization down → show generic ranking. If core index down → 500 (no graceful option).</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>News feed falls back to \"trending\" if the ranker is slow. YouTube/Netflix falls back to default posters if metadata is stale. E-commerce hides optional widgets when their services degrade. Notification system uses channel-level fallbacks (SMS fails → email; email fails → in-app).</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

@@ -1,0 +1,82 @@
+{
+  "slug": "consensus-paxos-raft",
+  "title": "Consensus — Paxos & Raft",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 245,
+    "s": 62,
+    "l": 50
+  },
+  "category": "Distributed Systems",
+  "blurb": "Five nodes each think they might be the leader. The old leader's network cable was unplugged; now it's plugged back in. Who's in charge? Who accepts writes? If two nodes both think they're leader, they both accept writes",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>Five nodes each think they might be the leader. The old leader's network cable was unplugged; now it's plugged back in. Who's in charge? Who accepts writes? If two nodes both think they're leader, they both accept writes — <span class=\"hl-red\">split-brain</span>, data corruption, hours of manual reconciliation.</p>\n      <p>Consensus algorithms (Paxos, Raft, Zab) solve \"make N nodes agree on one value, even when some crash or the network flakes.\" Every serious distributed system uses one. Raft won in the last decade because it's understandable; Paxos is still running under Spanner and Google's internal stack.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The FLP result — why consensus is hard",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The FLP result — why consensus is hard</h2></div>\n    <div class=\"prose\">\n      <p>Fischer-Lynch-Paterson (1985): <span class=\"hl\">in a purely asynchronous system, consensus is impossible if even one node can crash.</span> You can't distinguish \"node is slow\" from \"node is dead.\" So any algorithm either gives up liveness (might never decide) or gives up safety (might decide the wrong thing).</p>\n      <p>Real algorithms pick: Paxos and Raft preserve <strong>safety</strong> (never decide two different values), sacrifice <strong>liveness</strong> during pathological partitions (may fail to make progress temporarily). In practice, with reasonable timeouts, they make progress within milliseconds.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "Raft in one page",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Raft in one page</h2></div>\n    <div class=\"prose\">\n      <p>Raft elects a leader; the leader replicates a log; followers commit entries when replicated to a majority.</p>\n      <p><strong>Three roles.</strong> Follower (default), Candidate (trying to become leader), Leader (one at a time).</p>\n      <p><strong>Terms.</strong> Time divides into numbered terms. Each term has at most one leader. Terms increase monotonically.</p>\n      <p><strong>Election.</strong> Followers start an election timer (randomized 150–300ms). If no heartbeat from a leader before timeout, become candidate → increment term → vote for self → ask peers. A candidate with votes from a majority of nodes becomes leader.</p>\n      <p><strong>Log replication.</strong> Client sends write to leader. Leader appends to its log, ships to followers. Once majority of followers have persisted, leader <em>commits</em> and tells followers. Followers apply to state machine in order.</p>\n      <p><strong>Safety guarantee.</strong> A committed entry is never lost or overwritten. Even if the leader dies, the new leader will have it (because the old leader replicated to a majority before committing, and the new leader got votes from a majority → the two majorities overlap).</p>\n    </div>\n\n    <div class=\"diagram-wrap\">\n      <div class=\"diagram-head\"><span class=\"diagram-label\">Raft Log Replication</span><span class=\"diagram-type\">Mermaid</span></div>\n      <div class=\"diagram-body\">\n        <div class=\"mermaid\">\nsequenceDiagram\n    participant C as Client\n    participant L as Leader\n    participant F1 as Follower 1\n    participant F2 as Follower 2\n\n    C-&gt;&gt;L: write(x=5)\n    L-&gt;&gt;L: append to log (uncommitted)\n    par Replicate\n      L-&gt;&gt;F1: AppendEntries(x=5)\n      F1--&gt;&gt;L: ok\n    and\n      L-&gt;&gt;F2: AppendEntries(x=5)\n      F2--&gt;&gt;L: ok\n    end\n    Note over L: Majority ack → commit\n    L-&gt;&gt;L: apply to state machine\n    L--&gt;&gt;C: success\n\n    L-&gt;&gt;F1: AppendEntries(commit-idx=N)\n    L-&gt;&gt;F2: AppendEntries(commit-idx=N)\n    F1-&gt;&gt;F1: apply to state machine\n    F2-&gt;&gt;F2: apply to state machine\n        </div>\n      </div>\n    </div>\n\n    <div class=\"diagram-wrap\">\n      <div class=\"diagram-head\">\n        <span class=\"diagram-label\">Term Progression — Leader Failure &amp; Re-Election</span>\n        <span class=\"diagram-type\">Mermaid</span>\n      </div>\n      <div class=\"diagram-body\">\n        <div class=\"mermaid\">\nsequenceDiagram\n    participant L as Leader (term 1)\n    participant F1 as Follower 1\n    participant F2 as Follower 2\n\n    Note over L,F2: Term 1 — normal commit (~2ms)\n    L-&gt;&gt;F1: heartbeat\n    L-&gt;&gt;F2: heartbeat\n    F1--&gt;&gt;L: ack\n    F2--&gt;&gt;L: ack\n\n    Note over L: Leader crashes\n    Note over F1,F2: Election timeout fires (random 150-300ms)\n    F1-&gt;&gt;F1: become Candidate, term=2, vote self\n    F1-&gt;&gt;F2: RequestVote(term=2)\n    F2--&gt;&gt;F1: voteGranted\n    Note over F1: Majority (2/3) → Leader of term 2\n\n    Note over F1,F2: Term 2 — new leader resumes\n    F1-&gt;&gt;F2: AppendEntries(term=2)\n    F2--&gt;&gt;F1: ack\n    Note over F1,F2: Election + recovery: ~300-500ms total\n        </div>\n      </div>\n    </div>\n\n    <div class=\"kv-grid\">\n      <div class=\"kv-card\"><div class=\"kv-val\">~2 ms</div><div class=\"kv-lbl\">in-region commit (1 RTT to majority)</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">100-200 ms</div><div class=\"kv-lbl\">cross-region commit</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">150-300 ms</div><div class=\"kv-lbl\">election timeout (randomized)</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">~500 ms</div><div class=\"kv-lbl\">total recovery from leader loss</div></div>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Paxos vs Raft vs Zab",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Paxos vs Raft vs Zab</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Algorithm</th><th>Origin</th><th>Used in</th><th>Notes</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Paxos</td><td>Lamport, 1989</td><td>Chubby, Spanner, etcd (legacy)</td><td>Famously hard to understand. Many production variants (Multi-Paxos, EPaxos).</td></tr>\n        <tr><td class=\"algo-name\">Raft</td><td>Ongaro &amp; Ousterhout, 2014</td><td>etcd, Consul, CockroachDB, TiKV, RabbitMQ Streams</td><td>Designed for understandability. 90% of new systems pick Raft.</td></tr>\n        <tr><td class=\"algo-name\">Zab</td><td>Zookeeper, 2008</td><td>Apache Zookeeper</td><td>Predates Raft. Very similar structure — leader-based, majority acks.</td></tr>\n        <tr><td class=\"algo-name\">Viewstamped Replication</td><td>Oki &amp; Liskov, 1988</td><td>Research, some fault-tolerant systems</td><td>Pre-Paxos academic work. Influenced both Paxos and Raft.</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "What consensus costs",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">What consensus costs</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>Every write needs majority acknowledgment.</strong> 5-node cluster → at least 3 must ACK. One slow node is fine; two down and you're stalled.</li>\n        <li><strong>Write latency = leader + slowest of the majority.</strong> Typically 1–5ms in-region; 100+ ms cross-region. Put consensus groups in one region.</li>\n        <li><strong>Odd-numbered clusters.</strong> 3 or 5 nodes, not 4. An even cluster has no majority advantage (3-vs-3 split both sides lose).</li>\n        <li><strong>Leader load.</strong> All writes go through the leader. Leader crashes → election (~150ms) → new leader. During election, the cluster is unavailable for writes.</li>\n        <li><strong>Not for everything.</strong> Consensus is for <em>metadata</em> and <em>critical state</em> — locks, config, leader election, coordination. You don't run consensus on every tweet. Heavy data goes in separate, eventually-consistent stores that depend on the consensus tier for coordination.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — the majority overlap theorem",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Deep dive — the majority overlap theorem</h2></div>\n    <div class=\"prose\">\n      <p>The beautiful core insight of Raft (and Paxos): <strong>any two majorities of an N-node cluster must share at least one node.</strong></p>\n      <p>Proof sketch: a majority is ⌈N/2⌉ + 1 nodes. Two disjoint majorities would need N/2+1 + N/2+1 = N+2 nodes, but we only have N. Contradiction.</p>\n      <p>Why this matters: a committed entry is replicated to a majority. A new leader needs votes from a majority. By overlap, the new leader must have voted with at least one node that has the committed entry → new leader has the entry (it picks the most-up-to-date log among voters). <span class=\"hl-accent\">Committed entries survive leader changes.</span></p>\n      <p>This is the entire correctness argument for log-based consensus in one paragraph. Memorize it.</p>\n      <div class=\"callout\">\n        <div class=\"callout-label\">Interview answer</div>\n        <p>\"Raft elects a leader via randomized timeouts; the leader replicates the log to followers; entries are committed when a majority persist them. Safety follows from two facts: only a majority can elect a leader, and any two majorities overlap — so a new leader always has every committed entry.\"</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">etcd</div><h4>Raft-based KV store</h4><p>Powers Kubernetes. Holds cluster metadata. ~5-node cluster handling tens of thousands of writes/sec.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">CockroachDB</div><h4>Raft per range</h4><p>Each shard (~64 MB range) has its own Raft group. Millions of concurrent Raft groups across the cluster.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Google Spanner</div><h4>Paxos + TrueTime</h4><p>Multi-Paxos for each shard. Combined with TrueTime for globally-consistent transactions.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Kafka KRaft</div><h4>Raft for metadata</h4><p>Kafka 3+ replaced Zookeeper with a self-hosted Raft cluster for broker metadata and leader election.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "08",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">08</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Google Docs uses consensus for the operation log (OT resolves in order). Distributed locking relies on consensus for fencing tokens. Distributed job scheduler uses Raft to elect the active scheduler.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [
+    {
+      "sectionId": "how-it-works",
+      "source": "sequenceDiagram\n    participant C as Client\n    participant L as Leader\n    participant F1 as Follower 1\n    participant F2 as Follower 2\n\n    C->>L: write(x=5)\n    L->>L: append to log (uncommitted)\n    par Replicate\n      L->>F1: AppendEntries(x=5)\n      F1-->>L: ok\n    and\n      L->>F2: AppendEntries(x=5)\n      F2-->>L: ok\n    end\n    Note over L: Majority ack → commit\n    L->>L: apply to state machine\n    L-->>C: success\n\n    L->>F1: AppendEntries(commit-idx=N)\n    L->>F2: AppendEntries(commit-idx=N)\n    F1->>F1: apply to state machine\n    F2->>F2: apply to state machine",
+      "index": 0
+    },
+    {
+      "sectionId": "how-it-works",
+      "source": "sequenceDiagram\n    participant L as Leader (term 1)\n    participant F1 as Follower 1\n    participant F2 as Follower 2\n\n    Note over L,F2: Term 1 — normal commit (~2ms)\n    L->>F1: heartbeat\n    L->>F2: heartbeat\n    F1-->>L: ack\n    F2-->>L: ack\n\n    Note over L: Leader crashes\n    Note over F1,F2: Election timeout fires (random 150-300ms)\n    F1->>F1: become Candidate, term=2, vote self\n    F1->>F2: RequestVote(term=2)\n    F2-->>F1: voteGranted\n    Note over F1: Majority (2/3) → Leader of term 2\n\n    Note over F1,F2: Term 2 — new leader resumes\n    F1->>F2: AppendEntries(term=2)\n    F2-->>F1: ack\n    Note over F1,F2: Election + recovery: ~300-500ms total",
+      "index": 1
+    }
+  ],
+  "related": [],
+  "similar": [],
+  "readMinutes": 5
+}

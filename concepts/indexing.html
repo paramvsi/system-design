@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Indexing — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 38; --accent-s: 90%; --accent-l: 48%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>A database table with 100M rows. A query: <code>WHERE email = 'x@y.com'</code>. Without an index, the DB scans all 100M rows — <span class="hl-red">seconds per query</span>. With a B-tree index, it's <span class="hl-green">~10 lookups</span>, 0.5ms total. That's a 10,000× difference and the reason indexes exist.</p>
+      <p>But indexes aren't free — every write has to update the index too. The art is picking <em>what</em> to index (only hot-path queries), <em>what kind</em> (B-tree, hash, LSM, inverted), and <em>in what order</em> for composite indexes.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The four index families</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Index</th><th>Reads well</th><th>Writes well</th><th>Best for</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">B-tree</td><td>Point lookup + range scan in O(log N)</td><td>Moderate — log N rebalancing</td><td>General-purpose. Postgres, MySQL, Oracle default.</td></tr>
+        <tr><td class="algo-name">LSM-tree</td><td>Slightly slower than B-tree (merge on read)</td><td>Excellent — sequential writes</td><td>Write-heavy. Cassandra, LevelDB, RocksDB.</td></tr>
+        <tr><td class="algo-name">Hash</td><td>O(1) point lookup; no range</td><td>Fast</td><td>Exact-match only, tiny latency budgets. Redis, memcached.</td></tr>
+        <tr><td class="algo-name">Inverted</td><td>Full-text / term lookups</td><td>Slow — per-term posting list updates</td><td>Search. Elasticsearch, Lucene.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">B-tree in one breath</h2></div>
+    <div class="prose">
+      <p>A balanced tree where each internal node holds ~100–500 keys. For 1 billion rows, the tree is only 3–4 levels deep. Lookup = 3–4 random disk reads + final leaf scan = ~0.5–1ms.</p>
+      <p>Range scans are the killer feature: find the start, then walk leaf-level siblings. "Give me all orders from May" is one seek + a sequential scan, not a million lookups.</p>
+      <p>Every index row includes the indexed column(s) + a pointer to the actual row. A "covering index" includes every column the query needs, so you never have to fetch the actual row.</p>
+    
+      <div class="code-caption" data-code-snippet="1">Cursor-based pagination (stable under insert)</div>
+      <pre><code class="lang-sql">-- ❌ OFFSET / LIMIT breaks: new rows shift everyone's view
+-- SELECT * FROM posts ORDER BY id DESC LIMIT 20 OFFSET 40;
+
+-- ✓ Cursor (opaque token = last-seen id or (ts, id) tuple):
+SELECT id, title, created_at
+FROM posts
+WHERE (created_at, id) &lt; ($1, $2)     -- cursor from previous page
+ORDER BY created_at DESC, id DESC
+LIMIT 20;
+
+-- Encode cursor as base64(created_at || id); send to client.
+-- Stable under concurrent inserts. O(log N) per page via composite index.
+
+CREATE INDEX posts_ts_id_desc ON posts(created_at DESC, id DESC);</code></pre>
+  </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">LSM vs B-tree — the write-heavy tradeoff</h2></div>
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">B-tree</div>
+        <h4>Read-optimized</h4>
+        <p>Every write updates an existing tree node in place → random I/O. Well-suited when reads dominate writes (10:1 or more). Space-efficient (no duplicates).</p>
+      </div>
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">LSM-tree</div>
+        <h4>Write-optimized</h4>
+        <p>Writes go to an in-memory buffer, flushed to immutable sorted files. Background compaction merges files. <span class="hl-green">Sequential writes</span> — SSDs love this. Cost: reads may check multiple files (bloom filters help).</p>
+      </div>
+    </div>
+    <div class="callout">
+      <div class="callout-label">Rule of thumb</div>
+      <p>B-tree if read:write is 10:1 or higher. LSM if writes dominate (logs, metrics, IoT, feeds). At 1:1 it's a wash; pick B-tree for operational familiarity.</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — composite index ordering matters</h2></div>
+    <div class="prose">
+      <p>You have <code>orders(user_id, status, created_at)</code>. You query mostly by user + status. Which column order?</p>
+      <p><strong>Index on (user_id, status, created_at):</strong></p>
+      <ul>
+        <li><code>WHERE user_id = 5 AND status = 'open'</code> — ✅ uses index</li>
+        <li><code>WHERE user_id = 5</code> alone — ✅ uses index (prefix)</li>
+        <li><code>WHERE status = 'open'</code> alone — ❌ can't use index (status is not leading)</li>
+        <li><code>WHERE user_id = 5 ORDER BY created_at</code> — ✅ uses index for sort (no extra sort step)</li>
+      </ul>
+      <p><strong>Rule:</strong> leading column is the most selective / most common filter. Trailing columns are for secondary filters and sort orders. Columns between them are the constraint — you can't skip.</p>
+      <p><strong>Don't over-index.</strong> Each index costs ~20–30% write throughput. Tables with 15 indexes are write-bound for no benefit. Start with the 2–3 most-used queries; measure; add only what's proven needed.</p>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Postgres B-tree</div><h4>Default for everything</h4><p>Covers 95% of use cases. GIN indexes for full-text and JSON. GiST for geospatial. Partial indexes for "active users only."</p></div>
+      <div class="rw-card"><div class="rw-name">RocksDB (embedded LSM)</div><h4>Under many distributed systems</h4><p>Used inside CockroachDB, TiDB, Kafka streams. Great write throughput. Complex tuning of compaction settings.</p></div>
+      <div class="rw-card"><div class="rw-name">Elasticsearch inverted</div><h4>Search-first</h4><p>Term → doc_id posting lists. Scores documents by TF-IDF / BM25. Trade: 2–5× disk footprint vs source data.</p></div>
+      <div class="rw-card"><div class="rw-name">Redis sorted sets</div><h4>Skiplist — a sort of index</h4><p>O(log N) insert/remove, O(log N) range queries by score. Leaderboards, time-series, priority queues.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Typeahead uses inverted indexes + prefix tries. E-commerce uses B-tree indexes on product IDs and category. Yelp uses geospatial B-tree variants. News feed uses LSM-style writes in Cassandra for the feed store.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

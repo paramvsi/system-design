@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Zero-Downtime Database Migration — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 38; --accent-s: 90%; --accent-l: 48%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>You need to rename a column. Drop a table. Migrate from MySQL to Postgres. Add a NOT NULL field to a 1-billion-row table. Each of these can be a 30-minute outage if you do it naively — or zero downtime if you follow the right pattern. The difference is one principle: <strong>change the data layer in steps where old and new code coexist safely</strong>. Almost every "migration outage" story is a violation of this principle.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The expand-then-contract pattern</h2></div>
+    <div class="prose">
+      <p>The single most important migration pattern. To rename column <code>user_name</code> to <code>display_name</code>:</p>
+      <ol>
+        <li><strong>Expand</strong>: add the new column. Old code untouched.</li>
+        <li><strong>Backfill</strong>: copy <code>user_name</code> → <code>display_name</code> for existing rows. Run as a background job. Throttled.</li>
+        <li><strong>Dual-write</strong>: deploy code that writes to both columns on every change. Old + new always in sync.</li>
+        <li><strong>Switch reads</strong>: deploy code that reads from <code>display_name</code>. Old column still being written but unused.</li>
+        <li><strong>Stop dual-write</strong>: deploy code that only writes <code>display_name</code>.</li>
+        <li><strong>Contract</strong>: drop <code>user_name</code> column.</li>
+      </ol>
+      <p>Each step is reversible. Each step is independently deployable. Each step works with the previous step's code. Zero downtime.</p>
+      <p>Cost: 6 deploys instead of 1, weeks of elapsed time. But every step is safe and traffic never sees inconsistency.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Common migration scenarios</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Migration</th><th>Pattern</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Rename column</td><td>Expand-contract as above</td></tr>
+        <tr><td class="algo-name">Add NOT NULL column</td><td>Add as nullable + default → backfill → enforce NOT NULL. NEVER add NOT NULL directly to a populated table.</td></tr>
+        <tr><td class="algo-name">Drop a column</td><td>Stop reading first; deploy. Then stop writing; deploy. Then drop.</td></tr>
+        <tr><td class="algo-name">Change column type</td><td>Add new column with new type → dual-write → backfill → switch reads → drop old</td></tr>
+        <tr><td class="algo-name">Split table</td><td>Add new table → dual-write → backfill → switch reads → stop writes to old → drop old</td></tr>
+        <tr><td class="algo-name">Add index on huge table</td><td>Use <code>CREATE INDEX CONCURRENTLY</code> (Postgres) — non-blocking. Skip the lock.</td></tr>
+        <tr><td class="algo-name">Cross-DB migration (MySQL → Postgres)</td><td>Same expand-contract but with <a href="/concepts/cdc-change-data-capture">CDC</a> doing the dual-write</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Deep dive — cross-database migration with CDC</h2></div>
+    <div class="prose">
+      <p>You're moving from MySQL to Postgres. Different schemas, different connection strings, different SQL dialects. Naive: schedule a maintenance window, dump-restore, point app at new DB. <span class="hl-red">Hours of downtime; data loss if anything fails.</span></p>
+      <p>The right way using <a href="/concepts/cdc-change-data-capture">CDC</a>:</p>
+      <ol>
+        <li><strong>Set up Postgres</strong> with target schema. Empty.</li>
+        <li><strong>Backfill</strong>: streaming export from MySQL → import to Postgres. Take hours/days; no downtime since MySQL still serves prod.</li>
+        <li><strong>Start CDC</strong>: Debezium tails MySQL binlog → applies changes to Postgres. New writes flow through. Postgres now mirrors MySQL with seconds of lag.</li>
+        <li><strong>Verify</strong>: run consistency checks. Row counts match? Sample rows match? Latency under control?</li>
+        <li><strong>Dual-write</strong>: deploy app version that writes to both MySQL and Postgres explicitly. Catches bugs the CDC layer might miss.</li>
+        <li><strong>Switch reads</strong>: deploy app reading from Postgres. MySQL still being written but unused.</li>
+        <li><strong>Stop writing to MySQL</strong>: deploy app writing only to Postgres.</li>
+        <li><strong>Decommission MySQL</strong>: archive, then delete.</li>
+      </ol>
+      <p>Each step takes hours/days. The whole migration takes weeks. But traffic is served the entire time. This is how Stripe migrated billions of rows from MongoDB to Postgres; how Shopify continuously evolves its sharded MySQL fleet.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"Zero-downtime migrations follow expand-then-contract: add new schema, dual-write, backfill, switch reads, stop dual-write, drop old. Each step is independently deployable and reversible. Cross-database moves use CDC to keep target in sync during the dual-write window — Debezium tails the source's WAL/binlog and replays to the destination."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Common pitfalls</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Adding NOT NULL directly</strong> on a populated table → table lock for hours on big tables → outage. Always: add nullable, backfill, then enforce.</li>
+        <li><strong>Implicit type changes</strong> (VARCHAR(50) → VARCHAR(100) is fine; INT → BIGINT can rewrite the table). Test on a clone.</li>
+        <li><strong>Adding an index without CONCURRENTLY</strong> → write lock. Postgres has CREATE INDEX CONCURRENTLY; MySQL has online DDL.</li>
+        <li><strong>Foreign-key changes</strong> often re-validate the entire child table. Schedule during low traffic.</li>
+        <li><strong>Skipping the dual-write step</strong> for "speed" → silent data inconsistency between writes that happened before and after the cut-over.</li>
+        <li><strong>Forgetting to feature-flag the read switch</strong> → can't easily roll back to reading from old column when new column has bugs.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">GitHub</div><h4>gh-ost (Online Schema Change)</h4><p>MySQL schema migrator that creates a shadow table, dual-writes via triggers + CDC, swaps atomically. Used at GitHub for every schema change in their MySQL fleet.</p></div>
+      <div class="rw-card"><div class="rw-name">PlanetScale</div><h4>Branching for schema changes</h4><p>Treats DB schema changes like git branches. Test in a branch; merge to main with verified migration. No downtime.</p></div>
+      <div class="rw-card"><div class="rw-name">Stripe migrations</div><h4>Billion-row online migrations</h4><p>Heavy use of dual-write + CDC + feature flags. Public engineering blog documents the pattern.</p></div>
+      <div class="rw-card"><div class="rw-name">AWS DMS</div><h4>Cross-DB cloud-managed</h4><p>Database Migration Service. Handles cross-engine migrations with continuous replication. Common for Oracle → Aurora migrations.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>E-commerce platforms migrate constantly — schema changes, sharding splits, DB engine upgrades. News feed uses CDC for table-format changes. Payment gateway uses extreme caution with all schema changes — rollback paths must be explicit.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

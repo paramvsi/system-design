@@ -1,0 +1,50 @@
+{
+  "slug": "observability",
+  "cluster": "Observability & Reliability",
+  "blurb": "Metrics, logs, traces, SLOs, alerts.",
+  "accent": { "h": 145, "s": 55, "l": 45 },
+  "questions": [
+    {
+      "q": "The 'observability triad' is…",
+      "choices": ["Metrics, Logs, Traces", "CPU, Memory, Disk", "MTTR, MTBF, SLA", "Incident, Alert, Postmortem"],
+      "correct": 0,
+      "explanation": "Metrics (aggregated numbers), Logs (discrete events), Traces (request paths through services). Together answer: how fast / what happened / where did time go."
+    },
+    {
+      "q": "SLO of 99.9% monthly. How many minutes of downtime does that allow?",
+      "choices": ["~4.3 min", "~43.2 min", "~7.2 hr", "~72 min"],
+      "correct": 1,
+      "explanation": "30 days × 0.001 = 43.2 min/month. 99.99% = ~4.3 min. Every 9 is a ~10× smaller budget. The SLO directly sets error-budget-driven on-call responses."
+    },
+    {
+      "q": "p99 latency of 500ms but p50 is 50ms. What's the implication?",
+      "choices": ["Service is fast", "Most users see sub-100ms; a meaningful minority see slow tail", "p99 is outlier only", "Latency is uniform"],
+      "correct": 1,
+      "explanation": "p50 is the middle; p99 is the 99th-percentile worst. 1 in 100 users hits 500ms. In a 100-call page, that's near-certain to happen once. Tail latency is what users feel."
+    },
+    {
+      "q": "Distributed tracing: what does a 'span' represent?",
+      "choices": ["A log line", "One unit of work (RPC, DB query) within a trace, with start/end timestamps", "A service boundary", "An exception"],
+      "correct": 1,
+      "explanation": "Span = a single operation. Many spans form a trace. Parent-child relationships show call hierarchy. Shows latency breakdown: where is the time going?"
+    },
+    {
+      "q": "An alert fires every time CPU > 80%. Why is this often a bad SLO alert?",
+      "choices": ["80% is too low", "It's a CAUSE metric not a SYMPTOM; users don't care about CPU directly", "Monitoring is wrong", "CPU is always busy"],
+      "correct": 1,
+      "explanation": "SLO alerts should be user-symptom-based: high p99 latency, high error rate, low success rate. CPU might just be healthy load. Alerting on symptoms + investigating causes scales better than alerting on causes."
+    },
+    {
+      "q": "Sampling: trace 0.1% of requests. Why not 100%?",
+      "choices": ["Privacy", "Storage + compute cost prohibitive at scale", "Math doesn't work", "Traces are useless"],
+      "correct": 1,
+      "explanation": "At 100k QPS × full tracing = petabytes/day of data. Typical: 0.1–1% head sampling (decide at root) or tail sampling (keep all traces with errors/high-latency)."
+    },
+    {
+      "q": "An error budget for 99.9% SLO over 28 days is spent. What's the right response?",
+      "choices": ["Ignore", "Freeze non-critical launches; focus on reliability work until budget recovers", "Lower SLO", "Disable monitoring"],
+      "correct": 1,
+      "explanation": "Error budget = allowable downtime. Spent = user experience already degraded. Freezing feature work + prioritizing reliability work is the standard Google SRE response."
+    }
+  ]
+}

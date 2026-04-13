@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Backend for Frontend (BFF) — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 195; --accent-s: 65%; --accent-l: 45%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>One backend serves your iOS app, Android app, web SPA, and partner API. iOS wants compact JSON for slow networks. Web wants every field for the rich UI. Partners want a stable contract that never changes. You can't make one API perfect for all of them — every change for one client risks breaking another. Worse, mobile apps end up making 8 round-trips per screen because the API was designed for the web.</p>
+      <p>The <strong>Backend for Frontend</strong> pattern (Sam Newman, 2015) — give each client type its own dedicated backend tier that aggregates from internal services and shapes data for that client. iOS BFF, Android BFF, Web BFF, Partner API. Each tuned to its consumer.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Why one shared API hurts</h2></div>
+    <div class="prose">
+      <p>The "one API for all clients" approach fails for predictable reasons:</p>
+      <ul>
+        <li><strong>Different aggregation needs.</strong> Mobile home screen needs user + recent orders + recommendations + balance — 4 calls become 1 round-trip on slow networks.</li>
+        <li><strong>Different data shapes.</strong> Web wants every product field; mobile wants 5 fields + a thumbnail URL. Either over-fetch on mobile or under-fetch on web.</li>
+        <li><strong>Different update cadences.</strong> iOS app ships every 4 weeks; web ships daily. API can't change at the speed of the fastest client without breaking the slowest.</li>
+        <li><strong>Different security models.</strong> Internal mobile JWT vs partner OAuth bearer vs first-party cookie. Mixing in one API leads to mistakes.</li>
+        <li><strong>Different rate limits.</strong> Mobile gets 1000 RPS per user; partners get 100 RPS per key. One ratelimiter rule doesn't fit.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">The architecture</h2></div>
+    <div class="prose">
+      <p>Each client type gets its own thin BFF service:</p>
+      <ul>
+        <li><strong>BFF</strong> sits between client and internal microservices.</li>
+        <li>Speaks <em>client-optimal</em> protocols outward (e.g., GraphQL for SPA, compact JSON+gzip for mobile, REST+OpenAPI for partners).</li>
+        <li>Speaks <em>internal</em> protocols inward (gRPC to microservices is common).</li>
+        <li>Aggregates multiple internal calls into one client response.</li>
+        <li>Owned by the client team — not the platform team. Mobile team owns iOS BFF. Web team owns Web BFF.</li>
+      </ul>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">BFF Tier per Client</span>
+        <span class="diagram-type">Mermaid</span>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+flowchart LR
+    iOS[iOS app] --> iBFF[iOS BFF]
+    Android[Android app] --> aBFF[Android BFF]
+    Web[Web SPA] --> wBFF[Web BFF<br/>GraphQL]
+    Partner[Partner systems] --> pBFF[Partner API<br/>REST]
+
+    iBFF --> US[User service]
+    iBFF --> OS[Orders service]
+    iBFF --> RS[Recs service]
+    aBFF --> US
+    aBFF --> OS
+    aBFF --> RS
+    wBFF --> US
+    wBFF --> OS
+    wBFF --> RS
+    wBFF --> CS[Catalog service]
+    pBFF --> US
+    pBFF --> OS
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">BFF vs API gateway vs GraphQL</h2></div>
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option">
+        <div class="tradeoff-label"><a href="/concepts/api-gateway">API gateway</a></div>
+        <h4>One layer for cross-cutting concerns</h4>
+        <p>Auth, rate limits, routing for ALL traffic. Stays thin — no client-specific aggregation logic.</p>
+      </div>
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">BFF</div>
+        <h4>Per-client backend with business knowledge</h4>
+        <p>Lives behind the gateway. Knows the client's UI flows. Aggregates and shapes per-client. Often there's a gateway in front of multiple BFFs.</p>
+      </div>
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">GraphQL aggregator</div>
+        <h4>Client-specified queries against one schema</h4>
+        <p>Client picks fields per query. Reduces over/under-fetching without separate BFFs. Operationally heavier than REST BFFs.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — anti-patterns to avoid</h2></div>
+    <div class="prose">
+      <p><strong>BFF as business-logic dumping ground.</strong> The temptation is to put complex business logic in the BFF "because it's just a thin layer." Resist. Business logic belongs in the domain services. BFF should be aggregation, transformation, and protocol translation only. If you find yourself implementing pricing rules in the BFF, you're doing it wrong.</p>
+      <p><strong>BFF for every team rather than every client type.</strong> "Marketing team's BFF, Growth team's BFF, Mobile team's BFF" — now you have 12 BFFs and overlapping responsibilities. Group by <em>client experience</em>: iOS, Android, Web, Partner. Not by internal team org.</p>
+      <p><strong>BFF that calls another BFF.</strong> If iOS BFF calls Web BFF for some shared logic, that shared logic should be a downstream service, not a BFF. BFFs depend on services, not on other BFFs.</p>
+      <p><strong>BFF as a permanent home for legacy contracts.</strong> "We can't change the iOS API because v3 of the app is still in the wild." Use the BFF to translate legacy → modern internal, not to enshrine the legacy forever. Plan the deprecation.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">The senior interview answer</div>
+        <p>"We have a BFF tier — separate iOS, Android, Web, and Partner backends. Each owned by the team that owns the client. BFF aggregates 4-8 internal microservice calls into one client response, shapes data for the client's UI, and isolates protocol differences. Internal services stay client-agnostic; BFFs absorb the variability."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Netflix</div><h4>Coined the term as "edge service"</h4><p>Different backend per client device class — iOS, Android, Smart TVs, Roku, Web. Each is a distinct BFF tuned to its device's quirks.</p></div>
+      <div class="rw-card"><div class="rw-name">SoundCloud</div><h4>Pioneer adopter</h4><p>Sam Newman documented their migration from shared API to BFF tier. Common reference architecture.</p></div>
+      <div class="rw-card"><div class="rw-name">Shopify</div><h4>Storefront API as a BFF</h4><p>GraphQL Storefront API is effectively a customer-app BFF. Admin GraphQL is a merchant-app BFF.</p></div>
+      <div class="rw-card"><div class="rw-name">Spotify</div><h4>BFFs over Apollo Federation</h4><p>Per-platform GraphQL gateways federate across hundreds of internal services. BFF pattern with GraphQL infrastructure.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>News feed mobile apps use a BFF that aggregates feed + ranker + user profile in one call. E-commerce uses separate BFFs for storefront, mobile app, and partner integrations. Uber's rider and driver apps each have their own BFF.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

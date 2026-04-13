@@ -1,0 +1,56 @@
+{
+  "slug": "databases",
+  "cluster": "Databases",
+  "blurb": "Indexing, sharding, replication, consistency, SQL vs NoSQL.",
+  "accent": { "h": 215, "s": 75, "l": 48 },
+  "questions": [
+    {
+      "q": "A query needs to return rows ordered by (created_at DESC). Which index is best?",
+      "choices": ["Hash index on created_at", "B-tree on created_at with DESC order", "Bloom filter on created_at", "No index — ORDER BY is always fast"],
+      "correct": 1,
+      "explanation": "B-tree supports range queries AND sorted iteration — critical for ORDER BY. Hash indexes only support equality lookups. For descending, some engines need an explicit DESC index."
+    },
+    {
+      "q": "You're choosing between hash sharding and range sharding for a time-series workload. Which creates more hotspots?",
+      "choices": ["Hash", "Range", "Equal hotspots", "Neither — time series needs no sharding"],
+      "correct": 1,
+      "explanation": "Range sharding by timestamp puts ALL recent writes on the latest shard — classic hotspot. Hash sharding spreads writes, but loses range-query locality. The tradeoff is always in play."
+    },
+    {
+      "q": "In a Postgres write-ahead-log (WAL), why does group commit improve throughput?",
+      "choices": ["Reduces index updates", "Batches many commits into one fsync, amortizing the disk-flush cost", "Compresses the log", "Caches indexes"],
+      "correct": 1,
+      "explanation": "Each fsync costs 1–10ms. Committing 100 transactions in one fsync beats 100 individual fsyncs. Trade: durability window is bounded by commit interval, typically 5–10ms."
+    },
+    {
+      "q": "PACELC adds what to CAP?",
+      "choices": ["Performance", "A latency-vs-consistency tradeoff when no partition exists", "Availability scores", "Nothing — same as CAP"],
+      "correct": 1,
+      "explanation": "PACELC: during a Partition, choose Availability or Consistency; Else, choose Latency or Consistency. Dynamo is PA/EL (always latency). Spanner is PC/EC (always consistency)."
+    },
+    {
+      "q": "Quorum read/write with N=3 replicas. If R=2 and W=2, is consistency guaranteed?",
+      "choices": ["Yes (R+W > N)", "No (need R=3)", "Only with leader election", "Depends on the DB"],
+      "correct": 0,
+      "explanation": "R+W > N guarantees overlap between readers and latest writer. N=3, R=2, W=2 → overlap. Dynamo's default is exactly this."
+    },
+    {
+      "q": "LSM trees vs B-trees: which is generally faster for write-heavy workloads?",
+      "choices": ["B-tree", "LSM tree", "Equal", "B+ tree"],
+      "correct": 1,
+      "explanation": "LSM: writes go to an in-memory buffer + sequential WAL, then flushed as sorted SSTables. No random-write amplification. Read amp is higher (check multiple SSTables). RocksDB/Cassandra/LevelDB are LSM."
+    },
+    {
+      "q": "A multi-tenant SaaS database uses one schema-per-tenant vs one row-per-tenant. What's the main operational downside of schema-per-tenant?",
+      "choices": ["Worse isolation", "Schema migrations must apply to every tenant schema", "Higher query cost", "No indexes"],
+      "correct": 1,
+      "explanation": "Schema-per-tenant: 10K tenants = 10K migrations per deploy. Shared-schema with tenant_id is simpler to migrate but weaker isolation. Mid-tier: schema groups or DB-per-tenant for large customers."
+    },
+    {
+      "q": "Which type of replication has the WORST RPO (potential data loss window) in exchange for the lowest write latency?",
+      "choices": ["Synchronous", "Async", "Semi-synchronous", "Chain replication"],
+      "correct": 1,
+      "explanation": "Async replication: writes ack immediately; replication lag can be seconds. If primary crashes, unreplicated writes are lost. Sync replication ensures zero loss but adds RTT to every write."
+    }
+  ]
+}

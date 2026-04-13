@@ -1,0 +1,50 @@
+{
+  "slug": "reliability",
+  "cluster": "Reliability & Resilience",
+  "blurb": "Retries, circuit breakers, bulkheads, chaos.",
+  "accent": { "h": 10, "s": 80, "l": 50 },
+  "questions": [
+    {
+      "q": "Exponential backoff + JITTER. Why add jitter?",
+      "choices": ["Looks random", "Prevents synchronized retries from N clients causing retry storms", "Security", "Standard"],
+      "correct": 1,
+      "explanation": "Without jitter: N clients all hit the same retry timer after an outage → synchronized thundering herd. Jitter scatters retries over a window. AWS recommends 'full jitter' (uniform 0 to backoff)."
+    },
+    {
+      "q": "Circuit breaker in OPEN state — what happens to calls?",
+      "choices": ["Queue", "Fail fast without hitting the remote service", "Retry", "Slow"],
+      "correct": 1,
+      "explanation": "Open = circuit detected too many failures → short-circuits calls immediately. Protects the remote service from cascading load + gives the caller fast feedback. After timeout → half-open (probe one call)."
+    },
+    {
+      "q": "Bulkhead isolation pattern. What does it protect against?",
+      "choices": ["DDoS", "One subsystem's failure consuming resources needed by other subsystems (thread/connection exhaustion)", "Bugs", "Slowness"],
+      "correct": 1,
+      "explanation": "Named after ship compartments. Separate thread pool / connection pool per downstream. Slow or broken one exhausts ITS bulkhead, not the whole server's capacity. Netflix Hystrix popularized this."
+    },
+    {
+      "q": "Request hedging. What is it?",
+      "choices": ["Caching retries", "Send duplicate requests after a short delay; use first response; cancel others", "Async calls", "Retry on error"],
+      "correct": 1,
+      "explanation": "For tail-latency mitigation: if primary request hasn't returned in p95 time, fire a second to a replica. Take whichever wins. Google uses this heavily (hedged BigTable reads, etc)."
+    },
+    {
+      "q": "Graceful degradation. Example for a search service losing its ML reranker?",
+      "choices": ["Return 500", "Serve results ranked by basic BM25 only; surface 'limited ranking' notice", "Retry", "Restart"],
+      "correct": 1,
+      "explanation": "Something is better than nothing. Fallback paths that deliver reduced but working experience. Netflix: movie list without personalization still renders. ATM: dispense a capped amount if core banking is down."
+    },
+    {
+      "q": "Chaos engineering primary goal?",
+      "choices": ["Break stuff", "Proactively test failure-recovery paths in production by injecting known faults", "Performance testing", "Security"],
+      "correct": 1,
+      "explanation": "Hypothesis-driven: 'if we kill one replica, the system should recover within 10s.' Inject the failure; measure. Uncovers hidden dependencies + weak recovery paths BEFORE real incidents. Netflix Chaos Monkey."
+    },
+    {
+      "q": "An RPO of 1 hour means…",
+      "choices": ["Backup every hour", "If disaster strikes, you may lose up to 1 hour of data", "Recovery takes 1 hour", "Process restart 1/hr"],
+      "correct": 1,
+      "explanation": "Recovery Point Objective = maximum acceptable data loss. RPO=1h → backup cadence + replication lag must be ≤1h. RTO (Recovery Time Objective) = how long to restore service. Both set by product + business."
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "slug": "image-video-pipeline",
+  "title": "Image & Video Processing Pipeline",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 38,
+    "s": 90,
+    "l": 48
+  },
+  "category": "Frontend & Mobile",
+  "blurb": "User uploads a 12 MP photo from their phone. Your app needs to display it as: thumbnail (200×200), card image (600×400), full view (1920×1080), maybe HEIC + WebP + JPEG variants for different browsers. Maybe with face cr",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>User uploads a 12 MP photo from their phone. Your app needs to display it as: thumbnail (200×200), card image (600×400), full view (1920×1080), maybe HEIC + WebP + JPEG variants for different browsers. Maybe with face crop. Maybe in 4 different aspect ratios for different feed templates. <strong>One upload becomes 8-20 derived assets.</strong></p>\n      <p>Doing this synchronously on upload kills latency. Doing it on every read kills CPU. The right answer is a <strong>processing pipeline</strong>: upload triggers an async job, derivatives generated once, served from CDN. Same shape applies to video (transcoding + multi-bitrate ladder) at much higher cost.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "The image pipeline",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The image pipeline</h2></div>\n    <div class=\"prose\">\n      <ol>\n        <li><strong>Direct-to-S3 upload.</strong> Client gets a pre-signed URL; uploads original directly to S3. App server never sees the bytes — saves bandwidth + load.</li>\n        <li><strong>S3 event triggers</strong> a Lambda / SQS message (\"new image at path X\").</li>\n        <li><strong>Worker processes</strong>: read original, generate variants (resize, compress, format-convert), write derivatives back to S3 under predictable paths.</li>\n        <li><strong>CDN serves</strong> derivatives. URL pattern: <code>cdn.example.com/img/&lt;id&gt;/600x400.webp</code>.</li>\n        <li><strong>On-demand resize</strong> (modern variant): instead of pre-generating all sizes, generate on first request via image proxy (Imgix, Cloudflare Images, Vercel/Next Image). Cache result at edge. Better for long-tail sizes.</li>\n      </ol>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Pre-generate vs on-demand",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Pre-generate vs on-demand</h2></div>\n    <div class=\"tradeoff-grid\">\n      <div class=\"tradeoff-option\">\n        <div class=\"tradeoff-label\">Pre-generate</div>\n        <h4>All variants on upload</h4>\n        <p>Predictable storage, predictable serving cost, instant CDN serve. Wasted compute + storage for variants that are never requested. Common for small fixed variant sets (3-5 sizes).</p>\n      </div>\n      <div class=\"tradeoff-option chosen\">\n        <div class=\"tradeoff-label\">On-demand resize</div>\n        <h4>Generate on first request</h4>\n        <p>Serve any size or format from a single source. CDN caches result. Pay only for what's actually used. Used by Imgix, Cloudflare Images, Next.js Image. Modern default.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "Video — much harder",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Video — much harder</h2></div>\n    <div class=\"prose\">\n      <p>Video needs <strong>transcoding</strong> — decode the source, re-encode to multiple bitrate/resolution combinations for adaptive streaming (HLS / DASH). Each variant is a \"rendition.\" A typical ladder:</p>\n      <table class=\"algo-table\" style=\"margin:0\">\n        <thead><tr><th>Resolution</th><th>Bitrate</th><th>Use</th></tr></thead>\n        <tbody>\n          <tr><td>240p</td><td>~400 kbps</td><td>Slow mobile</td></tr>\n          <tr><td>480p</td><td>~1 Mbps</td><td>3G mobile</td></tr>\n          <tr><td>720p</td><td>~3 Mbps</td><td>WiFi mobile</td></tr>\n          <tr><td>1080p</td><td>~5 Mbps</td><td>Desktop / smart TV</td></tr>\n          <tr><td>4K</td><td>~16 Mbps</td><td>Premium</td></tr>\n        </tbody>\n      </table>\n      <div class=\"prose\">\n        <p>Each rendition encoded with a codec — H.264 (universal), H.265/HEVC (smaller, weaker support), AV1 (smallest, slow encode), VP9 (YouTube). Most providers encode multiple codecs per rendition for browser compatibility.</p>\n        <p>Cost: a 30-second 1080p clip transcoded to 5 renditions takes ~30 seconds of GPU time. A 90-minute movie: hours. Encoding farms are massive cost centers at YouTube/Netflix scale.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — adaptive bitrate streaming (HLS / DASH)",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — adaptive bitrate streaming (HLS / DASH)</h2></div>\n    <div class=\"prose\">\n      <p>The user's network changes mid-video — WiFi drops, cellular kicks in. Streaming adapts: switch to lower bitrate; switch back when bandwidth recovers. Both HLS and DASH work the same way:</p>\n      <ol>\n        <li><strong>Manifest file</strong> (<code>.m3u8</code> for HLS, <code>.mpd</code> for DASH) lists all renditions + their segments.</li>\n        <li><strong>Each rendition split into ~6-second segments</strong>. Pre-encoded; stored as files (<code>seg-001.ts</code>, etc.).</li>\n        <li><strong>Player downloads manifest, picks initial bitrate</strong> based on initial bandwidth estimate.</li>\n        <li><strong>Player downloads segments sequentially</strong>, switching renditions between segments based on observed throughput.</li>\n        <li><strong>CDN serves segments</strong> — each is just an HTTP-cacheable file. CDN scaling is normal HTTP scaling.</li>\n      </ol>\n      <p>Why segments + manifest beat continuous streaming: any HTTP CDN can serve it. No special protocols. WebSocket-grade complexity not needed. Player can prefetch, jump, pause, switch quality cheaply.</p>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">Interview answer</div>\n        <p>\"Direct-to-S3 upload triggers an async transcoding pipeline. Output 5-rendition HLS ladder + WebP/AV1 thumbnails. Manifests + segments served via CDN with long TTLs. Player adapts bitrate based on observed bandwidth. Image variants generated on-demand via image proxy (Imgix-style) so we don't pre-generate sizes that are never used.\"</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">YouTube / Netflix encoding farms</div><h4>Massive scale</h4><p>Tens of thousands of GPUs encoding new content + re-encoding old to newer codecs. AV1 re-encoding has saved Netflix petabytes of bandwidth.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Imgix / Cloudflare Images</div><h4>On-demand image proxy</h4><p>URL-based transformations. <code>?w=300&amp;fmt=webp</code> generates + caches at edge. The default for image-heavy sites.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Cloudflare Stream / AWS MediaConvert</div><h4>Managed video pipelines</h4><p>Upload → transcode → deliver as HLS/DASH. SaaS for teams that don't want to run encoding farms.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Mux</div><h4>Video API for developers</h4><p>\"Stripe for video.\" API-driven encoding + delivery. Handles HLS + DASH + analytics + thumbnails.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>YouTube/Netflix is fundamentally a video pipeline at extreme scale. News feed processes user-uploaded photos via image pipeline. Live streaming uses real-time transcoding (different beast). Google Drive thumbnails files via image pipeline.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

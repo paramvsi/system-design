@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Distributed Locking — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+
+    :root {
+      --accent-h:       234;
+      --accent-s:       70%;
+      --accent-l:       52%;
+      --accent:         hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light:   hsl(var(--accent-h), 80%, 94%);
+      --accent-mid:     hsl(var(--accent-h), 70%, 88%);
+      --accent-text:    hsl(var(--accent-h), var(--accent-s), 32%);
+      --accent-border:  hsl(var(--accent-h), 60%, 80%);
+      --hl-yellow:      #fff0a0;
+      --hl-yellow-dark: #a07a00;
+      --hl-accent:      hsl(var(--accent-h), 90%, 88%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 30%);
+      --bg:             #ffffff;
+      --bg-subtle:      #f7f7f5;
+      --bg-raised:      #f0eeeb;
+      --bg-code:        #f4f3f0;
+      --border:         #e4e2de;
+      --border-strong:  #ccc9c4;
+      --text-primary:   #111110;
+      --text-secondary: #4a4845;
+      --text-muted:     #878480;
+      --text-code:      #2d2c2b;
+      --font-serif:     'Instrument Serif', Georgia, serif;
+      --font-sans:      'Geist', system-ui, sans-serif;
+      --font-mono:      'JetBrains Mono', 'Fira Code', monospace;
+      --radius-sm:      4px;
+      --radius-md:      8px;
+      --radius-lg:      12px;
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+    body { font-family: var(--font-sans); font-size: 15px; line-height: 1.7; color: var(--text-primary); background: var(--bg); -webkit-font-smoothing: antialiased; }
+    .layout { display: grid; grid-template-columns: 240px 1fr; grid-template-rows: auto 1fr; min-height: 100vh; }
+    .topbar { grid-column: 1 / -1; position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; height: 52px; padding: 0 24px; background: rgba(255,255,255,0.88); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); }
+    .topbar-left { display: flex; align-items: center; gap: 10px; font-family: var(--font-mono); font-size: 13.5px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+    .topbar-left a { color: var(--text-muted); text-decoration: none; transition: color 0.2s; }
+    .topbar-left a:hover { color: var(--accent); }
+    .topbar-sep { color: var(--border-strong); user-select: none; }
+    .topbar-problem { color: var(--accent-text); font-weight: 500; }
+    .topbar-right { display: flex; align-items: center; gap: 16px; }
+    .topbar-tag { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 8px; border-radius: var(--radius-sm); background: var(--accent-light); color: var(--accent-text); }
+    .sidebar { position: sticky; top: 52px; height: calc(100vh - 52px); overflow-y: auto; padding: 28px 20px 40px; border-right: 1px solid var(--border); background: var(--bg-subtle); }
+    .sidebar::-webkit-scrollbar { width: 3px; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+    .sidebar-label { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; }
+    .sidebar-nav { list-style: none; margin-bottom: 32px; }
+    .sidebar-nav li { margin-bottom: 2px; }
+    .sidebar-nav a { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--radius-sm); font-size: 15px; font-weight: 400; color: var(--text-secondary); text-decoration: none; transition: all 0.15s ease; position: relative; }
+    .sidebar-nav a::before { content: ''; width: 4px; height: 4px; border-radius: 50%; background: var(--border-strong); flex-shrink: 0; transition: all 0.2s ease; }
+    .sidebar-nav a:hover { background: var(--bg-raised); color: var(--text-primary); }
+    .sidebar-nav a.active { background: var(--accent-light); color: var(--accent-text); font-weight: 500; }
+    .sidebar-nav a.active::before { background: var(--accent); width: 6px; height: 6px; }
+    .sidebar-related { list-style: none; margin-top: 8px; }
+    .sidebar-related li { margin-bottom: 4px; }
+    .sidebar-related a { font-size: 14.5px; color: var(--text-muted); text-decoration: none; transition: color 0.15s; }
+    .sidebar-related a:hover { color: var(--accent); }
+    .main { padding: 0 48px 120px; max-width: 860px; min-width: 0; }
+    .hero { padding: 56px 0 40px; border-bottom: 1px solid var(--border); margin-bottom: 48px; }
+    .hero-number { font-family: var(--font-mono); font-size: 12px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; }
+    .hero h1 { font-family: var(--font-serif); font-size: 48px; font-weight: 400; line-height: 1.1; color: var(--text-primary); margin-bottom: 16px; letter-spacing: -0.02em; }
+    .hero-desc { font-size: 17px; line-height: 1.65; color: var(--text-secondary); max-width: 600px; margin-bottom: 20px; }
+    .hero-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+    .hero-tag { font-family: var(--font-mono); font-size: 12px; font-weight: 400; letter-spacing: 0.04em; padding: 4px 10px; border-radius: var(--radius-sm); background: var(--bg-raised); color: var(--text-muted); border: 1px solid var(--border); }
+    .section { margin-bottom: 56px; opacity: 0; transform: translateY(20px); animation: fadeUp 0.5s ease forwards; }
+    .section:nth-child(1) { animation-delay: 0.05s; } .section:nth-child(2) { animation-delay: 0.10s; } .section:nth-child(3) { animation-delay: 0.15s; } .section:nth-child(4) { animation-delay: 0.20s; } .section:nth-child(5) { animation-delay: 0.25s; } .section:nth-child(6) { animation-delay: 0.30s; } .section:nth-child(7) { animation-delay: 0.35s; } .section:nth-child(8) { animation-delay: 0.40s; } .section:nth-child(9) { animation-delay: 0.45s; } .section:nth-child(10) { animation-delay: 0.50s; } .section:nth-child(11) { animation-delay: 0.55s; }
+    @keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
+    .section-number { font-family: var(--font-mono); font-size: 12px; font-weight: 500; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 6px; }
+    .section h2 { font-family: var(--font-serif); font-size: 30px; font-weight: 400; color: var(--text-primary); margin-bottom: 20px; letter-spacing: -0.01em; }
+    .section h3 { font-family: var(--font-sans); font-size: 16px; font-weight: 600; color: var(--text-primary); margin: 28px 0 10px; }
+    .section p { color: var(--text-secondary); margin-bottom: 14px; max-width: 680px; }
+    .section ul, .section ol { padding-left: 20px; margin-bottom: 16px; color: var(--text-secondary); }
+    .section li { margin-bottom: 6px; }
+    .hl { background: var(--hl-yellow); color: var(--hl-yellow-dark); padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+    .hl-accent { background: var(--hl-accent); color: var(--hl-accent-dark); padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+    .hl-red { background: hsl(0, 85%, 93%); color: hsl(0, 70%, 35%); padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+    .hl-green { background: hsl(145, 60%, 90%); color: hsl(145, 55%, 28%); padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+    .card { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px 24px; margin-bottom: 16px; }
+    .card-accent { background: var(--accent-light); border-color: var(--accent-border); }
+    .card h4 { font-family: var(--font-sans); font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; }
+    .card p { font-size: 16px; color: var(--text-secondary); margin-bottom: 0; }
+    .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .code-block { background: var(--bg-code); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px 20px; margin-bottom: 16px; overflow-x: auto; }
+    .code-block code { font-family: var(--font-mono); font-size: 14.5px; font-weight: 400; color: var(--text-code); line-height: 1.7; }
+    .code-label { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; }
+    .inline-code { font-family: var(--font-mono); font-size: 15px; background: var(--bg-code); border: 1px solid var(--border); padding: 1px 6px; border-radius: var(--radius-sm); color: var(--text-code); }
+    .table-wrap { overflow-x: auto; margin-bottom: 16px; border: 1px solid var(--border); border-radius: var(--radius-md); }
+    .table-wrap table { width: 100%; border-collapse: collapse; font-size: 15.5px; }
+    .table-wrap th { font-family: var(--font-mono); font-size: 12px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); text-align: left; padding: 10px 16px; background: var(--bg-subtle); border-bottom: 1px solid var(--border); }
+    .table-wrap td { padding: 10px 16px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
+    .table-wrap tr:last-child td { border-bottom: none; }
+    .scale-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .scale-card { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; text-align: center; }
+    .scale-card .number { font-family: var(--font-mono); font-size: 22px; font-weight: 500; color: var(--accent-text); margin-bottom: 2px; }
+    .scale-card .label { font-size: 13.5px; color: var(--text-muted); }
+    .arch-diagram { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 32px; margin-bottom: 20px; overflow-x: auto; }
+    .arch-diagram svg { display: block; margin: 0 auto; }
+    .arch-diagram .node { cursor: pointer; transition: filter 0.2s; }
+    .arch-diagram .node:hover { filter: brightness(0.95); }
+    .arch-diagram .node rect, .arch-diagram .node-rect { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arch-diagram .node-label { font-family: 'Geist', system-ui, sans-serif; font-size: 13.5px; font-weight: 500; fill: var(--text-primary); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+    .arch-diagram .node-sublabel { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; fill: var(--text-muted); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+    .arch-diagram .edge { stroke: var(--border-strong); stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+    .arch-diagram .edge-label { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; fill: var(--text-muted); text-anchor: middle; }
+    .node-highlight rect { stroke: var(--accent) !important; stroke-width: 2.5 !important; }
+    .node-highlight .node-label { fill: var(--accent-text) !important; }
+    .flow-stepper { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 20px; }
+    .flow-stepper-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .flow-stepper-title { font-family: var(--font-mono); font-size: 12px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+    .flow-stepper-controls { display: flex; gap: 8px; }
+    .flow-btn { font-family: var(--font-mono); font-size: 12px; font-weight: 500; padding: 5px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg); color: var(--text-secondary); cursor: pointer; transition: all 0.15s; }
+    .flow-btn:hover { background: var(--accent-light); border-color: var(--accent-border); color: var(--accent-text); }
+    .flow-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .flow-btn-primary { background: var(--accent); border-color: var(--accent); color: white; }
+    .flow-btn-primary:hover { opacity: 0.9; background: var(--accent); color: white; }
+    .flow-steps { display: flex; gap: 4px; align-items: center; margin-bottom: 16px; overflow-x: auto; padding-bottom: 4px; }
+    .flow-node { font-family: var(--font-mono); font-size: 12px; font-weight: 500; padding: 6px 14px; border-radius: var(--radius-sm); background: var(--bg); border: 1px solid var(--border); color: var(--text-muted); white-space: nowrap; transition: all 0.3s ease; }
+    .flow-node.active { background: var(--accent-light); border-color: var(--accent); color: var(--accent-text); box-shadow: 0 0 0 3px var(--accent-mid); }
+    .flow-node.done { background: var(--accent-light); border-color: var(--accent-border); color: var(--accent-text); }
+    .flow-arrow { color: var(--border-strong); font-size: 16px; flex-shrink: 0; }
+    .flow-desc { font-size: 16px; color: var(--text-secondary); line-height: 1.6; padding: 14px 16px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); min-height: 52px; }
+    .flow-counter { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); margin-top: 10px; text-align: right; }
+    .mermaid-wrap { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 20px; overflow-x: auto; }
+    .mermaid { text-align: center; }
+    .tradeoff { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .tradeoff-option { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px 20px; }
+    .tradeoff-option.chosen { border-color: var(--accent-border); background: var(--accent-light); }
+    .tradeoff-label { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px; }
+    .tradeoff-label.yes { color: hsl(145, 55%, 32%); }
+    .tradeoff-label.no { color: var(--text-muted); }
+    .tradeoff-option h4 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+    .tradeoff-option p { font-size: 15px; color: var(--text-secondary); margin-bottom: 0; }
+    .callout { border-left: 3px solid var(--accent); padding: 14px 18px; background: var(--accent-light); border-radius: 0 var(--radius-md) var(--radius-md) 0; margin-bottom: 16px; }
+    .callout p { font-size: 16px; color: var(--accent-text); margin-bottom: 0; }
+    .callout-warn { border-left-color: hsl(38, 92%, 50%); background: hsl(38, 80%, 94%); }
+    .callout-warn p { color: hsl(38, 70%, 28%); }
+    .callout-danger { border-left-color: hsl(0, 72%, 52%); background: hsl(0, 80%, 95%); }
+    .callout-danger p { color: hsl(0, 65%, 32%); }
+    .tip-card { display: flex; gap: 14px; padding: 16px 20px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); margin-bottom: 10px; }
+    .tip-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+    .tip-content { font-size: 16px; color: var(--text-secondary); line-height: 1.6; }
+    .tip-content strong { color: var(--text-primary); font-weight: 600; }
+    .similar-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .similar-card { display: block; text-decoration: none; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px 20px; transition: all 0.2s ease; }
+    .similar-card:hover { border-color: var(--accent-border); background: var(--accent-light); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+    .similar-card h4 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+    .similar-card p { font-size: 13.5px; color: var(--text-muted); margin-bottom: 0; }
+    .evolution-step { display: flex; gap: 16px; margin-bottom: 20px; position: relative; }
+    .evolution-step:not(:last-child)::after { content: ''; position: absolute; left: 15px; top: 36px; bottom: -20px; width: 2px; background: var(--border); }
+    .evolution-marker { width: 32px; height: 32px; border-radius: 50%; background: var(--accent-light); border: 2px solid var(--accent-border); display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 13.5px; font-weight: 600; color: var(--accent-text); flex-shrink: 0; }
+    .evolution-content h4 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+    .evolution-content p { font-size: 15.5px; color: var(--text-secondary); margin-bottom: 0; }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .sidebar { display: none; } .main { padding: 0 20px 80px; } .hero h1 { font-size: 34px; } .tradeoff { grid-template-columns: 1fr; } .card-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <header class="topbar">
+    <div class="topbar-left">
+      <a href="../index.html">System Design</a>
+      <span class="topbar-sep">/</span>
+      <span class="topbar-problem">Distributed Locking</span>
+    </div>
+    <div class="topbar-right">
+      <span class="topbar-tag">Hard</span>
+    </div>
+  </header>
+
+  <aside class="sidebar">
+    <div class="sidebar-label">Sections</div>
+    <ul class="sidebar-nav" id="sidebar-nav">
+      <li><a href="#problem">Problem Statement</a></li>
+      <li><a href="#requirements">Requirements</a></li>
+      <li><a href="#scale">Scale Estimation</a></li>
+      <li><a href="#api">API Design</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#deep-dive">Deep Dive</a></li>
+      <li><a href="#tradeoffs">Tradeoffs</a></li>
+      <li><a href="#failures">Failure Scenarios</a></li>
+      <li><a href="#interview-tips">Interview Tips</a></li>
+      <li><a href="#similar">Similar Problems</a></li>
+      <li><a href="#evolution">Evolution</a></li>
+    </ul>
+    <div class="sidebar-label">Related</div>
+    <ul class="sidebar-related">
+      <li><a href="../job-scheduler/index.html">Job Scheduler</a></li>
+      <li><a href="../rate-limiter/index.html">Rate Limiter</a></li>
+      <li><a href="../kafka/index.html">Distributed Message Queue</a></li>
+    </ul>
+  </aside>
+
+  <main class="main">
+
+    <div class="hero">
+      <div class="hero-number">System Design — 017</div>
+      <h1>Distributed Locking</h1>
+      <p class="hero-desc">How do you guarantee that at most one process operates on a shared resource at any time, across machines that can crash, networks that can partition, and clocks that can drift?</p>
+      <div class="hero-tags">
+        <span class="hero-tag">consensus</span>
+        <span class="hero-tag">fencing-tokens</span>
+        <span class="hero-tag">raft</span>
+        <span class="hero-tag">mutual-exclusion</span>
+        <span class="hero-tag">linearizability</span>
+      </div>
+    </div>
+
+    <!-- 01 PROBLEM STATEMENT -->
+    <div class="section" id="problem">
+      <div class="section-number">01</div>
+      <h2>Problem Statement</h2>
+      <p>On a single machine, locking is solved — your language gives you mutexes backed by shared memory and atomic CPU instructions. In a distributed system, there's no shared memory. Process A on Machine 1 and Process B on Machine 2 can only coordinate via the network, which is unreliable. The lock state must live somewhere both can access — a separate coordination service.</p>
+
+      <div class="callout-danger callout">
+        <p><strong>The central insight:</strong> A distributed lock, by itself, does NOT guarantee mutual exclusion. If a lock holder pauses (GC) and the lock expires (TTL), another holder acquires it. Two holders operate simultaneously. True mutual exclusion requires a lock service <em>plus</em> fencing tokens at the protected resource.</p>
+      </div>
+
+      <h3>Three Categories of Locking Need</h3>
+      <div class="card-grid">
+        <div class="card">
+          <h4>Tier 1 — Efficiency</h4>
+          <p>Prevent duplicate work (cache stampede, job dedup). Violation = wasted work. <span class="hl-green">Tolerable.</span> Use Redis SET NX.</p>
+        </div>
+        <div class="card">
+          <h4>Tier 2 — Correctness</h4>
+          <p>Protect shared state (wallet balance, leader election). Violation = data corruption, split brain. <span class="hl-red">Catastrophic.</span> Use consensus + fencing.</p>
+        </div>
+      </div>
+
+      <p>The most common production mistake: <span class="hl-red">using a Tier 1 lock for a Tier 2 problem</span>. Fast, simple, almost always correct — until the one time it isn't, and $50,000 vanishes from a user's account.</p>
+
+      <h3>The Naive Lock &amp; Its Four Failures</h3>
+      <p>A database row lock (<span class="inline-code">INSERT INTO locks ON CONFLICT DO NOTHING</span>) fails in four ways: <span class="hl-red">holder crashes → lock stuck forever</span> (no TTL), <span class="hl-red">TTL expires while holder works</span> (two holders simultaneously), <span class="hl-red">network partition</span> (lock unreachable), and <span class="hl-red">clock skew</span> (TTL unreliable). Every component in our distributed design solves one of these.</p>
+    </div>
+
+    <!-- 02 REQUIREMENTS -->
+    <div class="section" id="requirements">
+      <div class="section-number">02</div>
+      <h2>Requirements</h2>
+
+      <h3>Functional Requirements</h3>
+      <div class="card">
+        <ul>
+          <li><strong>Acquire lock</strong> — blocking (wait for availability) and non-blocking (try, fail fast). Every acquisition returns a <span class="hl">fencing token</span> — a monotonically increasing counter. Non-negotiable.</li>
+          <li><strong>Release lock</strong> — owner-verified (must present matching token). Prevents stale clients from releasing active locks.</li>
+          <li><strong>Renew / extend</strong> — extend TTL without releasing. Background thread renews at 1/3 of TTL intervals. Renewal failure = lock lost signal.</li>
+          <li><strong>Session management</strong> — clients establish sessions via persistent gRPC streams. All locks tied to session. Session death → all locks release.</li>
+          <li><strong>Multi-lock</strong> — acquire multiple resources atomically with canonical ordering (deadlock prevention). All-or-nothing semantics.</li>
+          <li><strong>Watch</strong> — observe lock events for monitoring dashboards. Not for control flow (TOCTOU race).</li>
+        </ul>
+      </div>
+
+      <h3>Non-Functional Requirements</h3>
+      <div class="card">
+        <ul>
+          <li><strong>Mutual exclusion (Safety)</strong> — at most one holder at any time. For Tier 2, this must hold under all failure modes — requiring consensus + fencing.</li>
+          <li><strong>Liveness (Deadlock freedom)</strong> — every request eventually succeeds or fails. Guaranteed by TTL expiry + wait timeouts.</li>
+          <li><strong>Low latency</strong> — uncontended acquire &lt; 5ms (Tier 2) or &lt; 1ms (Tier 1).</li>
+          <li><strong>High availability</strong> — 99.99%. Survives single node failure (5-node cluster tolerates 2 failures).</li>
+          <li><strong>Linearizability</strong> — every lock operation appears to happen at a single point in time. No stale reads from lagging replicas.</li>
+          <li><strong>Fairness</strong> — FIFO wait queues. No starvation of slow clients.</li>
+        </ul>
+      </div>
+
+      <div class="callout-warn callout">
+        <p><strong>CP, not AP:</strong> An AP lock service is a contradiction — a lock that doesn't guarantee mutual exclusion isn't a lock. During a network partition, the minority side must refuse to serve.</p>
+      </div>
+    </div>
+
+    <!-- 03 SCALE -->
+    <div class="section" id="scale">
+      <div class="section-number">03</div>
+      <h2>Scale Estimation</h2>
+      <p>500 microservices, each making ~100 lock operations/sec. The bottleneck is not storage (186 MB fits in memory) — it's <span class="hl">write throughput through consensus</span>.</p>
+
+      <div class="scale-grid">
+        <div class="scale-card"><div class="number">50K/s</div><div class="label">Total lock operations/sec</div></div>
+        <div class="scale-card"><div class="number">500K</div><div class="label">Active locks at any moment</div></div>
+        <div class="scale-card"><div class="number">186 MB</div><div class="label">Total state (fits in RAM)</div></div>
+        <div class="scale-card"><div class="number">5-7ms</div><div class="label">Consensus lock latency</div></div>
+        <div class="scale-card"><div class="number">~1ms</div><div class="label">Redis Tier 1 latency</div></div>
+        <div class="scale-card"><div class="number">1K/s</div><div class="label">Session keep-alives (batched)</div></div>
+      </div>
+
+      <div class="card">
+        <h4>Key Insight: Consensus-Bound, Not Storage-Bound</h4>
+        <p>A single etcd cluster: 10-20K writes/sec. A single ZK cluster: 15-30K writes/sec. Our 41K writes/sec (after session batching) is at the ceiling of a single consensus group. This forces either aggressive batching/pipelining or namespace sharding at higher scale. Session-based renewal (1K/sec) vs per-lock renewal (35K/sec) is a <span class="hl">35× reduction</span> — a mandatory optimization.</p>
+      </div>
+    </div>
+
+    <!-- 04 API -->
+    <div class="section" id="api">
+      <div class="section-number">04</div>
+      <h2>API Design</h2>
+      <p>gRPC-based (not REST) — locks are latency-sensitive, connection-oriented (sessions), and benefit from streaming (watch, keep-alive). The client library wraps all complexity.</p>
+
+      <div class="code-label">Acquire Lock</div>
+      <div class="code-block"><code><pre>Lock(request):
+  session_id: string
+  resource_id: string          // "wallet:user_123"
+  ttl: Duration                // 30 seconds
+  wait_timeout: Duration       // 0 for tryLock
+  tier: EFFICIENCY | CORRECTNESS
+
+→ LockResponse:
+  acquired: bool
+  lock_handle: {
+    resource_id, fence_token: uint64, expires_at
+  }</pre></code></div>
+
+      <div class="code-label">Release Lock (Owner-Verified)</div>
+      <div class="code-block"><code><pre>Unlock(request):
+  session_id: string
+  resource_id: string
+  fence_token: uint64          // MUST match current token
+
+→ UnlockResponse:
+  released: bool
+  reason: "ok" | "not_owner" | "already_released" | "expired"</pre></code></div>
+
+      <div class="code-label">Client Library — Safe by Default</div>
+      <div class="code-block"><code><pre>client = LockServiceClient("lock-service:2379")
+
+with client.lock("wallet:user_123", ttl=30, tier=CORRECTNESS) as lock:
+    balance = db.read("wallet:user_123")
+    db.write("wallet:user_123", balance - 100,
+             fence_token=lock.fence_token)
+# Lock auto-released when context exits</pre></code></div>
+
+      <div class="card-grid">
+        <div class="card">
+          <h4>Fencing Token Contract</h4>
+          <p>Monotonically increasing per resource. Unique per acquisition. Survives leader failover (part of consensus state). The protected resource must reject writes with token &lt; its high-water mark.</p>
+        </div>
+        <div class="card">
+          <h4>Session Model</h4>
+          <p>Persistent gRPC stream with keep-alive every 10s. Session TTL: 30s (3 missed keep-alives → expired). All locks tied to session — one death releases all.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 05 ARCHITECTURE -->
+    <div class="section" id="architecture">
+      <div class="section-number">05</div>
+      <h2>High-Level Architecture</h2>
+      <p>A 5-node Raft-replicated state machine storing lock ownership, sessions, fence tokens, and wait queues in memory (~186 MB), with a smart client library handling session management and tier-based routing.</p>
+
+      <div class="arch-diagram">
+        <svg viewBox="0 0 860 480" xmlns="http://www.w3.org/2000/svg">
+          <defs><marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#ccc9c4"/></marker></defs>
+
+          <!-- Client Library -->
+          <g class="node" id="node-client" onclick="hlNode('node-client')">
+            <rect class="node-rect" x="20" y="100" width="140" height="60" fill="hsl(234,80%,94%)" stroke="hsl(234,60%,80%)"/>
+            <text class="node-label" x="90" y="125">Client Library</text>
+            <text class="node-sublabel" x="90" y="142">Thick SDK</text>
+          </g>
+
+          <!-- Redis -->
+          <g class="node" id="node-redis" onclick="hlNode('node-redis')">
+            <rect class="node-rect" x="220" y="30" width="130" height="60" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="285" y="55">Redis</text>
+            <text class="node-sublabel" x="285" y="72">Tier 1 (~1ms)</text>
+          </g>
+
+          <!-- Raft Leader -->
+          <g class="node" id="node-leader" onclick="hlNode('node-leader')">
+            <rect class="node-rect" x="220" y="170" width="140" height="60" fill="hsl(234,80%,94%)" stroke="hsl(234,60%,80%)"/>
+            <text class="node-label" x="290" y="195">Raft Leader</text>
+            <text class="node-sublabel" x="290" y="212">Tier 2 (~5-7ms)</text>
+          </g>
+
+          <!-- Followers -->
+          <g class="node" id="node-f1" onclick="hlNode('node-f1')">
+            <rect class="node-rect" x="420" y="100" width="110" height="50" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="475" y="120">Follower 1</text>
+            <text class="node-sublabel" x="475" y="136">Replica</text>
+          </g>
+          <g class="node" id="node-f2" onclick="hlNode('node-f2')">
+            <rect class="node-rect" x="420" y="170" width="110" height="50" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="475" y="190">Follower 2</text>
+            <text class="node-sublabel" x="475" y="206">Replica</text>
+          </g>
+          <g class="node" id="node-f3" onclick="hlNode('node-f3')">
+            <rect class="node-rect" x="420" y="240" width="110" height="50" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="475" y="260">Follower 3</text>
+            <text class="node-sublabel" x="475" y="276">Replica</text>
+          </g>
+          <g class="node" id="node-f4" onclick="hlNode('node-f4')">
+            <rect class="node-rect" x="420" y="310" width="110" height="50" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="475" y="330">Follower 4</text>
+            <text class="node-sublabel" x="475" y="346">Replica</text>
+          </g>
+
+          <!-- State Machine -->
+          <g class="node" id="node-sm" onclick="hlNode('node-sm')">
+            <rect class="node-rect" x="600" y="160" width="200" height="80" fill="hsl(234,80%,94%)" stroke="hsl(234,60%,80%)"/>
+            <text class="node-label" x="700" y="185">Lock State Machine</text>
+            <text class="node-sublabel" x="700" y="202">locks, sessions, fence_counters</text>
+            <text class="node-sublabel" x="700" y="218">wait_queues (186 MB in RAM)</text>
+          </g>
+
+          <!-- Event Stream -->
+          <g class="node" id="node-kafka" onclick="hlNode('node-kafka')">
+            <rect class="node-rect" x="600" y="310" width="200" height="60" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="700" y="335">Event Streamer</text>
+            <text class="node-sublabel" x="700" y="352">→ Kafka → Dashboards</text>
+          </g>
+
+          <!-- Protected Resource -->
+          <g class="node" id="node-resource" onclick="hlNode('node-resource')">
+            <rect class="node-rect" x="20" y="310" width="140" height="60" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="90" y="335">Protected Resource</text>
+            <text class="node-sublabel" x="90" y="352">DB with fence check</text>
+          </g>
+
+          <!-- Edges -->
+          <line class="edge" x1="160" y1="110" x2="220" y2="60"/>
+          <text class="edge-label" x="180" y="78">Tier 1</text>
+          <line class="edge" x1="160" y1="140" x2="220" y2="195"/>
+          <text class="edge-label" x="178" y="175">Tier 2</text>
+          <line class="edge" x1="360" y1="195" x2="420" y2="125"/>
+          <line class="edge" x1="360" y1="200" x2="420" y2="195"/>
+          <line class="edge" x1="360" y1="210" x2="420" y2="265"/>
+          <line class="edge" x1="360" y1="220" x2="420" y2="335"/>
+          <text class="edge-label" x="395" y="155">Replicate</text>
+          <line class="edge" x1="530" y1="195" x2="600" y2="195"/>
+          <text class="edge-label" x="565" y="188">Apply</text>
+          <line class="edge" x1="700" y1="240" x2="700" y2="310"/>
+          <text class="edge-label" x="730" y="280">Events</text>
+          <line class="edge" x1="90" y1="160" x2="90" y2="310"/>
+          <text class="edge-label" x="115" y="240">fence_token</text>
+        </svg>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <tr><th>Component</th><th>Tech</th><th>Why</th></tr>
+          <tr><td>Client Library</td><td>Thick SDK</td><td>Session mgmt, renewal, circuit breaker, tier routing, fencing tracking</td></tr>
+          <tr><td>Raft Cluster</td><td>5-node consensus</td><td>Linearizable lock state, survives 2 failures, fencing tokens never go backwards</td></tr>
+          <tr><td>Lock State Machine</td><td>In-memory (186 MB)</td><td>Locks, sessions, fence counters, FIFO wait queues — all consensus-replicated</td></tr>
+          <tr><td>Redis Sidecar</td><td>Redis instance</td><td>Tier 1 fast path (~1ms) for efficiency locks</td></tr>
+          <tr><td>Session Manager</td><td>In-process</td><td>Keep-alive tracking, dead-client detection, batch lock cleanup</td></tr>
+          <tr><td>Event Streamer</td><td>Ring buffer → Kafka</td><td>Observability without adding latency to critical path</td></tr>
+        </table>
+      </div>
+
+      <!-- Flow Stepper -->
+      <div class="flow-stepper">
+        <div class="flow-stepper-header">
+          <span class="flow-stepper-title">Lock Acquisition Flow (Tier 2) — Step Through</span>
+          <div class="flow-stepper-controls">
+            <button class="flow-btn" onclick="resetFlow()" id="flow-reset" disabled>Reset</button>
+            <button class="flow-btn flow-btn-primary" onclick="runFlow()" id="flow-next">Next Step →</button>
+          </div>
+        </div>
+        <div class="flow-steps" id="flow-steps"></div>
+        <div class="flow-desc" id="flow-desc">Click <strong>Next Step</strong> to walk through the lock acquisition flow.</div>
+        <div class="flow-counter" id="flow-counter"></div>
+      </div>
+    </div>
+
+    <!-- 06 DEEP DIVE -->
+    <div class="section" id="deep-dive">
+      <div class="section-number">06</div>
+      <h2>Deep Dive — Consensus &amp; Fencing</h2>
+
+      <p>The spectrum from "fast and best-effort" to "slow and provably correct":</p>
+
+      <div class="table-wrap">
+        <table>
+          <tr><th>Level</th><th>Approach</th><th>Linearizable</th><th>Survives Slow Client</th><th>True Mutual Exclusion</th></tr>
+          <tr><td>1</td><td>Single Redis SET NX EX</td><td><span class="hl-red">No</span></td><td><span class="hl-red">No</span></td><td><span class="hl-red">No</span></td></tr>
+          <tr><td>2</td><td>Redlock (5 Redis nodes)</td><td><span class="hl-red">No</span></td><td><span class="hl-red">No</span></td><td><span class="hl-red">No</span></td></tr>
+          <tr><td>3</td><td>ZooKeeper / etcd (consensus)</td><td><span class="hl-green">Yes</span></td><td><span class="hl-red">No</span></td><td><span class="hl-red">No*</span></td></tr>
+          <tr><td>4</td><td>Consensus + Fencing Tokens</td><td><span class="hl-green">Yes</span></td><td><span class="hl-green">Yes</span></td><td><span class="hl-green">Yes</span></td></tr>
+        </table>
+      </div>
+      <p><em>*Consensus without fencing can be violated by a slow holder that outlives its lease and sends a stale write.</em></p>
+
+      <h3>The Redlock Debate (Kleppmann vs Antirez)</h3>
+      <div class="card-grid">
+        <div class="card">
+          <h4>Kleppmann's Critique</h4>
+          <p>Redlock assumes bounded timing (GC pauses break validity calculations) and accurate clocks (NTP jumps cause premature expiry). If you add fencing tokens, you don't need Redlock — single Redis + fencing is equally correct.</p>
+        </div>
+        <div class="card">
+          <h4>Our Verdict</h4>
+          <p>Kleppmann is correct on theory. Redlock occupies an awkward middle ground — more infrastructure than single Redis, but not actually linearizable. For correctness: use consensus + fencing. For efficiency: single Redis is simpler.</p>
+        </div>
+      </div>
+
+      <h3>Fencing Token Flow</h3>
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+sequenceDiagram
+    participant C_A as Client A
+    participant LS as Lock Service (Raft)
+    participant C_B as Client B
+    participant DB as Database
+
+    C_A->>LS: LOCK("wallet:123", ttl=30s)
+    LS-->>C_A: acquired, token=42
+    C_A->>DB: WRITE balance=$400, fence_token=42
+    Note over C_A: GC pause 35 seconds...
+    Note over LS: Session expires at T=30
+    LS->>LS: Release lock (session expired)
+    C_B->>LS: LOCK("wallet:123", ttl=30s)
+    LS-->>C_B: acquired, token=43
+    C_B->>DB: WRITE balance=$300, fence_token=43
+    DB->>DB: 43 > hwm(0) → accept, hwm=43
+    Note over C_A: Wakes from GC at T=35
+    C_A->>DB: WRITE balance=$400, fence_token=42 (delayed)
+    DB->>DB: 42 < hwm(43) → REJECTED
+    DB-->>C_A: StaleFenceTokenError
+        </div>
+      </div>
+
+      <div class="callout">
+        <p><strong>The proof:</strong> The database's high-water mark ensures that even if Client A's write was sent while the lock was validly held (at T=0.2), it's rejected when it arrives late (at T=35) because Client B's write (token=43) has already raised the bar. <strong>The fencing token at the resource is the actual safety mechanism — not the lock.</strong></p>
+      </div>
+
+      <h3>Why Consensus Locks Still Need Fencing</h3>
+      <p>Even Raft-backed locks can be violated. The consensus protocol guarantees linearizable <em>lock state</em> (who the lock service thinks holds the lock). But it can't control what happens <em>outside the lock service</em> — a write can be in the TCP buffer when the lock expires. The write arrives at the database after a new holder's write. Without fencing, data corrupts. <span class="hl">Consensus + fencing = true correctness. Neither alone is sufficient.</span></p>
+    </div>
+
+    <!-- 07 TRADEOFFS -->
+    <div class="section" id="tradeoffs">
+      <div class="section-number">07</div>
+      <h2>Key Design Decisions &amp; Tradeoffs</h2>
+
+      <h3>CP vs AP Lock Service</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>CP — Consistency over Availability</h4>
+          <p>Minority partition refuses to serve. Mutual exclusion always maintained. Clients get UNAVAILABLE during partition — safe.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>AP — Availability over Consistency</h4>
+          <p>Both sides serve during partition. Two holders simultaneously. An AP lock is a contradiction — never correct for Tier 2.</p>
+        </div>
+      </div>
+
+      <h3>Session-Based vs TTL-Only Expiry</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Session + Heartbeat</h4>
+          <p>All locks tied to session. One keep-alive covers all locks (1K/sec vs 35K/sec). Dead client detection via missed heartbeats — faster than individual TTL expiry.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Per-Lock TTL (Redis-style)</h4>
+          <p>Each lock independently expires. 35K renewals/sec overhead. Simpler (no sessions) but slower dead-client detection and 35× more renewal traffic.</p>
+        </div>
+      </div>
+
+      <h3>Consensus Protocol</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Raft</h4>
+          <p>Designed for clarity. Excellent library ecosystem (etcd/raft, hashicorp/raft). Single leader handles our throughput. Well-defined membership changes.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Multi-Paxos</h4>
+          <p>Higher theoretical throughput (multi-proposer). Used by Google Chubby. But notoriously difficult to implement correctly. Only justified at Google scale.</p>
+        </div>
+      </div>
+
+      <h3>Fencing Enforcement Location</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Resource-Side Enforcement</h4>
+          <p>Lock service issues tokens. Resource checks them. Loose coupling — lock service doesn't need to understand every resource type. Scales naturally.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Lock-Service-Side Enforcement</h4>
+          <p>Lock service proxies all writes, attaching tokens. Guaranteed enforcement but tight coupling — lock service becomes bottleneck for all writes.</p>
+        </div>
+      </div>
+
+      <h3>FIFO vs Competitive Lock Acquisition</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>FIFO Wait Queues</h4>
+          <p>Waiters served in order. No starvation. Single-successor notification (no thundering herd). ZooKeeper's sequential nodes do this naturally.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Competitive (Race on Release)</h4>
+          <p>All waiters race. Fastest wins. Simpler but starvation risk and thundering herd spike on every release. Bad for multi-tenant fairness.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 08 FAILURES -->
+    <div class="section" id="failures">
+      <div class="section-number">08</div>
+      <h2>What Can Go Wrong</h2>
+
+      <div class="card">
+        <h4>Lock Holder Dies</h4>
+        <p>gRPC stream breaks → detected in ~100-500ms (TCP close) or up to session TTL (~30s, missed keep-alives). Session expires → all locks release atomically in one consensus entry → next waiters notified. <span class="hl-accent">Fencing tokens</span> protect against any writes the dead client sent before crashing.</p>
+      </div>
+
+      <div class="card">
+        <h4>Slow Client (GC Pause Outlives Lock) — THE Critical Failure</h4>
+        <p>Client A acquires lock (token=42), pauses for 35 seconds. Lock expires at 30s. Client B acquires (token=43). Both operate simultaneously. <span class="hl-red">No lock service can prevent this</span> — the write may be in the TCP buffer when the pause starts. <span class="hl-green">Fencing token at the database</span> is the only defense: B's write sets high-water mark to 43, A's delayed write (token=42 &lt; 43) is rejected.</p>
+      </div>
+
+      <div class="card">
+        <h4>Network Partition</h4>
+        <p>Client on minority side can't reach lock service. Session eventually expires. Client continues operating, unaware lock is lost. Defense: client library tracks last successful keep-alive — warns application when nearing session TTL. Plus fencing tokens reject stale writes from the partitioned client.</p>
+      </div>
+
+      <div class="card">
+        <h4>Leader Failover</h4>
+        <p>2-3 second disruption during election. No lock state lost — all committed entries exist on majority. Clients get UNAVAILABLE, retry automatically. Existing locks remain valid (TTLs tracked on all nodes). Fence token counters never go backwards (consensus-replicated).</p>
+      </div>
+
+      <div class="card">
+        <h4>Clock Skew</h4>
+        <p>Lock TTLs use <span class="hl-green">logical ticks</span> (Raft heartbeat intervals), not wall clocks. All nodes agree on the tick count via consensus. No clock drift affects expiry decisions. Wall clocks used only for logging and external-facing timestamps.</p>
+      </div>
+
+      <div class="card">
+        <h4>Thundering Herd on Hot Lock Release</h4>
+        <p>200 waiters on a single lock. With broadcast notification: 200 acquire attempts, 199 wasted. With <span class="hl-green">FIFO single-successor notification</span>: only the next waiter is notified. Zero wasted requests. ZooKeeper's watch chain does this naturally.</p>
+      </div>
+
+      <div class="card">
+        <h4>Deadlock (Circular Wait)</h4>
+        <p>Client A holds lock 1, wants lock 2. Client B holds lock 2, wants lock 1. Circular wait → both stuck. Defense: wait timeouts (breaks deadlock after N seconds), <span class="hl-green">canonical ordering</span> in MultiLock (sort resource IDs, acquire in order — no cycles possible), optional deadlock detection via wait-for graph.</p>
+      </div>
+    </div>
+
+    <!-- 09 INTERVIEW TIPS -->
+    <div class="section" id="interview-tips">
+      <div class="section-number">09</div>
+      <h2>Interview Tips</h2>
+
+      <div class="tip-card">
+        <span class="tip-icon">💡</span>
+        <div class="tip-content">
+          <strong>Lead with the central insight.</strong><br/>
+          "A distributed lock by itself does NOT guarantee mutual exclusion. A slow holder can outlive the TTL. True safety requires a lock service plus fencing tokens at the protected resource." This one statement separates you from 95% of candidates.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">⚡</span>
+        <div class="tip-content">
+          <strong>Walk through the 5-level progression.</strong><br/>
+          In-process mutex → database row lock → Redis SET NX → Redlock → Consensus + fencing. Each level breaks and motivates the next. Takes 90 seconds but tells a complete story. The design feels derived, not memorized.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🎯</span>
+        <div class="tip-content">
+          <strong>Know the Redlock debate cold.</strong><br/>
+          Kleppmann's critique (bounded timing assumption, clock dependency) vs Antirez's response (add fencing on top). Your verdict: "If you have fencing, you don't need Redlock. If you don't have fencing, Redlock doesn't save you."
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🔑</span>
+        <div class="tip-content">
+          <strong>Draw the fencing token flow.</strong><br/>
+          Client A (token=42) pauses. Lock expires. Client B (token=43) writes. Client A's delayed write arrives. Database: 42 &lt; 43 → REJECTED. This concrete visual makes abstract concepts tangible.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🧠</span>
+        <div class="tip-content">
+          <strong>Distinguish Tier 1 from Tier 2.</strong><br/>
+          "The consequence of lock violation determines the design. Cache stampede? Redis is fine. Financial transaction? Consensus + fencing. Most production bugs come from using a Tier 1 lock for a Tier 2 problem."
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🎯</span>
+        <div class="tip-content">
+          <strong>Never claim your lock prevents all concurrency issues.</strong><br/>
+          "Locks prevent concurrent access. Database transactions prevent partial updates. You often need both. If the holder crashes mid-transaction, the lock releases but partial writes persist — the transaction rolls back, not the lock."
+        </div>
+      </div>
+    </div>
+
+    <!-- 10 SIMILAR -->
+    <div class="section" id="similar">
+      <div class="section-number">10</div>
+      <h2>Similar Problems</h2>
+      <div class="similar-grid">
+        <a href="../job-scheduler/index.html" class="similar-card">
+          <h4>Distributed Job Scheduler</h4>
+          <p>Uses locks for exactly-once execution (Redis leases) and leader election (ZooKeeper). Lock service is the foundation.</p>
+        </a>
+        <div class="similar-card" style="cursor:default">
+          <h4>Leader Election</h4>
+          <p>Special case of locking — single long-lived lock. Fencing token becomes the epoch number for all downstream operations.</p>
+        </div>
+        <div class="similar-card" style="cursor:default">
+          <h4>Distributed Transactions (2PC)</h4>
+          <p>Locks provide mutual exclusion; transactions provide atomicity. Often used together. MultiLock parallels 2PC's prepare phase.</p>
+        </div>
+        <div class="similar-card" style="cursor:default">
+          <h4>Optimistic Concurrency Control</h4>
+          <p>Fencing tokens ARE OCC — version check at write time. Our design is a hybrid: pessimistic (lock) + optimistic (fence check).</p>
+        </div>
+        <a href="../rate-limiter/index.html" class="similar-card">
+          <h4>Rate Limiter</h4>
+          <p>Same distributed Redis state, time-based expiry, clock skew challenges. Different correctness requirement (AP vs CP).</p>
+        </a>
+        <div class="similar-card" style="cursor:default">
+          <h4>Distributed Semaphore</h4>
+          <p>Generalization from max_holders=1 to max_holders=N. Same sessions, TTLs, and wait queues. Fencing tokens less useful.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 11 EVOLUTION -->
+    <div class="section" id="evolution">
+      <div class="section-number">11</div>
+      <h2>Evolution</h2>
+      <p>Each stage is triggered by a specific failure or scale ceiling. The one exception: <span class="hl">fencing tokens should be designed in from the start</span> — cheap to implement, impossible to retrofit safely.</p>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">1</div>
+        <div class="evolution-content">
+          <h4>In-Process Mutex — 1 server</h4>
+          <p>Language-level lock. Zero infrastructure. Breaks the moment you add a second server — no shared memory across processes.</p>
+        </div>
+      </div>
+      <div class="evolution-step">
+        <div class="evolution-marker">2</div>
+        <div class="evolution-content">
+          <h4>Database Row Lock — 2-10 servers</h4>
+          <p>INSERT with unique constraint or <span class="inline-code">pg_try_advisory_lock</span>. Breaks when holder crashes → lock stuck forever (no TTL).</p>
+        </div>
+      </div>
+      <div class="evolution-step">
+        <div class="evolution-marker">3</div>
+        <div class="evolution-content">
+          <h4>Redis SET NX EX — 2-50 servers, &lt;10K locks/sec</h4>
+          <p>TTL solves stuck locks. ~1ms latency. Breaks on <span class="hl-red">failover</span> (async replication loses locks) and <span class="hl-red">slow holders</span> (TTL outlived). Fine for Tier 1.</p>
+        </div>
+      </div>
+      <div class="evolution-step">
+        <div class="evolution-marker">4</div>
+        <div class="evolution-content">
+          <h4>Consensus (etcd/ZooKeeper) — 10-200 servers</h4>
+          <p>Linearizable lock state. Sessions with keep-alive. FIFO wait queues. Fencing tokens via revision numbers. ~5-15ms. Breaks at 30K+ ops/sec (consensus ceiling).</p>
+        </div>
+      </div>
+      <div class="evolution-step">
+        <div class="evolution-marker">5</div>
+        <div class="evolution-content">
+          <h4>Two-Tier Custom Service — 50-500 services (Target Design)</h4>
+          <p>Tier 1 (Redis ~1ms) + Tier 2 (Raft ~5-7ms). Thick client library. Purpose-built fencing tokens, FIFO queues, session management. <span class="hl">The design we built in this document.</span></p>
+        </div>
+      </div>
+      <div class="evolution-step">
+        <div class="evolution-marker">6</div>
+        <div class="evolution-content">
+          <h4>Sharded Multi-Cluster — 500+ services</h4>
+          <p>Shard lock namespace across N Raft groups (<span class="inline-code">hash(resource) % N</span>). Linear throughput scaling. Per-shard blast radius. Cross-shard MultiLock not supported.</p>
+        </div>
+      </div>
+      <div class="evolution-step">
+        <div class="evolution-marker">7</div>
+        <div class="evolution-content">
+          <h4>Multi-Region Global — 1000+ services, global</h4>
+          <p>Region-local clusters. Global lock coordinator for cross-region resources. Spanner-style TrueTime for global fencing token ordering (aspirational). Data sovereignty compliance.</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'base', themeVariables: { primaryColor: 'hsl(234, 80%, 94%)', primaryTextColor: '#111110', primaryBorderColor: 'hsl(234, 60%, 80%)', lineColor: '#ccc9c4', secondaryColor: '#f7f7f5', tertiaryColor: '#f0eeeb', fontFamily: 'Geist, system-ui, sans-serif', fontSize: '13px' }});
+
+  (function() {
+    const sections = document.querySelectorAll('.section[id]');
+    const navLinks = document.querySelectorAll('#sidebar-nav a');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+          navLinks.forEach(link => { link.classList.toggle('active', link.getAttribute('href') === '#' + id); });
+        }
+      });
+    }, { rootMargin: '-80px 0px -60% 0px', threshold: 0 });
+    sections.forEach(s => observer.observe(s));
+  })();
+
+  let highlightedNode = null;
+  function hlNode(id) {
+    if (highlightedNode) document.getElementById(highlightedNode).classList.remove('node-highlight');
+    if (highlightedNode === id) { highlightedNode = null; return; }
+    document.getElementById(id).classList.add('node-highlight');
+    highlightedNode = id;
+  }
+
+  const FLOW_NODES = ['Client Lib', 'Session', 'Raft Leader', 'Followers', 'State Machine', 'Client Gets Token', 'Resource Write', 'Fence Check'];
+  const FLOW_DESCS = [
+    'The client library ensures a session exists (or creates one via gRPC stream). It routes based on the tier: EFFICIENCY → Redis, CORRECTNESS → Raft leader.',
+    'The session is established via a persistent gRPC bidirectional stream. Keep-alives are sent every 10 seconds. All locks will be tied to this session — if it dies, all locks release.',
+    'The LOCK request arrives at the Raft leader. The leader checks: is the resource locked? If no → assign next fence_token, create lock entry. If yes → add to FIFO wait queue. The operation is appended to the Raft log.',
+    'The leader replicates the log entry to all followers. When a majority (3/5) acknowledge, the entry is committed. This guarantees the lock state survives leader failure — the new leader has the same data.',
+    'The committed entry is applied to the in-memory state machine: locks map updated, fence_counter incremented, session\'s held_locks set updated. The state machine is identical on all nodes.',
+    'The leader responds to the client: { acquired: true, fence_token: 42 }. The client library stores the token and starts a background renewal thread (renews at TTL/3 intervals).',
+    'The client does its work, passing the fence_token to every write to the protected resource: db.write(data, fence_token=42). The token is the proof of lock ownership.',
+    'The database checks: is this token ≥ my high-water mark? If yes → accept write, update high-water mark. If no → REJECT (stale token from a previous holder). This is the actual safety mechanism.'
+  ];
+
+  let flowStep = -1;
+  const flowStepsEl = document.getElementById('flow-steps');
+  const flowDescEl = document.getElementById('flow-desc');
+  const flowCounter = document.getElementById('flow-counter');
+  const flowNextBtn = document.getElementById('flow-next');
+  const flowResetBtn = document.getElementById('flow-reset');
+
+  FLOW_NODES.forEach((name, i) => {
+    if (i > 0) { const arrow = document.createElement('span'); arrow.className = 'flow-arrow'; arrow.textContent = '→'; flowStepsEl.appendChild(arrow); }
+    const node = document.createElement('span'); node.className = 'flow-node'; node.id = 'fnode-' + i; node.textContent = name; flowStepsEl.appendChild(node);
+  });
+
+  function runFlow() {
+    flowStep++;
+    if (flowStep >= FLOW_NODES.length) { flowNextBtn.disabled = true; flowDescEl.innerHTML = '<strong>✓ Flow complete.</strong> Click Reset to start over.'; return; }
+    flowResetBtn.disabled = false;
+    for (let i = 0; i < flowStep; i++) { document.getElementById('fnode-' + i).classList.remove('active'); document.getElementById('fnode-' + i).classList.add('done'); }
+    document.getElementById('fnode-' + flowStep).classList.add('active');
+    document.getElementById('fnode-' + flowStep).scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    flowDescEl.innerHTML = FLOW_DESCS[flowStep];
+    flowCounter.textContent = `Step ${flowStep + 1} of ${FLOW_NODES.length}`;
+    if (flowStep === FLOW_NODES.length - 1) flowNextBtn.textContent = 'Finish ✓';
+  }
+
+  function resetFlow() {
+    flowStep = -1;
+    FLOW_NODES.forEach((_, i) => { const el = document.getElementById('fnode-' + i); el.classList.remove('active', 'done'); });
+    flowDescEl.innerHTML = 'Click <strong>Next Step</strong> to walk through the lock acquisition flow.';
+    flowCounter.textContent = '';
+    flowNextBtn.disabled = false;
+    flowNextBtn.textContent = 'Next Step →';
+    flowResetBtn.disabled = true;
+  }
+</script>
+</body>
+</html>

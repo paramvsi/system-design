@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Latency Numbers — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 217; --accent-s: 91%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Every architectural decision — "do we need a cache?", "should this call be async?", "can we fit this in RAM?" — collapses to the same question: <span class="hl">how long does the operation actually take?</span> Engineers who can't estimate this pick the wrong tool constantly. Engineers who can know, without running a benchmark, that reading 1MB from disk will dominate a request and therefore must go through cache.</p>
+      <p>The numbers below are Jeff Dean's famous list, updated for 2025 hardware. Memorize the orders of magnitude.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The ladder — 9 orders of magnitude</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Operation</th><th>Time</th><th>Relative</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">L1 cache reference</td><td>0.5 ns</td><td>1×</td></tr>
+        <tr><td class="algo-name">Branch mispredict</td><td>5 ns</td><td>10×</td></tr>
+        <tr><td class="algo-name">L2 cache reference</td><td>7 ns</td><td>14×</td></tr>
+        <tr><td class="algo-name">Mutex lock/unlock</td><td>25 ns</td><td>50×</td></tr>
+        <tr><td class="algo-name">Main memory reference</td><td>100 ns</td><td>200×</td></tr>
+        <tr><td class="algo-name">Compress 1 KB with Snappy</td><td>2 μs</td><td>4 000×</td></tr>
+        <tr><td class="algo-name">Send 1 KB over 1 Gbps network</td><td>10 μs</td><td>20 000×</td></tr>
+        <tr><td class="algo-name">Read 1 MB sequentially from memory</td><td>100 μs</td><td>200 000×</td></tr>
+        <tr><td class="algo-name">SSD random read (NVMe)</td><td>16 μs</td><td>32 000×</td></tr>
+        <tr><td class="algo-name">Read 1 MB sequentially from SSD</td><td>1 ms</td><td>2 000 000×</td></tr>
+        <tr><td class="algo-name">Round-trip within datacenter</td><td>500 μs</td><td>1 000 000×</td></tr>
+        <tr><td class="algo-name">Round-trip CA → Netherlands</td><td>150 ms</td><td>300 000 000×</td></tr>
+        <tr><td class="algo-name">Disk seek (spinning, rare now)</td><td>10 ms</td><td>20 000 000×</td></tr>
+        <tr><td class="algo-name">Read 1 MB sequentially from disk</td><td>20 ms</td><td>40 000 000×</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Scaled to human time</h2></div>
+    <div class="prose">
+      <p>If an L1 access took 1 second:</p>
+      <ul>
+        <li>L2 cache: <strong>14 seconds</strong></li>
+        <li>RAM: <strong>3.3 minutes</strong></li>
+        <li>SSD random read: <strong>9 hours</strong></li>
+        <li>SSD sequential 1MB: <strong>23 days</strong></li>
+        <li>DC round-trip: <strong>11.5 days</strong></li>
+        <li>Disk seek: <strong>~7.6 months</strong></li>
+        <li>CA → Netherlands round-trip: <strong>~9.5 years</strong></li>
+      </ul>
+      <p>This is why reading from disk to serve a user request is insane when the data could be in RAM. It's also why a cross-ocean call must never happen synchronously in a hot path.</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Deep dive — what this means in practice</h2></div>
+    <div class="prose">
+      <p><strong>Why caches exist.</strong> RAM is ~200× faster than SSD. A 1ms DB query becomes a 5μs Redis hit. On a page that makes 20 backend calls, that's 20ms vs 100μs — the difference between "snappy" and "laggy."</p>
+      <p><strong>Why CDNs exist.</strong> A round-trip from Singapore to Virginia is ~180ms. You cannot beat this with code. The only answer is to move the data closer — <a href="/concepts/cdn">CDN edges</a> cut this to ~20ms.</p>
+      <p><strong>Why asynchronous processing exists.</strong> A single synchronous cross-datacenter call per request limits you to ~6–7 RPS per thread. An async architecture (queue + workers) decouples request latency from processing latency — the user gets a fast ACK, work happens in the background.</p>
+      <p><strong>Why compression is cheap.</strong> Snappy compresses 1KB in 2μs. Sending it over a 1 Gbps link takes 10μs, but sending 400 bytes (gzipped) takes 4μs. Net win: 4μs total instead of 10μs. For anything crossing the network, compress.</p>
+      <p><strong>Why sequential beats random.</strong> 1MB sequential SSD read = 1ms. 1MB of random 4KB reads = 256 × 16μs = 4ms. 4× slower. This is why B-tree indexes (sequential) outperform pointer-chasing (random) even when the total bytes read are equal.</p>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Budget per user request</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">200 ms</div><h4>Total request budget</h4><p>Typical SLO for an interactive API endpoint. Anything over 500ms feels slow to a human.</p></div>
+      <div class="rw-card"><div class="rw-name">50 ms</div><h4>Database per query</h4><p>If you do 4 sequential queries, you've blown the budget. Parallelize or cache.</p></div>
+      <div class="rw-card"><div class="rw-name">10 ms</div><h4>Cache per lookup</h4><p>Can afford ~15–20 cache hits inside one request without slowing the user.</p></div>
+      <div class="rw-card"><div class="rw-name">1 ms</div><h4>In-process computation</h4><p>JSON parse, template render. If yours exceeds this, profile.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Every problem sets explicit latency targets in its requirements. These targets drive whether you need CDN, cache, in-memory indices, or async processing.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

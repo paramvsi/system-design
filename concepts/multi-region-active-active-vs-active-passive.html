@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Multi-Region — Active-Active vs Active-Passive — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 195; --accent-s: 65%; --accent-l: 42%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>One AWS region fails — your service is down for 30 minutes. Multi-region deployment fixes this, but how? You can run the second region <strong>passively</strong> (cold or warm standby that takes traffic only on disaster) or <strong>actively</strong> (both regions serve users continuously). The choice cascades through every architectural decision: replication strategy, consistency model, DNS, costs.</p>
+      <p>Active-active sounds obviously better — until you confront writes-from-two-places, conflict resolution, and 2× the infra bill. Most teams who say they want active-active actually want the easier option done well.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The four configurations</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Pattern</th><th>Both regions serving?</th><th>RTO</th><th>Cost vs single-region</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Active-cold</td><td>No · second region built on demand</td><td>4-24 hr</td><td>~5% (backup storage only)</td></tr>
+        <tr><td class="algo-name">Active-pilot</td><td>No · minimal infra warm</td><td>1-4 hr</td><td>~25%</td></tr>
+        <tr><td class="algo-name">Active-passive (warm standby)</td><td>No · full standby ready</td><td>5-30 min</td><td>~50-80%</td></tr>
+        <tr><td class="algo-name">Active-active</td><td>Yes · both serve real traffic</td><td>seconds</td><td>~100% (2× infra)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Active-passive — the easy mode</h2></div>
+    <div class="prose">
+      <p>Region A serves all traffic. Region B has identical infrastructure but no traffic — async replication keeps its data current. On disaster:</p>
+      <ol>
+        <li>Health check fails (Route 53 or external monitor).</li>
+        <li>DNS updated to point to region B (or anycast routing kicks in).</li>
+        <li>Region B's database is promoted from replica to primary.</li>
+        <li>Service comes online. RTO: 5-30 min depending on automation.</li>
+      </ol>
+      <p>Wins: <strong>no write conflicts</strong> — only one region accepts writes at a time. Standard relational databases work fine. Conceptually simple; most engineering teams can ship this.</p>
+      <p>Catches: warm standby may not actually work when needed (untested code paths). Async replication means RPO &gt; 0 — some recent writes can be lost. Failback (returning to A after recovery) is operationally tricky.</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Active-active — the hard mode</h2></div>
+    <div class="prose">
+      <p>Both regions serve. Users in EU hit EU region; users in US hit US region. Lower latency for everyone. Region failure is invisible to most users.</p>
+      <p>The hard part: <strong>writes happen in both regions simultaneously</strong>. Conflict resolution becomes mandatory. Three approaches:</p>
+      <ul>
+        <li><strong>Sharded by user/region</strong> — user "always lives" in one region. Writes for user X always go to that region. Other region holds a replica for reads. Reduces conflicts to near-zero. Practical default.</li>
+        <li><strong>CRDTs / multi-master with merge</strong> — accept that conflicts happen, design data types that merge automatically. <a href="/concepts/vector-clocks-lww">Vector clocks</a> + LWW or richer CRDTs. Works for some data shapes (counters, sets); not for ordered transactions.</li>
+        <li><strong>Sync cross-region writes</strong> — every write coordinates across regions before commit. <a href="/concepts/consensus-paxos-raft">Paxos</a>/Raft across regions. Spanner does this. Latency cost: 100-200ms per write.</li>
+      </ul>
+      <p>Picking depends on workload. Banking can't tolerate conflict resolution → sync sharded by account. Social networks can → user-level sharding with CRDT counters for likes. Cassandra-backed services use LWW + accept some lost writes.</p>
+
+      <div class="diagram-wrap">
+        <div class="diagram-head">
+          <span class="diagram-label">User Sharding for Active-Active</span>
+          <span class="diagram-type">Mermaid</span>
+        </div>
+        <div class="diagram-body">
+          <div class="mermaid">
+flowchart LR
+    EU_user[User in EU] -->|writes| EU_region[(EU region<br/>primary for EU users)]
+    US_user[User in US] -->|writes| US_region[(US region<br/>primary for US users)]
+    EU_region -.async replication.-> US_region
+    US_region -.async replication.-> EU_region
+    EU_user -.reads (own data, local).-> EU_region
+    US_user -.cross-region reads only when needed.-> EU_region
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">When each pattern wins</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Active-passive</strong> for: most B2B SaaS, internal tools, anything where 15 min downtime is OK if rare. Lower complexity, lower cost.</li>
+        <li><strong>Active-active sharded</strong> for: global consumer apps with locality (Slack workspaces, Dropbox accounts, Notion teams). Mostly each user lives in one region.</li>
+        <li><strong>Active-active CRDT</strong> for: counters, dashboards, soft state. Eventual consistency tolerated.</li>
+        <li><strong>Active-active synchronous</strong> for: financial systems where consistency &gt; availability. Pay the latency.</li>
+      </ul>
+      <div class="callout callout-warn">
+        <div class="callout-label">Common mistake</div>
+        <p>Picking active-active for the marketing reasons ("we never go down") without designing for write conflicts. Result: silent data corruption that takes months to discover. Default to active-passive unless you have a real conflict-handling story.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Stripe</div><h4>Active-active sharded by merchant</h4><p>Each merchant lives in one region. Cross-region failover for that merchant only happens on disaster. Writes never conflict in normal operation.</p></div>
+      <div class="rw-card"><div class="rw-name">Slack</div><h4>Active-active sharded by workspace</h4><p>Workspaces pinned to regions. Compliance-sensitive workspaces (EU) must stay in EU. Failover is workspace-level.</p></div>
+      <div class="rw-card"><div class="rw-name">DynamoDB Global Tables</div><h4>Multi-region active-active CRDT</h4><p>LWW conflict resolution baked in. Writes sub-second across regions. Suitable for soft state; not for invariants.</p></div>
+      <div class="rw-card"><div class="rw-name">Spanner</div><h4>Active-active synchronous</h4><p>Paxos across regions for every write. Strict consistency, ~100-200ms write latency. Payment-network grade.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>WhatsApp uses active-active sharded by user_id. News feed uses active-active for reads, primary-region for writes. Payment gateway runs active-active synchronous for the ledger. E-commerce typically warm-passive — failover acceptable if rare.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

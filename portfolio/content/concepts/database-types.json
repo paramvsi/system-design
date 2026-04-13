@@ -1,0 +1,59 @@
+{
+  "slug": "database-types",
+  "title": "Database Types",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 230,
+    "s": 55,
+    "l": 50
+  },
+  "category": "Databases",
+  "blurb": "\"We'll use a database\" is not an architecture decision — it's punting. Every system design interview eventually asks: Postgres or Cassandra? Redis or DynamoDB? Mongo or Elasticsearch? The answer is never \"it depends\" alo",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>\"We'll use a database\" is not an architecture decision — it's punting. Every system design interview eventually asks: <strong>Postgres or Cassandra?</strong> <strong>Redis or DynamoDB?</strong> <strong>Mongo or Elasticsearch?</strong> The answer is never \"it depends\" alone — it's \"this workload needs X because Y.\"</p>\n      <p>This page is the decision matrix. Learn the shape of each, the failure modes of each, and which <em>real</em> workloads fit each.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "The seven families",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The seven families</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Family</th><th>Exemplars</th><th>Best for</th><th>Hard no</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Relational (SQL)</td><td>Postgres, MySQL, CockroachDB</td><td>Transactions, complex queries, strong consistency</td><td>Huge write throughput on one table without sharding</td></tr>\n        <tr><td class=\"algo-name\">Key-value</td><td>Redis, Memcached, DynamoDB</td><td>Caches, sessions, hot lookups by single key</td><td>Any query that's not by key</td></tr>\n        <tr><td class=\"algo-name\">Document</td><td>MongoDB, Couchbase, DynamoDB</td><td>Flexible schema, nested objects, per-object CRUD</td><td>Heavy relational queries, multi-doc ACID</td></tr>\n        <tr><td class=\"algo-name\">Wide-column</td><td>Cassandra, HBase, ScyllaDB</td><td>Time-series, massive writes, known access patterns</td><td>Ad-hoc queries, joins, strong consistency</td></tr>\n        <tr><td class=\"algo-name\">Graph</td><td>Neo4j, JanusGraph, Amazon Neptune</td><td>Relationship-heavy data (social graph, fraud detection)</td><td>Simple CRUD, huge scale</td></tr>\n        <tr><td class=\"algo-name\">Search (inverted index)</td><td>Elasticsearch, OpenSearch, Solr</td><td>Full-text search, faceting, relevance ranking</td><td>Source-of-truth storage (use as secondary only)</td></tr>\n        <tr><td class=\"algo-name\">Time-series</td><td>InfluxDB, TimescaleDB, Prometheus</td><td>Metrics, monitoring, IoT telemetry</td><td>Transactional workloads, low cardinality</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "variants",
+      "label": "The ten databases you must know",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">The ten databases you must know</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">PostgreSQL</div><h4>Relational — the default</h4><p>ACID, mature, JSON support, full-text search built in, extensions for everything. Scale limit ≈ single-box writes (~10k–50k/sec). Shard or switch when you outgrow.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">MySQL</div><h4>Relational — operational simplicity</h4><p>Simpler than Postgres, slightly less featureful. Huge operator knowledge. Vitess shards it at YouTube scale.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Redis</div><h4>In-memory KV + data structures</h4><p>0.5ms reads, 1M ops/sec per node. Sessions, caches, leaderboards (sorted sets), pub/sub, rate limiting. Data in RAM — expensive for huge datasets.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Memcached</div><h4>Pure KV cache</h4><p>No persistence, no data structures, no replication. Just a cache. Sub-millisecond. Still relevant when you need simplicity.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">DynamoDB</div><h4>Managed KV/document, any scale</h4><p>Single-digit ms at any throughput. Primary/sort keys drive data model. Expensive at large scale but zero ops.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Cassandra</div><h4>Wide-column, write-heavy</h4><p>Leaderless, linearly scalable writes. Discord, Netflix, Instagram. Eventual consistency by default. Hard to operate well.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">MongoDB</div><h4>Document, flexible schema</h4><p>BSON documents, rich query language, secondary indexes. Sharded clusters. ACID on single doc; multi-doc since 4.0 (slower).</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Elasticsearch</div><h4>Inverted index, search</h4><p>Full-text + structured filtering + aggregations. NOT your source of truth — use alongside Postgres.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Neo4j</div><h4>Graph — relationship-first</h4><p>Traversals over millions of edges in milliseconds. Fraud detection, recommendation, social networks. Not a general-purpose DB.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Kafka</div><h4>Distributed log</h4><p>Technically not a DB — but often used as the system of record. Event sourcing, audit logs, stream processing. Retention from hours to years.</p></div>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "The decision tree",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">The decision tree</h2></div>\n    <div class=\"prose\">\n      <ol>\n        <li><strong>Do you need ACID transactions across multiple rows?</strong> → Postgres/MySQL. Nothing else does this well.</li>\n        <li><strong>Do you need single-key lookups in &lt; 1ms?</strong> → Redis (in-memory) or DynamoDB (managed).</li>\n        <li><strong>Do you need &gt; 100k writes/sec on one logical dataset?</strong> → Cassandra or DynamoDB. Avoid SQL sharding unless the team has scar tissue.</li>\n        <li><strong>Do you need full-text search with relevance scoring?</strong> → Elasticsearch. Alongside, never instead of, a source-of-truth DB.</li>\n        <li><strong>Is your data graph-shaped (traversals &gt; joins)?</strong> → Neo4j or a graph extension.</li>\n        <li><strong>Is your data timestamped metrics?</strong> → Prometheus (metrics) or TimescaleDB (analytics).</li>\n        <li><strong>Default for greenfield apps?</strong> → <span class=\"hl-green\">Postgres</span>. Can handle most workloads up to mid-scale and the migration path is well-trodden.</li>\n      </ol>\n    \n      <div class=\"code-caption\" data-code-snippet=\"1\">LSM-tree sketch (memtable + SSTables)</div>\n      <pre><code class=\"lang-python\"># LSM = Log-Structured Merge tree. Writes: append to memtable + WAL.\n# Reads: check memtable → bloom filters → SSTables from newest to oldest.\n\nclass LSM:\n    def __init__(self, memtable_limit=10**6):\n        self.memtable = {}  # sorted map (in-mem B-tree in real engines)\n        self.wal = WAL(\"lsm.wal\")\n        self.sstables = []  # list of on-disk immutable files, newest first\n\n    def put(self, k, v):\n        self.wal.append((k, v))\n        self.memtable[k] = v\n        if len(self.memtable) &gt;= 10**6:\n            self._flush()\n\n    def _flush(self):\n        sst = SSTable.from_dict(self.memtable)\n        self.sstables.insert(0, sst)\n        self.memtable = {}\n        self.wal.rotate()\n\n    def get(self, k):\n        if k in self.memtable: return self.memtable[k]\n        for sst in self.sstables:\n            if k in sst.bloom:  # cheap probabilistic check\n                v = sst.get(k)\n                if v is not None: return v\n        return None\n\n# Compaction merges older SSTables; Cassandra, RocksDB, LevelDB all do this.</code></pre>\n  </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — polyglot persistence, the reality",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — polyglot persistence, the reality</h2></div>\n    <div class=\"prose\">\n      <p>At scale, you don't pick one DB. You pick many. A realistic stack for a consumer social app:</p>\n      <ul>\n        <li><strong>Postgres</strong> — users, payments, account settings (relational + ACID)</li>\n        <li><strong>Cassandra</strong> — feed posts, activity events (write volume + eventual OK)</li>\n        <li><strong>Redis</strong> — session tokens, feed caches, rate limiters (sub-ms reads)</li>\n        <li><strong>Elasticsearch</strong> — search (posts, users, hashtags)</li>\n        <li><strong>S3</strong> — media (images, video) with CDN in front</li>\n        <li><strong>Kafka</strong> — event bus between all of the above</li>\n      </ul>\n      <p>Each has one job it does 10× better than the alternatives. Trying to force Postgres to do search, or Elasticsearch to hold the ledger, loses ~90% of the specialized DB's value.</p>\n      <div class=\"callout\">\n        <div class=\"callout-label\">Operational reality</div>\n        <p>Running 6 databases means 6 on-call rotations, 6 failure modes, 6 backup strategies. Polyglot isn't free. Most companies pick 2–3 (Postgres + Redis + one of {Cassandra, Elasticsearch, Kafka}) and push each hard.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Every problem in this portfolio picks 2–5 DBs. The decision table in §4 is the framework; the specific choices are justified on each problem page.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 4
+}

@@ -1,0 +1,50 @@
+{
+  "slug": "messaging",
+  "cluster": "Messaging & Async",
+  "blurb": "Queues, pub/sub, Kafka, delivery guarantees, idempotency.",
+  "accent": { "h": 255, "s": 55, "l": 50 },
+  "questions": [
+    {
+      "q": "At-least-once delivery. Why must consumers be idempotent?",
+      "choices": ["For performance", "A message may be delivered multiple times (on retry / rebalance)", "For ordering", "For durability"],
+      "correct": 1,
+      "explanation": "At-least-once: producer retries on timeout; consumer may crash after processing but before ack. Either re-delivers. Consumer must tolerate duplicates — typically via dedup keys or idempotent operations."
+    },
+    {
+      "q": "Kafka consumer group: 12 partitions, 4 consumers. How many partitions per consumer?",
+      "choices": ["1", "3", "4", "12"],
+      "correct": 1,
+      "explanation": "Kafka assigns N partitions / M consumers = 3. Key: a partition goes to AT MOST one consumer per group. Scaling beyond partition count means idle consumers — increase partitions first."
+    },
+    {
+      "q": "Outbox pattern solves what problem?",
+      "choices": ["Queue size", "Writing to DB + publishing a message atomically", "Consumer lag", "Producer throughput"],
+      "correct": 1,
+      "explanation": "Dual-write: without outbox, writing to DB + Kafka can partially succeed. Outbox: write the message to an outbox table in the same DB transaction; a separate process publishes from outbox. Atomicity preserved."
+    },
+    {
+      "q": "Exactly-once semantics in Kafka. Which combo enables it?",
+      "choices": ["Idempotent producer alone", "Idempotent producer + transactions + read_committed consumer", "Standard producer + auto-commit", "Not possible"],
+      "correct": 1,
+      "explanation": "Kafka transactions (0.11+) + idempotent producer (dedup on retry) + transactional-aware consumer (read_committed) provide exactly-once for Kafka-to-Kafka pipelines. Across-system still needs app-level idempotency."
+    },
+    {
+      "q": "Pub/sub vs queue semantics. If 3 subscribers follow topic X, how many see each published message?",
+      "choices": ["1", "3 (all)", "Random 1 of 3", "Depends on partitions"],
+      "correct": 1,
+      "explanation": "Pub/sub (fan-out): each subscriber gets every message. Queue (load-balanced): only one consumer per message. Kafka is effectively pub/sub (each consumer group is a separate topic tap)."
+    },
+    {
+      "q": "Dead-letter queue (DLQ): what triggers moving a message to DLQ?",
+      "choices": ["After fixed TTL", "After N processing retries fail", "On producer crash", "On consumer lag"],
+      "correct": 1,
+      "explanation": "Message failed N (e.g., 5) consecutive times → move to DLQ for manual inspection. Without DLQ, a poison message loops forever and blocks the partition."
+    },
+    {
+      "q": "What's the MAIN reason to partition a Kafka topic by entity_id?",
+      "choices": ["Storage efficiency", "Preserve per-entity message ordering + parallelism across entities", "Less network I/O", "Smaller broker memory"],
+      "correct": 1,
+      "explanation": "Same entity_id → same partition → same consumer thread → processed in order. Different entities → different partitions → parallel. Round-robin partitioning loses ordering."
+    }
+  ]
+}

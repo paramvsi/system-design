@@ -1,0 +1,65 @@
+{
+  "slug": "api-versioning",
+  "title": "API Versioning",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 215,
+    "s": 70,
+    "l": 50
+  },
+  "category": "Networking & Delivery",
+  "blurb": "You ship v1 of your API. Customers integrate. Six months later, you need to rename a field, change a response shape, drop a deprecated endpoint. Every existing customer integration will break. They didn't sign up for a m",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>You ship v1 of your API. Customers integrate. Six months later, you need to rename a field, change a response shape, drop a deprecated endpoint. <span class=\"hl-red\">Every existing customer integration will break</span>. They didn't sign up for a maintenance project on your schedule.</p>\n      <p>API versioning is the discipline of evolving your API without breaking existing consumers. Get the strategy right and you can ship breaking changes for years; get it wrong and you create permanent technical debt with thousands of integrations frozen on v1.</p>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Where the version lives",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Where the version lives</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Strategy</th><th>Example</th><th>Pros</th><th>Cons</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">URL path</td><td><code>/v1/users</code> vs <code>/v2/users</code></td><td>Visible, cacheable, easy to test in browser</td><td>Couples version to URL — REST purists hate it</td></tr>\n        <tr><td class=\"algo-name\">Subdomain</td><td><code>v2.api.example.com</code></td><td>Different infra per version, easy traffic split</td><td>CORS pain, infra duplication</td></tr>\n        <tr><td class=\"algo-name\">Header</td><td><code>Accept: application/vnd.api+json;version=2</code></td><td>\"Cleanest\" REST</td><td>Invisible, hard to debug, breaks browser testing</td></tr>\n        <tr><td class=\"algo-name\">Query param</td><td><code>?api_version=2</code></td><td>Easy to test</td><td>Confused with business params</td></tr>\n        <tr><td class=\"algo-name\">Date-based</td><td>Header <code>Stripe-Version: 2023-10-16</code></td><td>Tiny granular versions; per-account pinning</td><td>Server must maintain N versions; complex internally</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "The Stripe model — date-based versioning",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">The Stripe model — date-based versioning</h2></div>\n    <div class=\"prose\">\n      <p>Stripe's approach is the gold standard for high-stakes APIs:</p>\n      <ul>\n        <li>Every breaking change creates a new version dated to that release (e.g. <code>2023-10-16</code>).</li>\n        <li>Each customer is <strong>pinned</strong> to whatever version their account was created at.</li>\n        <li>API requests can override via <code>Stripe-Version</code> header.</li>\n        <li>Stripe maintains all versions <em>simultaneously</em> — they have versions from 2011 still working.</li>\n        <li>Old versions implemented as transformation layers on top of the current internal model. New version is the default; older versions translate request/response on the wire.</li>\n      </ul>\n      <p>Result: Stripe can ship breaking changes weekly. Old integrations work forever. Customers upgrade explicitly when they want new features. Cost: significant engineering complexity to keep N versions running.</p>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "Pragmatic guidelines",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Pragmatic guidelines</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>Prefer additive changes.</strong> Add fields, never remove. Add endpoints, don't repurpose existing. Old clients ignore new fields → no breakage. Most \"breaking changes\" can be reformulated as additive.</li>\n        <li><strong>Reserve major versions for true breakage.</strong> Going from v1 → v2 should be rare (years apart). Most evolution stays within a major version.</li>\n        <li><strong>Deprecate before removing.</strong> Add <code>Deprecation</code> + <code>Sunset</code> headers. Email customers. Provide a migration path. Give 6-12 months minimum.</li>\n        <li><strong>Document on day one.</strong> OpenAPI / Swagger / API explorer. Consumers can't migrate without docs.</li>\n        <li><strong>Test old versions in CI.</strong> If v1 still ships, tests for v1 still run. Otherwise it'll silently break.</li>\n      </ul>\n      <div class=\"callout callout-warn\">\n        <div class=\"callout-label\">The temptation to avoid</div>\n        <p>\"We'll just version when needed.\" Translates to \"we'll never version, we'll just break things and email people.\" Decide on the strategy day one. Cheaper to have unused versioning than to retrofit it.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — handling deletes the additive way",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — handling deletes the additive way</h2></div>\n    <div class=\"prose\">\n      <p>You want to remove the <code>nickname</code> field from <code>/users</code>. Removing it would break old clients. Additive solution:</p>\n      <ol>\n        <li>Stop populating <code>nickname</code> in new records. Field still exists in schema, returns <code>null</code> for new users.</li>\n        <li>Document the field as deprecated.</li>\n        <li>For 12 months, monitor: who is still calling expecting non-null? Email those clients.</li>\n        <li>After deprecation period: stop returning the field. Old clients see \"missing key\" — most JSON parsers handle gracefully. Hard breakers get a 12-month notice.</li>\n      </ol>\n      <p>Same for renames: add <code>display_name</code>; populate both fields; deprecate <code>nickname</code>; eventually drop it. Two writes for the deprecation period; old clients keep working; new clients use the new name.</p>\n      <p>If a real breaking change is unavoidable: bump major version. Run both. Set a sunset date for the old major. Communicate. Repeat.</p>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Stripe</div><h4>Date-based, per-account pinning</h4><p>Every breaking change = new version dated. Versions kept indefinitely. Internal transformation layers handle old contracts.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">GitHub REST API</div><h4>URL versioning + media types</h4><p><code>/v3/</code> path + <code>Accept: application/vnd.github.v3+json</code> for sub-version features. Now mostly pushing toward GraphQL.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Twilio</div><h4>URL versioning</h4><p><code>/2010-04-01/</code> in path. Each major version a new path. Maintained for years past launch.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">AWS APIs</div><h4>Date-based per service</h4><p>Each AWS service uses an internal API version date. Backwards compatibility is maintained essentially forever — APIs from 2006 still work.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>URL shortener APIs version via path (<code>/v1/shorten</code>) for clean separation. E-commerce APIs use URL + sub-versioning for minor field additions. Payment gateway uses Stripe-style date-based versioning for max compatibility. News feed mobile API versions independently from web.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

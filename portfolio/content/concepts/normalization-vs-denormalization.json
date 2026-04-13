@@ -1,0 +1,77 @@
+{
+  "slug": "normalization-vs-denormalization",
+  "title": "Normalization vs Denormalization",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 200,
+    "s": 65,
+    "l": 45
+  },
+  "category": "Databases",
+  "blurb": "Your data model has two extremes. Fully normalized: every fact lives in exactly one place, connected by foreign keys. Great for writes (update once, seen everywhere), bad for reads (join 5 tables to render one page). Ful",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>Your data model has two extremes. <strong>Fully normalized</strong>: every fact lives in exactly one place, connected by foreign keys. Great for writes (update once, seen everywhere), bad for reads (join 5 tables to render one page). <strong>Fully denormalized</strong>: each row has everything needed to render a view. Great for reads (single fetch), bad for writes (update in 50 places when a user changes their name).</p>\n      <p>Every real system lives somewhere in between. Getting the balance right is the difference between a snappy app with cheap writes and a slow app with terrifying update cascades.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The two extremes",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The two extremes</h2></div>\n    <div class=\"tradeoff-grid\">\n      <div class=\"tradeoff-option chosen\">\n        <div class=\"tradeoff-label\">Normalized (3NF)</div>\n        <h4>Single source of truth per fact</h4>\n        <p>Tables: <code>users</code>, <code>posts</code>, <code>comments</code>, <code>users_blocked_users</code>. A post row stores <code>author_id</code> — to render it you join <code>users</code>. Change a username once, every post display updates. Writes: cheap. Reads: multi-join.</p>\n      </div>\n      <div class=\"tradeoff-option\">\n        <div class=\"tradeoff-label\">Denormalized</div>\n        <h4>Each row is a self-contained view</h4>\n        <p>Post row stores <code>author_id</code>, <code>author_name</code>, <code>author_avatar_url</code>. Render with one read. Change a username: rewrite every post that user wrote. Reads: O(1). Writes: O(posts_by_user).</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "When to denormalize",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">When to denormalize</h2></div>\n    <div class=\"prose\">\n      <ol>\n        <li><strong>Read-heavy workload.</strong> Reads outnumber writes 10:1 or more → denormalize the hot read path.</li>\n        <li><strong>Fixed access patterns.</strong> You always render \"feed post with author.\" Then store \"feed post with author\" as a single row in the read store. Don't reinvent the join on every request.</li>\n        <li><strong>Rarely-changing copied data.</strong> Username changes once a year; author_name copied to 10k post rows is fine. Don't copy data that changes every minute.</li>\n        <li><strong>Data you can't afford to join across.</strong> Across <a href=\"/concepts/sharding\">shards</a>, joins are application logic — either denormalize or fetch twice.</li>\n        <li><strong>Wide-column stores demand it.</strong> Cassandra, DynamoDB explicitly recommend denormalization — they can't join, period.</li>\n      </ol>\n    </div>\n\n    <div class=\"diagram-wrap\">\n      <div class=\"diagram-head\">\n        <span class=\"diagram-label\">Decision Flowchart — Normalize or Denormalize?</span>\n        <span class=\"diagram-type\">Mermaid</span>\n      </div>\n      <div class=\"diagram-body\">\n        <div class=\"mermaid\">\nflowchart TD\n    A[New table / new query path]\n    A --&gt; B{Read:write ratio &gt; 10:1?}\n    B --&gt;|No| N1[Stay normalized · 3NF]\n    B --&gt;|Yes| C{Source data changes &lt; 1×/day?}\n    C --&gt;|No| N2[Stay normalized · denorm too volatile]\n    C --&gt;|Yes| D{Cross-shard join needed?}\n    D --&gt;|Yes| E[Denormalize · copy fields inline]\n    D --&gt;|No| F{Latency budget &lt; 10ms?}\n    F --&gt;|Yes| E\n    F --&gt;|No| N3[Stay normalized · join is fast enough]\n\n    style E fill:#e4f5ec,stroke:#1a5c38\n    style N1 fill:#f0eeeb,stroke:#878480\n    style N2 fill:#f0eeeb,stroke:#878480\n    style N3 fill:#f0eeeb,stroke:#878480\n        </div>\n      </div>\n    </div>\n\n    <div class=\"kv-grid\">\n      <div class=\"kv-card\"><div class=\"kv-val\">10:1</div><div class=\"kv-lbl\">read:write threshold for denorm</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">&lt; 1/day</div><div class=\"kv-lbl\">source-change rate that's safe to copy</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">10 ms</div><div class=\"kv-lbl\">latency budget where join hurts</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">3×</div><div class=\"kv-lbl\">typical write amplification per copy</div></div>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "The four patterns",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">The four patterns</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Pattern</th><th>How</th><th>Example</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Copy columns</td><td>Store the foreign object's frequently-read fields inline</td><td><code>comment</code> table stores <code>author_name</code>, <code>author_avatar_url</code></td></tr>\n        <tr><td class=\"algo-name\">Pre-computed aggregate</td><td>Maintain a counter/sum/count alongside the source data</td><td><code>post.like_count</code> column updated on every like/unlike</td></tr>\n        <tr><td class=\"algo-name\">Materialized view</td><td>Second table derived from the first, refreshed async</td><td><code>trending_posts</code> table recomputed every 5 min</td></tr>\n        <tr><td class=\"algo-name\">Read-side projection (CQRS)</td><td>Separate store shaped for reads, written via events from source-of-truth store</td><td>Write to Postgres; projection writes to Elasticsearch</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "What denormalization costs",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">What denormalization costs</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>Update cascades.</strong> User changes their name → rewrite N rows. If N is big (celebrity with 10M posts), this is a background job, not a synchronous write.</li>\n        <li><strong>Potential inconsistency.</strong> Update the source, then update 10 copies. If one update fails, the system is briefly inconsistent. Idempotent retries + eventual consistency.</li>\n        <li><strong>Storage.</strong> Copying a 200-byte user record to 10M posts = 2GB of duplicate bytes. Usually fine; occasionally significant.</li>\n        <li><strong>Schema evolution.</strong> Renaming a column means rewriting the copies. Slower to change.</li>\n      </ul>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">The working rule</div>\n        <p>Start normalized (3NF). When a specific query becomes slow, denormalize <strong>that query's data</strong>, not the whole schema. Treat denormalization as an optimization, not a starting stance.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — counters, the classic denormalization",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Deep dive — counters, the classic denormalization</h2></div>\n    <div class=\"prose\">\n      <p>You want to show \"posts by this user: 42\" on their profile. Three options:</p>\n      <p><strong>Compute from source:</strong> <code>SELECT COUNT(*) FROM posts WHERE user_id = 5</code>. Always right. Costs an index scan per profile view. OK at small scale; dies at scale.</p>\n      <p><strong>Denormalized counter:</strong> <code>users.post_count</code> column, incremented on every post insert. One extra write per post, zero on read. Fast but <span class=\"hl-red\">drift-prone</span>: failed increment → counter is off forever. Crashed replica → counter is off forever. Easy to corrupt.</p>\n      <p><strong>Periodic reconciliation:</strong> keep the counter, but also run a nightly job <code>UPDATE users SET post_count = (SELECT COUNT(*)...) </code>. Counter drifts during the day; corrects at night. Best-of-both.</p>\n      <p>For financial data: never trust a denormalized counter. Reconcile from source every transaction. For social media likes: denormalized counter + occasional reconciliation is industry standard.</p>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Twitter home feed</div><h4>Fan-out on write = denormalization</h4><p>Each tweet copied into every follower's feed cache. Write amplification of 100× for normal users; 10M× for celebrities. Pure denormalization for read speed.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Amazon DynamoDB model</div><h4>Single-table design</h4><p>Pre-compute the joins. One table holds orders + line items + customer fields, accessed by a single composite key.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Elasticsearch</div><h4>Pure denormalization</h4><p>Each document fully self-contained. No joins. Excellent reads, painful writes when source objects change.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Stripe</div><h4>Normalized with materialized views</h4><p>Charges and refunds normalized in Postgres. Analytics rollups materialized in a separate store, updated by events.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "08",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">08</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>News feed denormalizes by fan-out on write. Reddit denormalizes comment counts onto posts. E-commerce denormalizes product name + price onto cart line items (price at time of purchase).</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [
+    {
+      "sectionId": "how-it-works",
+      "source": "flowchart TD\n    A[New table / new query path]\n    A --> B{Read:write ratio > 10:1?}\n    B -->|No| N1[Stay normalized · 3NF]\n    B -->|Yes| C{Source data changes < 1×/day?}\n    C -->|No| N2[Stay normalized · denorm too volatile]\n    C -->|Yes| D{Cross-shard join needed?}\n    D -->|Yes| E[Denormalize · copy fields inline]\n    D -->|No| F{Latency budget < 10ms?}\n    F -->|Yes| E\n    F -->|No| N3[Stay normalized · join is fast enough]\n\n    style E fill:#e4f5ec,stroke:#1a5c38\n    style N1 fill:#f0eeeb,stroke:#878480\n    style N2 fill:#f0eeeb,stroke:#878480\n    style N3 fill:#f0eeeb,stroke:#878480",
+      "index": 0
+    }
+  ],
+  "related": [],
+  "similar": [],
+  "readMinutes": 4
+}

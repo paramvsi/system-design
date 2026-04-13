@@ -1,0 +1,2158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Uber / Ride Sharing — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+
+    :root {
+      --accent-h:       38;
+      --accent-s:       92%;
+      --accent-l:       50%;
+      --accent:         hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light:   hsl(var(--accent-h), 80%, 94%);
+      --accent-mid:     hsl(var(--accent-h), 70%, 88%);
+      --accent-text:    hsl(var(--accent-h), var(--accent-s), 32%);
+      --accent-border:  hsl(var(--accent-h), 60%, 80%);
+
+      --hl-yellow:      #fff0a0;
+      --hl-yellow-dark: #a07a00;
+      --hl-accent:      hsl(var(--accent-h), 90%, 88%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 30%);
+
+      --bg:             #ffffff;
+      --bg-subtle:      #f7f7f5;
+      --bg-raised:      #f0eeeb;
+      --bg-code:        #f4f3f0;
+      --border:         #e4e2de;
+      --border-strong:  #ccc9c4;
+
+      --text-primary:   #111110;
+      --text-secondary: #4a4845;
+      --text-muted:     #878480;
+      --text-code:      #2d2c2b;
+
+      --font-serif:     'Instrument Serif', Georgia, serif;
+      --font-sans:      'Geist', system-ui, sans-serif;
+      --font-mono:      'JetBrains Mono', 'Fira Code', monospace;
+
+      --radius-sm:      4px;
+      --radius-md:      8px;
+      --radius-lg:      12px;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--text-primary);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      grid-template-rows: auto 1fr;
+      min-height: 100vh;
+    }
+
+    .topbar {
+      grid-column: 1 / -1;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 52px;
+      padding: 0 24px;
+      background: rgba(255,255,255,0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .topbar-left a {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .topbar-left a:hover { color: var(--accent); }
+
+    .topbar-sep { color: var(--border-strong); user-select: none; }
+
+    .topbar-problem { color: var(--accent-text); font-weight: 500; }
+
+    .topbar-right { display: flex; align-items: center; gap: 16px; }
+
+    .topbar-tag {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      background: var(--accent-light);
+      color: var(--accent-text);
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 52px;
+      height: calc(100vh - 52px);
+      overflow-y: auto;
+      padding: 28px 16px 40px;
+      border-right: 1px solid var(--border);
+      background: var(--bg-subtle);
+    }
+
+    .sidebar::-webkit-scrollbar { width: 3px; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+
+    .sidebar-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .sidebar-nav { list-style: none; margin-bottom: 32px; }
+    .sidebar-nav li { margin-bottom: 2px; }
+
+    .sidebar-nav a {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 14.5px;
+      font-weight: 400;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: all 0.15s ease;
+      position: relative;
+    }
+
+    .sidebar-nav a::before {
+      content: '';
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--border-strong);
+      flex-shrink: 0;
+      transition: all 0.2s ease;
+    }
+
+    .sidebar-nav a:hover {
+      background: var(--bg-raised);
+      color: var(--text-primary);
+    }
+
+    .sidebar-nav a.active {
+      background: var(--accent-light);
+      color: var(--accent-text);
+      font-weight: 500;
+    }
+
+    .sidebar-nav a.active::before {
+      background: var(--accent);
+      width: 6px;
+      height: 6px;
+    }
+
+    .sidebar-related { list-style: none; margin-top: 8px; }
+    .sidebar-related li { margin-bottom: 4px; }
+
+    .sidebar-related a {
+      font-size: 14.5px;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .sidebar-related a:hover { color: var(--accent); }
+
+    .main {
+      padding: 0 48px 120px;
+      max-width: 880px;
+      min-width: 0;
+    }
+
+    .hero {
+      padding: 56px 0 40px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 48px;
+    }
+
+    .hero-number {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+
+    .hero h1 {
+      font-family: var(--font-serif);
+      font-size: 48px;
+      font-weight: 400;
+      line-height: 1.1;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+      letter-spacing: -0.02em;
+    }
+
+    .hero-desc {
+      font-size: 17px;
+      line-height: 1.65;
+      color: var(--text-secondary);
+      max-width: 620px;
+      margin-bottom: 20px;
+    }
+
+    .hero-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .hero-tag {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 400;
+      letter-spacing: 0.04em;
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-raised);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+
+    .section {
+      margin-bottom: 56px;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeUp 0.5s ease forwards;
+    }
+
+    .section:nth-child(1)  { animation-delay: 0.05s; }
+    .section:nth-child(2)  { animation-delay: 0.08s; }
+    .section:nth-child(3)  { animation-delay: 0.11s; }
+    .section:nth-child(4)  { animation-delay: 0.14s; }
+    .section:nth-child(5)  { animation-delay: 0.17s; }
+    .section:nth-child(6)  { animation-delay: 0.20s; }
+    .section:nth-child(7)  { animation-delay: 0.23s; }
+    .section:nth-child(8)  { animation-delay: 0.26s; }
+    .section:nth-child(9)  { animation-delay: 0.29s; }
+    .section:nth-child(10) { animation-delay: 0.32s; }
+    .section:nth-child(11) { animation-delay: 0.35s; }
+    .section:nth-child(12) { animation-delay: 0.38s; }
+    .section:nth-child(13) { animation-delay: 0.41s; }
+    .section:nth-child(14) { animation-delay: 0.44s; }
+    .section:nth-child(15) { animation-delay: 0.47s; }
+
+    @keyframes fadeUp {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .section-number {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+
+    .section h2 {
+      font-family: var(--font-serif);
+      font-size: 30px;
+      font-weight: 400;
+      color: var(--text-primary);
+      margin-bottom: 20px;
+      letter-spacing: -0.01em;
+    }
+
+    .section h3 {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin: 28px 0 10px;
+    }
+
+    .section p {
+      color: var(--text-secondary);
+      margin-bottom: 14px;
+      max-width: 700px;
+    }
+
+    .section ul, .section ol {
+      padding-left: 20px;
+      margin-bottom: 16px;
+      color: var(--text-secondary);
+    }
+
+    .section li { margin-bottom: 6px; }
+
+    .hl {
+      background: var(--hl-yellow);
+      color: var(--hl-yellow-dark);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+
+    .hl-accent {
+      background: var(--hl-accent);
+      color: var(--hl-accent-dark);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+
+    .hl-red {
+      background: hsl(0, 85%, 93%);
+      color: hsl(0, 70%, 35%);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+
+    .hl-green {
+      background: hsl(145, 60%, 90%);
+      color: hsl(145, 55%, 28%);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+
+    .card {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+
+    .card-accent {
+      background: var(--accent-light);
+      border-color: var(--accent-border);
+    }
+
+    .card h4 {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+
+    .card p {
+      font-size: 16px;
+      color: var(--text-secondary);
+      margin-bottom: 0;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .code-block {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: var(--font-mono);
+      font-size: 14.5px;
+      font-weight: 400;
+      color: var(--text-code);
+      line-height: 1.7;
+    }
+
+    .code-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .inline-code {
+      font-family: var(--font-mono);
+      font-size: 15px;
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      padding: 1px 6px;
+      border-radius: var(--radius-sm);
+      color: var(--text-code);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin-bottom: 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+    }
+
+    .table-wrap table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 15.5px;
+    }
+
+    .table-wrap th {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      text-align: left;
+      padding: 10px 16px;
+      background: var(--bg-subtle);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .table-wrap td {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+
+    .table-wrap tr:last-child td { border-bottom: none; }
+
+    .scale-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .scale-card {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      text-align: center;
+    }
+
+    .scale-card .number {
+      font-family: var(--font-mono);
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--accent-text);
+      margin-bottom: 2px;
+    }
+
+    .scale-card .label {
+      font-size: 13.5px;
+      color: var(--text-muted);
+    }
+
+    .arch-diagram {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+    }
+
+    .arch-diagram svg { display: block; margin: 0 auto; }
+
+    .arch-diagram .node { cursor: pointer; transition: filter 0.2s; }
+    .arch-diagram .node:hover { filter: brightness(0.95); }
+
+    .arch-diagram .node rect, .arch-diagram .node-rect { rx: 8; ry: 8; stroke-width: 1.5; }
+
+    .arch-diagram .node-label {
+      font-family: 'Geist', system-ui, sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      fill: var(--text-primary);
+      text-anchor: middle;
+      dominant-baseline: central;
+      pointer-events: none;
+    }
+
+    .arch-diagram .node-sublabel {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 8.5px;
+      fill: var(--text-muted);
+      text-anchor: middle;
+      dominant-baseline: central;
+      pointer-events: none;
+    }
+
+    .arch-diagram .edge {
+      stroke: var(--border-strong);
+      stroke-width: 1.5;
+      fill: none;
+      marker-end: url(#arrowhead);
+    }
+
+    .arch-diagram .edge-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 8px;
+      fill: var(--text-muted);
+      text-anchor: middle;
+    }
+
+    .node-highlight rect { stroke: var(--accent) !important; stroke-width: 2.5 !important; }
+    .node-highlight .node-label { fill: var(--accent-text) !important; }
+
+    .flow-stepper {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .flow-stepper-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .flow-stepper-title {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .flow-stepper-controls { display: flex; gap: 8px; }
+
+    .flow-btn {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 5px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .flow-btn:hover {
+      background: var(--accent-light);
+      border-color: var(--accent-border);
+      color: var(--accent-text);
+    }
+
+    .flow-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .flow-btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+    .flow-btn-primary:hover { opacity: 0.9; background: var(--accent); color: white; }
+
+    .flow-steps {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      margin-bottom: 16px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .flow-node {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      white-space: nowrap;
+      transition: all 0.3s ease;
+    }
+
+    .flow-node.active {
+      background: var(--accent-light);
+      border-color: var(--accent);
+      color: var(--accent-text);
+      box-shadow: 0 0 0 3px var(--accent-mid);
+    }
+
+    .flow-node.done {
+      background: var(--accent-light);
+      border-color: var(--accent-border);
+      color: var(--accent-text);
+    }
+
+    .flow-arrow { color: var(--border-strong); font-size: 16px; flex-shrink: 0; }
+
+    .flow-desc {
+      font-size: 16px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      padding: 14px 16px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      min-height: 52px;
+    }
+
+    .flow-counter {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 10px;
+      text-align: right;
+    }
+
+    .mermaid-wrap {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+    }
+
+    .mermaid { text-align: center; }
+
+    .tradeoff {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .tradeoff-option {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+    }
+
+    .tradeoff-option.chosen {
+      border-color: var(--accent-border);
+      background: var(--accent-light);
+    }
+
+    .tradeoff-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .tradeoff-label.yes { color: hsl(145, 55%, 32%); }
+    .tradeoff-label.no  { color: var(--text-muted); }
+
+    .tradeoff-option h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+
+    .tradeoff-option p {
+      font-size: 15px;
+      color: var(--text-secondary);
+      margin-bottom: 0;
+    }
+
+    .callout {
+      border-left: 3px solid var(--accent);
+      padding: 14px 18px;
+      background: var(--accent-light);
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+      margin-bottom: 16px;
+    }
+
+    .callout p {
+      font-size: 16px;
+      color: var(--accent-text);
+      margin-bottom: 0;
+    }
+
+    .callout-warn {
+      border-left-color: hsl(38, 92%, 50%);
+      background: hsl(38, 80%, 94%);
+    }
+    .callout-warn p { color: hsl(38, 70%, 28%); }
+
+    .callout-danger {
+      border-left-color: hsl(0, 72%, 52%);
+      background: hsl(0, 80%, 95%);
+    }
+    .callout-danger p { color: hsl(0, 65%, 32%); }
+
+    .tip-card {
+      display: flex;
+      gap: 14px;
+      padding: 16px 20px;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      margin-bottom: 10px;
+    }
+
+    .tip-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+
+    .tip-content {
+      font-size: 16px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    .tip-content strong { color: var(--text-primary); font-weight: 600; }
+
+    .similar-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .similar-card {
+      display: block;
+      text-decoration: none;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 18px 20px;
+      transition: all 0.2s ease;
+    }
+
+    .similar-card:hover {
+      border-color: var(--accent-border);
+      background: var(--accent-light);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    }
+
+    .similar-card h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .similar-card p {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      margin-bottom: 0;
+    }
+
+    .evolution-step {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+      position: relative;
+    }
+
+    .evolution-step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      left: 15px;
+      top: 36px;
+      bottom: -20px;
+      width: 2px;
+      background: var(--border);
+    }
+
+    .evolution-marker {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--accent-light);
+      border: 2px solid var(--accent-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--accent-text);
+      flex-shrink: 0;
+    }
+
+    .evolution-content h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .evolution-content p {
+      font-size: 15.5px;
+      color: var(--text-secondary);
+      margin-bottom: 0;
+    }
+
+    /* ── Extended: Sub-section divider ── */
+    .sub-divider {
+      border: none;
+      border-top: 1px dashed var(--border);
+      margin: 32px 0;
+    }
+
+    /* ── Extended: Comparison grid (3-col) ── */
+    .compare-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .compare-card {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px 18px;
+    }
+
+    .compare-card.recommended {
+      border-color: var(--accent-border);
+      background: var(--accent-light);
+    }
+
+    .compare-card h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+
+    .compare-card p {
+      font-size: 15px;
+      color: var(--text-secondary);
+      margin-bottom: 0;
+      line-height: 1.55;
+    }
+
+    /* ── Extended: Timeline ── */
+    .spike-timeline {
+      position: relative;
+      padding-left: 28px;
+      margin-bottom: 20px;
+    }
+
+    .spike-timeline::before {
+      content: '';
+      position: absolute;
+      left: 8px;
+      top: 4px;
+      bottom: 4px;
+      width: 2px;
+      background: var(--accent-border);
+    }
+
+    .spike-event {
+      position: relative;
+      margin-bottom: 18px;
+    }
+
+    .spike-event::before {
+      content: '';
+      position: absolute;
+      left: -24px;
+      top: 7px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid var(--accent-light);
+    }
+
+    .spike-time {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--accent-text);
+      margin-bottom: 2px;
+    }
+
+    .spike-event p {
+      font-size: 15.5px;
+      color: var(--text-secondary);
+      margin: 0;
+    }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .main { padding: 0 20px 80px; }
+      .hero h1 { font-size: 34px; }
+      .tradeoff { grid-template-columns: 1fr; }
+      .card-grid { grid-template-columns: 1fr; }
+      .compare-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- ═══════════════════ TOPBAR ═══════════════════ -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <a href="../index.html">System Design</a>
+      <span class="topbar-sep">/</span>
+      <span class="topbar-problem">Uber / Ride Sharing</span>
+    </div>
+    <div class="topbar-right">
+      <span class="topbar-tag">Hard</span>
+    </div>
+  </header>
+
+  <!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-label">Sections</div>
+    <ul class="sidebar-nav" id="sidebar-nav">
+      <li><a href="#problem">Problem Statement</a></li>
+      <li><a href="#requirements">Requirements</a></li>
+      <li><a href="#scale">Scale Estimation</a></li>
+      <li><a href="#api">API Design</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#deep-dive-geo">Geospatial Indexing</a></li>
+      <li><a href="#deep-dive-matching">Matching State Machine</a></li>
+      <li><a href="#deep-dive-tracking">Real-Time Tracking</a></li>
+      <li><a href="#deep-dive-spike">Spike &amp; Surge</a></li>
+      <li><a href="#deep-dive-eta">ETA Calculation</a></li>
+      <li><a href="#tradeoffs">Tradeoffs</a></li>
+      <li><a href="#failures">Failure Scenarios</a></li>
+      <li><a href="#interview-tips">Interview Tips</a></li>
+      <li><a href="#similar">Similar Problems</a></li>
+      <li><a href="#evolution">Evolution</a></li>
+    </ul>
+
+    <div class="sidebar-label">Related</div>
+    <ul class="sidebar-related">
+      <li><a href="../whatsapp/index.html">WhatsApp (WebSockets)</a></li>
+      <li><a href="../notification-system/index.html">Notification System</a></li>
+      <li><a href="../rate-limiter/index.html">Rate Limiter</a></li>
+      <li><a href="../search-autocomplete/index.html">Search Autocomplete</a></li>
+    </ul>
+  </aside>
+
+  <!-- ═══════════════════ MAIN ═══════════════════ -->
+  <main class="main">
+
+    <!-- ── Hero ── -->
+    <div class="hero">
+      <div class="hero-number">System Design — 05</div>
+      <h1>Uber / Ride Sharing</h1>
+      <p class="hero-desc">
+        Design a real-time ride-hailing platform that matches riders with nearby drivers, tracks trips live on a map, handles geographic demand spikes, and calculates ETAs — all at city-scale.
+      </p>
+      <div class="hero-tags">
+        <span class="hero-tag">Geospatial</span>
+        <span class="hero-tag">Real-Time</span>
+        <span class="hero-tag">WebSockets</span>
+        <span class="hero-tag">State Machine</span>
+        <span class="hero-tag">Matching</span>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 01 · PROBLEM STATEMENT ═══════════════ -->
+    <div class="section" id="problem">
+      <div class="section-number">01</div>
+      <h2>Problem Statement</h2>
+      <p>
+        At its core, Uber is a <span class="hl-accent">matchmaking service with a location constraint</span>. A rider says "I need a car here," and the system finds the best available driver nearby. Everything else — surge pricing, ETAs, trip tracking — is layered on top of that core loop.
+      </p>
+      <p>
+        Think of it like a dating app, but instead of matching on interests, you're matching on <span class="hl">proximity and availability</span>, and the match has to happen in seconds, not hours.
+      </p>
+
+      <div class="callout">
+        <p><strong>Core question:</strong> How do you efficiently find the nearest available driver among millions of moving objects, match them to a rider with strong consistency guarantees, and stream real-time location updates — all in under 10 seconds?</p>
+      </div>
+
+      <div class="callout callout-warn">
+        <p><strong>Key insight:</strong> Uber is a <em>local</em> business. A rider in Dubai will never be matched with a driver in London. This means the hot path (matching) can be <span class="hl-accent">partitioned by geography</span>, which fundamentally changes how you think about scale.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 02 · REQUIREMENTS ═══════════════ -->
+    <div class="section" id="requirements">
+      <div class="section-number">02</div>
+      <h2>Requirements</h2>
+
+      <h3>Functional Requirements</h3>
+      <div class="card">
+        <ul>
+          <li><strong>Ride request:</strong> Riders specify pickup &amp; dropoff, see ETA and fare estimate</li>
+          <li><strong>Real-time matching:</strong> System matches rider with the best nearby available driver</li>
+          <li><strong>Driver location broadcast:</strong> Drivers go online/offline and continuously report GPS position</li>
+          <li><strong>Live trip tracking:</strong> Both rider and driver see each other's position on a map in real-time</li>
+          <li><strong>Trip lifecycle:</strong> REQUESTED → MATCHED → DRIVER_EN_ROUTE → PICKUP → IN_PROGRESS → COMPLETED</li>
+          <li><strong>Fare calculation:</strong> Based on distance, time, and demand (surge pricing)</li>
+        </ul>
+      </div>
+
+      <h3>Non-Functional Requirements</h3>
+      <div class="card">
+        <ul>
+          <li><strong>Low latency matching:</strong> Rider expects a driver match within <span class="hl">5–10 seconds</span></li>
+          <li><strong>High availability:</strong> If Uber goes down at 2am on New Year's Eve, it's a safety issue</li>
+          <li><strong>Real-time updates:</strong> Driver positions refresh every <span class="hl">3–4 seconds</span></li>
+          <li><strong>Strong consistency on matching:</strong> A driver must never be matched to two riders simultaneously</li>
+          <li><strong>Geographic scalability:</strong> Scale by adding cities, not by sharding within a city</li>
+        </ul>
+      </div>
+
+      <h3>Out of Scope</h3>
+      <div class="card">
+        <p>Payments processing, driver onboarding, ratings/reviews, scheduled rides. These are important but architecturally straightforward CRUD — not where the interesting design lives.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 03 · SCALE ESTIMATION ═══════════════ -->
+    <div class="section" id="scale">
+      <div class="section-number">03</div>
+      <h2>Scale Estimation</h2>
+
+      <p>The critical insight: <span class="hl">Uber scales geographically, not globally.</span> A rider in Mumbai has zero interaction with a trip in São Paulo. The real unit of scale is <strong>per-city</strong>, not global.</p>
+
+      <h3>Per City — NYC Scale (Worst Case)</h3>
+      <div class="scale-grid">
+        <div class="scale-card">
+          <div class="number">30K</div>
+          <div class="label">Concurrent Drivers</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">7,500/s</div>
+          <div class="label">Location Writes</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~25/s</div>
+          <div class="label">Ride Requests (Peak)</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">1.2 MB</div>
+          <div class="label">Geospatial Index</div>
+        </div>
+      </div>
+
+      <h3>Global Aggregate</h3>
+      <div class="scale-grid">
+        <div class="scale-card">
+          <div class="number">1M</div>
+          <div class="label">Concurrent Drivers</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">250K/s</div>
+          <div class="label">Location Writes</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~2K/s</div>
+          <div class="label">Ride Requests (Peak)</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">20M/day</div>
+          <div class="label">Rides Completed</div>
+        </div>
+      </div>
+
+      <div class="card card-accent">
+        <h4>Derivation</h4>
+        <p><strong>Location writes:</strong> 30K drivers × (1 update / 4 sec) = <span class="hl">7,500 writes/sec</span> — one Redis instance handles 100K+ ops/sec. <strong>One city fits on a single machine.</strong></p>
+        <p style="margin-top:8px"><strong>Ride requests:</strong> 500K rides/day ÷ 86,400 sec ≈ 6/sec average. Peak 4x → ~25 req/sec. A single Node.js server handles this.</p>
+        <p style="margin-top:8px"><strong>Index size:</strong> 30K drivers × 40 bytes = 1.2 MB. Fits in L2 CPU cache.</p>
+        <p style="margin-top:8px"><strong>Design implication:</strong> Matching is <span class="hl-red">not a throughput problem</span> within a city — it's a <span class="hl-green">latency and correctness problem</span>. Scale horizontally by adding cities, not by sharding within a city.</p>
+      </div>
+
+      <div class="callout">
+        <p><strong>Interview move:</strong> "The interesting challenge isn't 250K writes/sec globally — it's that per-city throughput is modest (7,500 writes/sec, 25 ride requests/sec). The real scaling challenge is operational: deploying this per-city stack across 500+ cities."</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 04 · API DESIGN ═══════════════ -->
+    <div class="section" id="api">
+      <div class="section-number">04</div>
+      <h2>API Design</h2>
+
+      <div class="code-label">Request a Ride</div>
+      <div class="code-block"><code><pre>POST /v1/rides
+{
+  "rider_id": "u_abc123",
+  "pickup":  { "lat": 40.7505, "lng": -73.9934 },
+  "dropoff": { "lat": 40.7580, "lng": -73.9855 },
+  "ride_type": "standard"
+}
+→ 201 { "ride_id": "r_xyz", "status": "REQUESTED", "fare_estimate": "$18-22", "eta_minutes": 4 }</pre></code></div>
+
+      <div class="code-label">Driver — Update Location</div>
+      <div class="code-block"><code><pre>// Via WebSocket (persistent connection)
+SEND { "type": "location_update", "lat": 40.7512, "lng": -73.9940, "heading": 45, "speed": 35 }
+← ACK { "type": "ack", "ts": 1234567890 }</pre></code></div>
+
+      <div class="code-label">Driver — Accept / Decline Offer</div>
+      <div class="code-block"><code><pre>POST /v1/rides/{ride_id}/respond
+{ "driver_id": "d_456", "action": "accept" }
+→ 200 { "status": "MATCHED", "rider": { "name": "Alice", "pickup": {...} } }
+
+// If offer expired:
+→ 409 { "error": "offer_expired", "message": "This trip is no longer available" }</pre></code></div>
+
+      <div class="code-label">Get Trip Status (Rider Polling Fallback)</div>
+      <div class="code-block"><code><pre>GET /v1/rides/{ride_id}
+→ 200 {
+  "status": "DRIVER_EN_ROUTE",
+  "driver": { "name": "Bob", "lat": 40.7510, "lng": -73.9938, "eta_minutes": 3 },
+  "fare_estimate": "$18-22"
+}</pre></code></div>
+
+      <div class="code-label">Driver — Go Online / Offline</div>
+      <div class="code-block"><code><pre>PUT /v1/drivers/{driver_id}/status
+{ "status": "AVAILABLE" }   // or "OFFLINE"
+→ 200 { "status": "AVAILABLE" }</pre></code></div>
+    </div>
+
+    <!-- ═══════════════ 05 · HIGH-LEVEL ARCHITECTURE ═══════════════ -->
+    <div class="section" id="architecture">
+      <div class="section-number">05</div>
+      <h2>High-Level Architecture</h2>
+
+      <p>The architecture splits into a <span class="hl-accent">local hot path</span> (per-city: location, matching, surge) and a <span class="hl-accent">global cold path</span> (auth, payments, analytics). The hot path is completely isolated per region.</p>
+
+      <div class="arch-diagram">
+        <svg viewBox="0 0 860 520" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="#ccc9c4"/>
+            </marker>
+          </defs>
+
+          <!-- Clients -->
+          <g class="node" id="node-rider" onclick="hlNode('node-rider')">
+            <rect class="node-rect" x="10" y="100" width="100" height="56" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="60" y="123">Rider App</text>
+            <text class="node-sublabel" x="60" y="140">Mobile</text>
+          </g>
+
+          <g class="node" id="node-driver" onclick="hlNode('node-driver')">
+            <rect class="node-rect" x="10" y="280" width="100" height="56" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="60" y="303">Driver App</text>
+            <text class="node-sublabel" x="60" y="320">Mobile</text>
+          </g>
+
+          <!-- Gateway -->
+          <g class="node" id="node-gateway" onclick="hlNode('node-gateway')">
+            <rect class="node-rect" x="170" y="180" width="110" height="56" fill="hsl(38,80%,94%)" stroke="hsl(38,60%,80%)"/>
+            <text class="node-label" x="225" y="203">WS Gateway</text>
+            <text class="node-sublabel" x="225" y="220">Stateful</text>
+          </g>
+
+          <!-- API -->
+          <g class="node" id="node-api" onclick="hlNode('node-api')">
+            <rect class="node-rect" x="170" y="100" width="110" height="56" fill="hsl(38,80%,94%)" stroke="hsl(38,60%,80%)"/>
+            <text class="node-label" x="225" y="123">API Gateway</text>
+            <text class="node-sublabel" x="225" y="140">REST / LB</text>
+          </g>
+
+          <!-- Location Service -->
+          <g class="node" id="node-location" onclick="hlNode('node-location')">
+            <rect class="node-rect" x="340" y="260" width="120" height="56" fill="hsl(38,80%,94%)" stroke="hsl(38,60%,80%)"/>
+            <text class="node-label" x="400" y="283">Location Svc</text>
+            <text class="node-sublabel" x="400" y="300">Snap + Filter</text>
+          </g>
+
+          <!-- Matching Service -->
+          <g class="node" id="node-matching" onclick="hlNode('node-matching')">
+            <rect data-tooltip="Runs in 2-sec batched windows. Hungarian algorithm over (driver, ride) scores." data-concept-link="/concepts/geospatial-indexes" class="node-rect" x="340" y="100" width="120" height="56" fill="hsl(38,80%,94%)" stroke="hsl(38,60%,80%)"/>
+            <text class="node-label" x="400" y="123">Matching Svc</text>
+            <text class="node-sublabel" x="400" y="140">Dispatch</text>
+          </g>
+
+          <!-- Trip Service -->
+          <g class="node" id="node-trip" onclick="hlNode('node-trip')">
+            <rect class="node-rect" x="340" y="180" width="120" height="56" fill="hsl(38,80%,94%)" stroke="hsl(38,60%,80%)"/>
+            <text class="node-label" x="400" y="203">Trip Svc</text>
+            <text class="node-sublabel" x="400" y="220">State Machine</text>
+          </g>
+
+          <!-- Geospatial Index -->
+          <g class="node" id="node-geo" onclick="hlNode('node-geo')">
+            <rect data-tooltip="H3 hexagonal cell index. Ring queries for 'nearby drivers' — user's cell + ~18 neighbors." data-concept-link="/concepts/geospatial-indexes" class="node-rect" x="540" y="230" width="120" height="56" fill="#fff0a0" stroke="#d4b84a"/>
+            <text class="node-label" x="600" y="253">Geo Index</text>
+            <text class="node-sublabel" x="600" y="270">Redis / S2 Cells</text>
+          </g>
+
+          <!-- Redis Pub/Sub -->
+          <g class="node" id="node-pubsub" onclick="hlNode('node-pubsub')">
+            <rect class="node-rect" x="540" y="150" width="120" height="56" fill="#fff0a0" stroke="#d4b84a"/>
+            <text class="node-label" x="600" y="173">Redis Pub/Sub</text>
+            <text class="node-sublabel" x="600" y="190">Trip Channels</text>
+          </g>
+
+          <!-- Database -->
+          <g class="node" id="node-db" onclick="hlNode('node-db')">
+            <rect class="node-rect" x="540" y="70" width="120" height="56" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="600" y="93">Database</text>
+            <text class="node-sublabel" x="600" y="110">PostgreSQL</text>
+          </g>
+
+          <!-- Surge Pricing -->
+          <g class="node" id="node-surge" onclick="hlNode('node-surge')">
+            <rect class="node-rect" x="540" y="320" width="120" height="56" fill="hsl(0, 80%, 95%)" stroke="hsl(0, 60%, 80%)"/>
+            <text class="node-label" x="600" y="343">Surge Svc</text>
+            <text class="node-sublabel" x="600" y="360">Supply/Demand</text>
+          </g>
+
+          <!-- ETA Service -->
+          <g class="node" id="node-eta" onclick="hlNode('node-eta')">
+            <rect data-tooltip="GBDT ML model with features: distance, traffic, time-of-day, driver speed profile, historical." data-concept-link="/concepts/model-serving-online-vs-batch" class="node-rect" x="540" y="400" width="120" height="56" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="600" y="423">ETA Svc</text>
+            <text class="node-sublabel" x="600" y="440">Routing Engine</text>
+          </g>
+
+          <!-- Driver Status Store -->
+          <g class="node" id="node-driverstore" onclick="hlNode('node-driverstore')">
+            <rect class="node-rect" x="720" y="150" width="120" height="56" fill="#fff0a0" stroke="#d4b84a"/>
+            <text class="node-label" x="780" y="173">Driver Status</text>
+            <text class="node-sublabel" x="780" y="190">Redis CAS Lock</text>
+          </g>
+
+          <!-- Edges -->
+          <line class="edge" x1="110" y1="128" x2="170" y2="128"/>
+          <line class="edge" x1="110" y1="308" x2="170" y2="218"/>
+          <line class="edge" x1="110" y1="118" x2="170" y2="200"/>
+          <line class="edge" x1="280" y1="128" x2="340" y2="128"/>
+          <line class="edge" x1="280" y1="128" x2="340" y2="200"/>
+          <line class="edge" x1="280" y1="218" x2="340" y2="280"/>
+          <line class="edge" x1="460" y1="288" x2="540" y2="258"/>
+          <line class="edge" x1="460" y1="128" x2="540" y2="98"/>
+          <line class="edge" x1="460" y1="128" x2="540" y2="170"/>
+          <line class="edge" x1="460" y1="210" x2="540" y2="170"/>
+          <line class="edge" x1="460" y1="128" x2="540" y2="258"/>
+          <line class="edge" x1="460" y1="288" x2="540" y2="340"/>
+          <line class="edge" x1="460" y1="128" x2="540" y2="420"/>
+          <line class="edge" x1="660" y1="178" x2="720" y2="178"/>
+
+          <!-- Edge labels -->
+          <text class="edge-label" x="140" y="120">HTTPS</text>
+          <text class="edge-label" x="140" y="258">WebSocket</text>
+          <text class="edge-label" x="310" y="120">Match</text>
+          <text class="edge-label" x="310" y="270">GPS</text>
+          <text class="edge-label" x="500" y="248">S2 Cells</text>
+          <text class="edge-label" x="500" y="162">Pub/Sub</text>
+          <text class="edge-label" x="500" y="88">R/W</text>
+          <text class="edge-label" x="690" y="170">CAS</text>
+        </svg>
+      </div>
+
+      <div class="card card-accent">
+        <h4>Regional Isolation Model</h4>
+        <p>The <strong>hot path</strong> (Location Svc, Matching Svc, Geo Index, Surge, ETA) is deployed per-city/region. If the London region goes down, NYC keeps running. The <strong>cold path</strong> (Auth, Payments, User Profiles, Analytics) is global but low-throughput and latency-tolerant.</p>
+      </div>
+
+      <!-- ── Flow Stepper ── -->
+      <div class="flow-stepper">
+        <div class="flow-stepper-header">
+          <span class="flow-stepper-title">Ride Request Flow — Step Through</span>
+          <div class="flow-stepper-controls">
+            <button class="flow-btn" onclick="resetFlow()" id="flow-reset" disabled>Reset</button>
+            <button class="flow-btn flow-btn-primary" onclick="runFlow()" id="flow-next">Next Step →</button>
+          </div>
+        </div>
+        <div class="flow-steps" id="flow-steps"></div>
+        <div class="flow-desc" id="flow-desc">Click <strong>Next Step</strong> to walk through the ride request flow.</div>
+        <div class="flow-counter" id="flow-counter"></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 06 · DEEP DIVE — GEOSPATIAL INDEXING ═══════════════ -->
+    <div class="section" id="deep-dive-geo">
+      <div class="section-number">06</div>
+      <h2>Deep Dive — Geospatial Indexing</h2>
+
+      <p>The core query: <span class="hl">"Which drivers are within 2km of this rider?"</span> with 1 million moving objects. A regular database with a B-tree spatial index can't handle 250K location updates/sec rebuilding indexes constantly.</p>
+
+      <h3>Three Approaches Compared</h3>
+
+      <div class="compare-grid">
+        <div class="compare-card">
+          <h4>Geohash</h4>
+          <p><strong>Idea:</strong> Fixed-size grid. Convert (lat, lng) → string prefix. Drivers in same cell share prefix.</p>
+          <p style="margin-top:6px"><span class="hl-green">Simple, O(1) lookup</span>, works with any key-value store.</p>
+          <p style="margin-top:4px"><span class="hl-red">Fixed cell size</span> — edge problems at cell boundaries. Query 9 cells to cover radius.</p>
+        </div>
+        <div class="compare-card">
+          <h4>Quadtree</h4>
+          <p><strong>Idea:</strong> Recursive subdivision. Dense areas (Manhattan) subdivide more than sparse areas.</p>
+          <p style="margin-top:6px"><span class="hl-green">Adaptive density</span> — high resolution where needed.</p>
+          <p style="margin-top:4px"><span class="hl-red">In-memory only</span>, hard to distribute. Rebalancing on moves.</p>
+        </div>
+        <div class="compare-card recommended">
+          <h4>Google S2 ★</h4>
+          <p><strong>Idea:</strong> Hilbert curve on a cube projection → 64-bit integer cell IDs. Nearby points → nearby integers.</p>
+          <p style="margin-top:6px"><span class="hl-green">Correct sphere geometry</span>, adaptive levels, native DB indexes.</p>
+          <p style="margin-top:4px"><span class="hl-red">More complex</span> to understand. Overkill unless you can explain it.</p>
+        </div>
+      </div>
+
+      <hr class="sub-divider"/>
+
+      <h3>How S2 Works — Step by Step</h3>
+
+      <p><strong>Step 1 — Sphere to Cube:</strong> Project Earth onto 6 cube faces. Unlike Mercator (which distorts poles), no cell is more than ~5.2× larger than any other. Think of wrapping a round ball in a box.</p>
+
+      <p><strong>Step 2 — Hilbert Curve:</strong> A space-filling curve that visits every cell in the grid while <span class="hl">preserving spatial locality</span>. Points close in 2D stay close in 1D. Unlike a row-scan (which jumps from row end to next row start), the Hilbert curve snakes continuously — consecutive numbers are always neighbors on the grid.</p>
+
+      <div class="card">
+        <h4>Hilbert vs Row-Scan — The Lawn Mowing Analogy</h4>
+        <p><strong>Bad strategy (row scan):</strong> Mow entire row left→right, walk all the way back, mow next row. Constant long jumps.</p>
+        <p style="margin-top:6px"><strong>Hilbert strategy:</strong> Mow in U-shape patterns that recursively nest at every scale. Never make a long jump. Always near where you just were.</p>
+      </div>
+
+      <p><strong>Step 3 — Cell IDs:</strong> Every point on Earth becomes a <span class="hl">64-bit integer</span>. Encodes: which cube face (3 bits), Hilbert curve position (up to 60 bits), precision level. Works natively with sorted sets, B-trees, any integer index.</p>
+
+      <div class="table-wrap">
+        <table>
+          <tr><th>S2 Level</th><th>Cell Size</th><th>Use Case</th></tr>
+          <tr><td>12</td><td>~3.3 km²</td><td>Coarse city-area queries</td></tr>
+          <tr><td>14</td><td>~0.2 km²</td><td>Neighborhood level</td></tr>
+          <tr><td>16</td><td>~0.01 km²</td><td>Street-block level</td></tr>
+          <tr><td>18</td><td>~150 m²</td><td>Individual building</td></tr>
+        </table>
+      </div>
+
+      <p><strong>Step 4 — The Payoff:</strong> "Find drivers within 2km" becomes: compute S2 cell ranges covering that circle → run <span class="inline-code">ZRANGEBYSCORE drivers 576543209900 576543210100</span> in Redis → get 15 candidates → haversine for final filter. Narrowed <span class="hl">1M drivers → ~15 candidates</span> with a simple integer range query.</p>
+
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+sequenceDiagram
+    participant R as Rider App
+    participant M as Matching Svc
+    participant S2 as S2 Library
+    participant GI as Geo Index (Redis)
+    R->>M: Request ride at (lat, lng)
+    M->>S2: Cover 2km radius
+    S2-->>M: Cell ranges [5765...99–5765...01]
+    M->>GI: ZRANGEBYSCORE per range
+    GI-->>M: [D1, D2, D3 ... D15]
+    M->>M: Haversine filter + ETA rank
+    M-->>R: Best candidate: D3 (ETA 4min)
+        </div>
+      </div>
+
+      <div class="callout">
+        <p><strong>Interview shortcut:</strong> "I'd use S2 cells — they map Earth to 64-bit integers via a Hilbert curve. Spatially close points get numerically close IDs, so 'find nearby drivers' becomes a range query on a sorted integer index. Works with any DB or Redis sorted set."</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 07 · DEEP DIVE — MATCHING STATE MACHINE ═══════════════ -->
+    <div class="section" id="deep-dive-matching">
+      <div class="section-number">07</div>
+      <h2>Deep Dive — Matching State Machine</h2>
+
+      <p>Two competing goals: <span class="hl">speed</span> (match in &lt;10 sec) vs <span class="hl">correctness</span> (a driver must never be matched to two riders). Speed pushes toward parallel offers; correctness pushes toward serial. <span class="hl-accent">Uber chose serial</span> — and the state machine reflects that.</p>
+
+      <h3>Trip State Machine</h3>
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+stateDiagram-v2
+    [*] --> REQUESTED: Rider taps Request
+    REQUESTED --> MATCHING: Enters dispatch
+    MATCHING --> OFFERED: Best driver found
+    OFFERED --> MATCHED: Driver accepts
+    OFFERED --> MATCHING: Timeout / Decline
+    MATCHING --> NO_DRIVERS: Retries exhausted
+    MATCHED --> DRIVER_EN_ROUTE: Driver navigates
+    DRIVER_EN_ROUTE --> ARRIVED: At pickup
+    ARRIVED --> IN_PROGRESS: Rider picked up
+    IN_PROGRESS --> COMPLETED: At dropoff
+    REQUESTED --> CANCELLED: Rider cancels
+    MATCHING --> CANCELLED: Rider cancels
+    OFFERED --> CANCELLED: Rider cancels
+    MATCHED --> CANCELLED: Either cancels
+        </div>
+      </div>
+
+      <h3>Driver State Machine</h3>
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+stateDiagram-v2
+    [*] --> OFFLINE
+    OFFLINE --> AVAILABLE: Goes online
+    AVAILABLE --> OFFERED: Trip offer received
+    OFFERED --> ON_TRIP: Accepts
+    OFFERED --> AVAILABLE: Declines / Timeout
+    ON_TRIP --> AVAILABLE: Trip completed
+    AVAILABLE --> OFFLINE: Goes offline
+        </div>
+      </div>
+
+      <hr class="sub-divider"/>
+
+      <h3>Preventing Double-Matching — The CAS Lock</h3>
+
+      <p>The race condition: Trip A queries the geo index → finds Driver X. Trip B queries → also finds Driver X. Both send offers. Driver X has two offers on screen. <span class="hl-red">Chaos.</span></p>
+
+      <p>The fix: <span class="hl-accent">Compare-and-Swap (CAS)</span> on driver status. An <strong>optimistic lock</strong> — try the write, check if it succeeded.</p>
+
+      <div class="code-block"><code><pre>-- Atomic claim attempt
+UPDATE drivers
+SET status = 'OFFERED', trip_id = 'trip_A'
+WHERE driver_id = 'X' AND status = 'AVAILABLE'
+
+-- Did it affect 1 row?
+-- YES → We got the lock. Send push to Driver X.
+-- NO  → Someone else claimed X. Move to next candidate.</pre></code></div>
+
+      <div class="code-block"><code><pre># Redis equivalent (WATCH/MULTI/EXEC)
+WATCH driver:X:status
+status = GET driver:X:status
+if status != "AVAILABLE":
+    return FAILED
+
+MULTI
+  SET driver:X:status "OFFERED"
+  SET driver:X:offered_trip "trip_A"
+  SET driver:X:offer_expires (now + 15s)
+EXEC
+# If EXEC returns nil → another client modified the key → retry next driver</pre></code></div>
+
+      <h3>The Matching Flow — Full Trace</h3>
+
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+sequenceDiagram
+    participant R as Rider
+    participant TS as Trip Svc
+    participant MS as Matching Svc
+    participant GI as Geo Index
+    participant DS as Driver Status (CAS)
+    participant D1 as Driver 1
+    participant D2 as Driver 2
+
+    R->>TS: Request ride
+    TS->>MS: Find driver for Trip T1
+    MS->>GI: Nearby drivers at (lat,lng)
+    GI-->>MS: [D1 (0.5km), D2 (1.2km)]
+
+    MS->>DS: CAS: D1 AVAILABLE → OFFERED
+    DS-->>MS: SUCCESS ✓
+    MS->>D1: Push: "New trip, 0.5km away"
+    Note over D1: 15-second timer starts
+
+    alt Driver accepts
+        D1->>MS: Accept
+        MS->>DS: D1 → ON_TRIP
+        MS->>TS: Trip T1 → MATCHED
+        TS->>R: "Driver found! ETA 3 min"
+    else Driver times out (15s)
+        Note over MS: Timer fires
+        MS->>DS: D1 → AVAILABLE (release)
+        MS->>DS: CAS: D2 AVAILABLE → OFFERED
+        DS-->>MS: SUCCESS ✓
+        MS->>D2: Push: "New trip, 1.2km away"
+    end
+        </div>
+      </div>
+
+      <h3>Why 15 Seconds?</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">Too Short (5s)</div>
+          <h4>High Timeout Rate</h4>
+          <p>Driver might be driving, can't safely look at phone. More retries → slower overall match. Drivers get frustrated by missed opportunities.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">Too Long (30s)</div>
+          <h4>Terrible Rider UX</h4>
+          <p>30s × 5 attempts = 2.5 min with no match. Closer drivers may become available but aren't considered. App feels broken.</p>
+        </div>
+      </div>
+      <div class="card card-accent">
+        <h4>15 Seconds — The Sweet Spot</h4>
+        <p>Long enough for a driver to glance at the offer. Short enough that the retry loop completes within ~60 seconds worst case. After <span class="hl">3–5 failed offers</span>, the system expands the search radius or returns NO_DRIVERS.</p>
+      </div>
+
+      <h3>Edge Case: The Phantom Accept</h3>
+      <div class="card">
+        <h4>Driver accepts after server-side timeout</h4>
+        <p>At T+14.5s driver's slow phone receives the offer. At T+15s server times out, moves to next candidate. At T+15.2s driver taps Accept. The accept endpoint validates: <span class="inline-code">trip.status == OFFERED AND trip.offered_driver == D1</span>. Since the trip already moved back to MATCHING, the validation fails. Driver sees <span class="hl-red">"This trip is no longer available."</span> Slightly frustrating, but correct.</p>
+      </div>
+
+      <h3>Concurrency Model</h3>
+      <div class="callout">
+        <p>Multiple Matching Service instances can run in parallel. The <strong>geospatial index</strong> is "loose" (eventually consistent, multiple readers). The <strong>driver status store</strong> is "tight" (strongly consistent, atomic CAS). Think of it like an auction — everyone browses the catalog freely, but bids go through a single auctioneer. Two bidders on the same item don't break the system.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 08 · DEEP DIVE — REAL-TIME TRACKING ═══════════════ -->
+    <div class="section" id="deep-dive-tracking">
+      <div class="section-number">08</div>
+      <h2>Deep Dive — Real-Time Trip Tracking</h2>
+
+      <p>The rider stares at a little car icon crawling toward them on the map. That icon updates every few seconds, smoothly. This is a <span class="hl-accent">real-time pub/sub problem</span> — the driver publishes location, the rider subscribes, the trip is the channel.</p>
+
+      <h3>Why Not Just Poll?</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ HTTP Polling (3s)</div>
+          <h4>3.3M req/sec globally</h4>
+          <p>Each request: full TCP handshake, TLS, headers, teardown. 90% of responses are "location moved 10m." ~10 GB/sec bandwidth wasted on headers.</p>
+        </div>
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ WebSocket</div>
+          <h4>250K msg/sec globally</h4>
+          <p>Persistent full-duplex TCP. No headers, no handshakes. ~100 MB/sec bandwidth. 30× less bandwidth, 13× fewer messages.</p>
+        </div>
+      </div>
+
+      <h3>The Four Components</h3>
+
+      <div class="card">
+        <h4>1. Connection Gateway (Stateful)</h4>
+        <p>Holds all WebSocket connections. Each instance maintains ~50K–100K connections. <strong>Separate from API servers</strong> because it's stateful — a rider's connection lives on a specific instance. Scaling: add instances, Redis handles cross-instance routing.</p>
+      </div>
+
+      <div class="card">
+        <h4>2. Redis Pub/Sub (Message Bus)</h4>
+        <p>Decouples driver's gateway from rider's gateway. Each trip has a channel <span class="inline-code">trip:{trip_id}</span>. Driver's gateway publishes, rider's gateway subscribes. Messages are ephemeral — if one update is missed, the next arrives in 3 seconds. <span class="hl-red">Not Kafka</span> — no need for durability/replay here.</p>
+      </div>
+
+      <div class="card">
+        <h4>3. Location Processing Pipeline</h4>
+        <p><strong>Road snapping</strong> (GPS might be 30m off-road) → <strong>noise filtering</strong> (discard impossible-speed outliers) → <strong>rate normalization</strong> (one processed update per 3–4 sec). Adds ~10–50ms latency. Also computes heading + speed for client interpolation.</p>
+      </div>
+
+      <div class="card">
+        <h4>4. Client-Side Interpolation</h4>
+        <p>The app doesn't teleport the car icon between updates. It <em>animates smoothly</em> from position P1 to P2 over 4 seconds using heading and speed. <span class="hl">The smoothness is a client-side illusion</span>, not a server achievement. Server sends coarse updates; client fills the gaps.</p>
+      </div>
+
+      <h3>End-to-End Data Flow</h3>
+
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+sequenceDiagram
+    participant DP as Driver Phone
+    participant G7 as Gateway #7
+    participant LP as Location Pipeline
+    participant RPS as Redis Pub/Sub
+    participant G3 as Gateway #3
+    participant RP as Rider Phone
+
+    DP->>G7: GPS: (40.7506, -73.9931)
+    G7->>LP: Raw location
+    LP->>LP: Road snap + noise filter
+    LP->>RPS: PUBLISH trip:T1 {lat, lng, heading, speed}
+    RPS->>G3: Message delivered (subscriber)
+    G3->>RP: WebSocket push
+    RP->>RP: Animate car icon (interpolation)
+    Note over DP,RP: Total server latency ~25ms + network ~150ms = ~200ms
+        </div>
+      </div>
+
+      <h3>Connection Failure Handling</h3>
+
+      <div class="card-grid">
+        <div class="card">
+          <h4>Rider WS Drops</h4>
+          <p>App detects disconnection, reconnects (possibly to different gateway). During gap, app continues interpolating from last known position. New gateway subscribes to same Redis channel. Usually seamless.</p>
+        </div>
+        <div class="card">
+          <h4>Driver WS Drops</h4>
+          <p>No location updates flow. After 5–10s of silence, rider sees "Updating driver location..." Car icon freezes. When driver reconnects, updates resume. Location TTL (30s) auto-marks driver offline if phone died.</p>
+        </div>
+        <div class="card">
+          <h4>Gateway Crash</h4>
+          <p>50K connections drop simultaneously. Clients reconnect with <span class="hl-accent">exponential backoff + jitter</span>: <span class="inline-code">delay = random(0, min(30s, 2^attempt))</span>. Spreads reconnection storm over several seconds.</p>
+        </div>
+        <div class="card">
+          <h4>Multiple Observers</h4>
+          <p>"Share trip status" adds 2–3 family watchers. Redis Pub/Sub fans out natively — one publish, multiple subscribers. Operations dashboard uses a separate Kafka pipeline for aggregation.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 09 · DEEP DIVE — SPIKE SCENARIOS ═══════════════ -->
+    <div class="section" id="deep-dive-spike">
+      <div class="section-number">09</div>
+      <h2>Deep Dive — Spike Scenarios &amp; Surge Pricing</h2>
+
+      <p>Beyoncé concert at MSG ends. 20,000 people pour out. ~4,800 ride requests in 10 minutes from one city block. Available drivers nearby: <span class="hl">50</span>. That's a 96:1 ratio. Three problems hit simultaneously.</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <h4>Problem 1: Supply/Demand</h4>
+          <p>4,800 riders, 50 drivers. Even with a 5km radius, maybe 300 drivers. <span class="hl-red">Physical constraint — no amount of engineering makes 300 serve 4,800.</span></p>
+        </div>
+        <div class="card">
+          <h4>Problem 2: Geo Hot Spot</h4>
+          <p>Thousands of queries hit the same S2 cell. If sharded by region, one shard gets 100× normal load while neighbors sit idle.</p>
+        </div>
+      </div>
+      <div class="card">
+        <h4>Problem 3: Driver Starvation</h4>
+        <p>Aggressively pulling drivers toward MSG drains Midtown Manhattan. Someone 15 blocks away now sees "no drivers available." You've solved one hot spot by creating a dead zone around it.</p>
+      </div>
+
+      <hr class="sub-divider"/>
+
+      <h3>Solution 1: Surge Pricing (Load Shedding in Economics Clothing)</h3>
+
+      <div class="table-wrap">
+        <table>
+          <tr><th>Demand/Supply Ratio</th><th>Surge Multiplier</th><th>Effect</th></tr>
+          <tr><td>1.0–1.5</td><td>1.0×</td><td>Normal pricing</td></tr>
+          <tr><td>1.5–2.0</td><td>1.3×</td><td>Mild surge</td></tr>
+          <tr><td>2.0–3.0</td><td>1.8×</td><td>Some riders choose alternatives</td></tr>
+          <tr><td>3.0–5.0</td><td>2.5×</td><td>Many riders drop off</td></tr>
+          <tr><td>5.0+</td><td>3.0×+</td><td>Only urgent riders remain</td></tr>
+        </table>
+      </div>
+
+      <p><strong>Demand side:</strong> 2.5× pricing reduces 4,800 requests to ~1,500 — a serviceable number. <strong>Supply side:</strong> Drivers 3–5km away see the surge zone on their app and converge. Surge pricing is a <span class="hl-accent">load shedding mechanism wearing an economics hat</span>.</p>
+
+      <p><strong>Timing matters:</strong> Uses a <span class="hl">5-minute sliding window</span> with smoothing. Can't recalculate every second (surge bounces wildly: $45 → $28 → $52) — erodes trust.</p>
+
+      <h3>Solution 2: Request Coalescing &amp; Read Replicas</h3>
+      <p><strong>Read replicas:</strong> Matching queries are read-heavy during spikes. Multiple Redis replicas, load-balanced. 1.2MB of data replicates with negligible lag.</p>
+      <p><strong>Request coalescing:</strong> 200 requests from the same block in 2 seconds? Run one geospatial query, get candidates, do <span class="hl-accent">optimal batch assignment</span> instead of greedy first-come-first-served. Better outcomes than individual matching.</p>
+
+      <h3>Solution 3: Supply Reservation</h3>
+      <p>Each zone keeps a <span class="hl">minimum supply threshold</span> (e.g., 5 drivers per hexagon). When matching for the spike area, filter out drivers who are the "last few" in their home zone. Like a hospital — don't send every doctor to the disaster site; keep some for unrelated emergencies.</p>
+
+      <hr class="sub-divider"/>
+
+      <h3>Spike Timeline — Minute by Minute</h3>
+
+      <div class="spike-timeline">
+        <div class="spike-event">
+          <div class="spike-time">T+0 min — Concert Ends</div>
+          <p>20,000 people start exiting. Available drivers near MSG: ~50.</p>
+        </div>
+        <div class="spike-event">
+          <div class="spike-time">T+1 min — First Wave</div>
+          <p>~500 requests hit matching. First 40–50 riders matched quickly. Surge calculation detects spike.</p>
+        </div>
+        <div class="spike-event">
+          <div class="spike-time">T+2 min — Surge Activates</div>
+          <p>Demand/supply ratio hits 10:1. Surge rises to 1.5×, then 2.0×. Drivers 3–5km away see surge zone appear.</p>
+        </div>
+        <div class="spike-event">
+          <div class="spike-time">T+3–5 min — Demand Shaping</div>
+          <p>Surge reaches 2.5×. ~30% of riders abandon and choose alternatives. Remaining riders enter virtual queue with increasing ETAs.</p>
+        </div>
+        <div class="spike-event">
+          <div class="spike-time">T+5–10 min — Supply Response</div>
+          <p>Drivers attracted by surge converge. Supply increases from 50 to ~150. Search radius expands to 5km. Rides matched with 8–12 min ETAs.</p>
+        </div>
+        <div class="spike-event">
+          <div class="spike-time">T+10–20 min — Stabilization</div>
+          <p>Demand tapers. Supply catches up. Surge begins dropping. By T+20, system back to equilibrium.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <p><strong>The insight:</strong> Not every problem is a software problem. The system's job during a spike is to <em>manage scarcity gracefully</em> — not pretend scarcity doesn't exist.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 10 · DEEP DIVE — ETA CALCULATION ═══════════════ -->
+    <div class="section" id="deep-dive-eta">
+      <div class="section-number">10</div>
+      <h2>Deep Dive — ETA Calculation</h2>
+
+      <p>When the rider sees "3 min away," that's not a guess — it's a <span class="hl">prediction pipeline</span> with four layers, each trading accuracy for speed.</p>
+
+      <h3>Why Not Just Use Google Maps?</h3>
+      <div class="card">
+        <h4>Cost + Latency Kill It</h4>
+        <p>5 ETA calculations per app open × 1M opens/day = 5M API calls/day per city. At $5/1K calls = <span class="hl-red">$25,000/day per city</span>. Across 500 cities → $12.5M/day. Plus 100–300ms latency per call. Uber built their own routing engine.</p>
+      </div>
+
+      <h3>The Four-Layer ETA Pipeline</h3>
+
+      <div class="table-wrap">
+        <table>
+          <tr><th>Layer</th><th>When Used</th><th>Latency</th><th>Accuracy</th></tr>
+          <tr><td><strong>Haversine + Detour Factor</strong></td><td>Rider browsing, quick filter</td><td>&lt;1ms</td><td>±40%</td></tr>
+          <tr><td><strong>Pre-Computed Zone Matrix</strong></td><td>"X min away" on nearby drivers</td><td>&lt;1ms</td><td>±20%</td></tr>
+          <tr><td><strong>Contraction Hierarchies</strong></td><td>After match — "arriving in X"</td><td>5–50ms</td><td>±10%</td></tr>
+          <tr><td><strong>ML Correction</strong></td><td>Final correction layer</td><td>+5ms</td><td>±5–7%</td></tr>
+        </table>
+      </div>
+
+      <h3>Layer 1 — Haversine + Detour Factor</h3>
+      <div class="code-block"><code><pre>straight_line = haversine(driver_lat, driver_lng, rider_lat, rider_lng)
+estimated_dist = straight_line × detour_factor   // Manhattan: 1.4, London: 1.7
+eta = estimated_dist / avg_speed_at_time_of_day  // 8am rush: 15km/h, 3am: 40km/h</pre></code></div>
+      <p>Sub-millisecond. Just arithmetic. Good enough for "is the nearest driver ~3 minutes or ~15 minutes away?" — the coarse filter.</p>
+
+      <h3>Layer 2 — Pre-Computed Zone Matrix</h3>
+      <p>Divide the city into ~500m hexagonal zones. Pre-compute travel time between zone pairs within 10–15km (sparse matrix: ~1.5M entries, <span class="hl">6 MB</span> in memory). Updated every 5–15 min from crowdsourced trip data. Lookup: O(1) hash map.</p>
+
+      <h3>Layer 3 — Contraction Hierarchies (The Big One)</h3>
+      <p>Full graph-based shortest path on the road network. Nodes = intersections. Edges = road segments. Weights = <strong>travel time</strong> (not distance — a 1km highway takes 30s, a 1km local road takes 3 min).</p>
+
+      <div class="card card-accent">
+        <h4>How Contraction Hierarchies Work — The Highway Analogy</h4>
+        <p>You drive cross-city the same way: "get on Highway 1, take it across, exit at 5th Ave." You skip unimportant streets mentally. CH formalizes this: <strong>offline</strong>, rank nodes by importance (highways &gt; residential). Add "shortcut edges" that skip unimportant nodes. <strong>Online</strong>, search upward from source and downward from target — they meet at an important node (highway). Explores ~1,000 nodes instead of 1,000,000. Query drops from ~100ms to <span class="hl">~0.1ms</span> — a thousand× faster.</p>
+      </div>
+
+      <p><strong>Real-time traffic:</strong> Edge weights updated every 1–5 min using GPS data from active drivers (millions of real-time speed observations). Uses <span class="hl-accent">Customizable Contraction Hierarchies</span> — hierarchy structure pre-computed once, weights swappable in ~1 second.</p>
+
+      <h3>Layer 4 — ML Correction</h3>
+      <p>Fixes systematic biases the graph misses: traffic lights, left turns, school zones, pickup complexity. Input: graph ETA + time/day/weather/zone. Trained on billions of historical trips. Improves accuracy from ~85% to <span class="hl-green">~90–93%</span> within ±2 minutes.</p>
+
+      <h3>The Data Flywheel</h3>
+
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart LR
+    A["Trip Completed"] --> B["Actual vs Predicted"]
+    B --> C["Zone Matrix Update"]
+    B --> D["Road Segment Weights"]
+    B --> E["ML Model Retrain"]
+    C --> F["Better ETAs"]
+    D --> F
+    E --> F
+    F --> G["More Trips"]
+    G --> A
+        </div>
+      </div>
+
+      <div class="callout">
+        <p><strong>Competitive moat:</strong> Every completed trip makes future predictions better. Uber has <em>billions</em> of historical trips. A new ride-hailing startup has zero trip data to train on.</p>
+      </div>
+
+      <h3>Edge Cases</h3>
+      <div class="card-grid">
+        <div class="card">
+          <h4>GPS Tunnel Problem</h4>
+          <p>Driver enters tunnel, GPS lost for 2 min. System predicts progress based on route + average tunnel traversal time. Synthetic ETA updates without GPS.</p>
+        </div>
+        <div class="card">
+          <h4>Driver Goes Off-Route</h4>
+          <p>Wrong turn or shortcut. Recalculate from current position every 30–60s. If deviation is significant, ETA adjusts automatically.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 11 · TRADEOFFS ═══════════════ -->
+    <div class="section" id="tradeoffs">
+      <div class="section-number">11</div>
+      <h2>Key Design Decisions &amp; Tradeoffs</h2>
+
+      <h3>1. Location Updates: Push vs Pull</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Push (Driver → Server)</div>
+          <h4>Driver Pushes Every 4s</h4>
+          <p>Via persistent WebSocket/HTTP2. Server just receives and writes. Natural direction of data flow. Only active drivers send.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Server Polls Drivers</div>
+          <h4>Poll 1M Drivers Every 4s</h4>
+          <p>250K polls/sec initiated by server. Backwards — server does all the work. Drivers that went offline still get polled. Massive waste.</p>
+        </div>
+      </div>
+
+      <h3>2. Geospatial Index: In-Memory vs Database</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ In-Memory (Redis)</div>
+          <h4>Sub-ms Queries, 250K Writes/s</h4>
+          <p>Only stores current locations (~40MB globally). Data is ephemeral — if Redis dies, drivers re-report within 4 seconds. Perfect fit for volatile, high-throughput workload.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ PostgreSQL + PostGIS</div>
+          <h4>Durable But Slow</h4>
+          <p>Constantly rebuilding B-tree spatial indexes at 250K writes/sec. Overkill durability for data that expires in seconds. Trip history goes here — not live locations.</p>
+        </div>
+      </div>
+
+      <h3>3. Matching: Single Offer vs Broadcast</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Serial (One at a Time)</div>
+          <h4>Sequential Offers with 15s Timeout</h4>
+          <p>Clean UX — one driver considers at a time. No race conditions. Tradeoff: slower if drivers decline (up to 60s worst case).</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Broadcast to All Nearby</div>
+          <h4>Fan-Out to 10 Drivers</h4>
+          <p>Faster first match, but 9 angry drivers who tapped Accept and lost. Race conditions everywhere. Terrible driver experience.</p>
+        </div>
+      </div>
+
+      <h3>4. Matching Consistency: Strong vs Eventually Consistent</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Strong (CAS Lock)</div>
+          <h4>Atomic Compare-and-Swap</h4>
+          <p>A driver can only be in one OFFERED state at a time. Single serialization point. Correctness is non-negotiable — you can't tell two riders "driver found" for the same driver.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Eventually Consistent</div>
+          <h4>Optimistic, Resolve Conflicts Later</h4>
+          <p>Higher throughput, but double-matching becomes possible. Resolving after-the-fact ("sorry, your driver was reassigned") is terrible UX.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 12 · FAILURE SCENARIOS ═══════════════ -->
+    <div class="section" id="failures">
+      <div class="section-number">12</div>
+      <h2>What Can Go Wrong</h2>
+
+      <div class="card">
+        <h4>GPS Drift in Urban Canyons</h4>
+        <p>Tall buildings cause GPS accuracy to drop to 50–100m. Driver appears inside a building. <strong>Fix:</strong> Road-snapping algorithm pins coordinates to nearest road segment. Handles approximate locations gracefully.</p>
+      </div>
+
+      <div class="card">
+        <h4>Stale Driver Location</h4>
+        <p>Driver's app crashes. Last known location stays in index — matching service offers trips to a "ghost." <strong>Fix:</strong> TTL on location entries (30s). No update received → auto-mark offline, remove from geo index.</p>
+      </div>
+
+      <div class="card">
+        <h4>Hot Spot Overloads a Shard</h4>
+        <p>Concert/sports event: 50K requests from one small area. If geo index sharded by region, one shard is crushed. <strong>Fix:</strong> Read replicas for query load + request coalescing for batch matching + dynamic re-sharding of hot cells.</p>
+      </div>
+
+      <div class="card">
+        <h4>Double Matching (Race Condition)</h4>
+        <p>Two concurrent ride requests match the same driver in the gap between querying index and sending offer. <strong>Fix:</strong> Atomic CAS on driver status. If CAS fails, retry with next candidate. Design guarantees at-most-one active offer per driver.</p>
+      </div>
+
+      <div class="card">
+        <h4>Network Partition During Active Trip</h4>
+        <p>Driver loses connectivity mid-trip. Rider sees frozen map. <strong>Fix:</strong> Rider app shows "connection lost" after N seconds. Trip continues — fare calculated from GPS data when connectivity resumes. Client interpolation masks brief gaps.</p>
+      </div>
+
+      <div class="card">
+        <h4>Gateway Server Crash</h4>
+        <p>50K WebSocket connections drop simultaneously. <strong>Fix:</strong> Exponential backoff + jitter on reconnection. Graceful shutdown protocol: send "please reconnect" before retiring instances.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 13 · INTERVIEW TIPS ═══════════════ -->
+    
+  <section class="section" id="antipatterns">
+    <div class="section-head"><span class="section-n">⚠</span><h2 class="section-title">Anti-patterns</h2></div>
+    <div class="prose">
+      
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Nearest-driver wins every trip</div>
+        <p class="why">Greedy local assignment leaves Dashers idle on one side, riders waiting on other.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> 2-second batched window + Hungarian-algorithm assignment optimizing global score (distance, ETA, fairness).</div>
+    </div>
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Single Postgres table for all locations</div>
+        <p class="why">Millions of driver location pings/sec melts OLTP. Geo query on B-tree is O(N).</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Redis GEO or H3 hex-cell index; ring queries on cell + 18 neighbors; history to Cassandra.</div>
+    </div>
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Strong consistency on all trip state</div>
+        <p class="why">2PC across driver + rider + payments is slow AND brittle.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Saga with idempotent steps; compensating actions on failure; strong only on fund movements.</div>
+    </div>
+    </div>
+  </section>
+
+  <div class="section" id="interview-tips">
+      <div class="section-number">13</div>
+      <h2>Interview Tips</h2>
+
+      <div class="tip-card">
+        <span class="tip-icon">💡</span>
+        <div class="tip-content">
+          <strong>Start with single-rider, single-driver</strong><br/>
+          "One rider, one driver, same server." Build the simplest working version first, then scale. This grounds the conversation in reality and shows you don't pattern-match to distributed systems.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">⚡</span>
+        <div class="tip-content">
+          <strong>Derive the numbers — they drive the design</strong><br/>
+          "250K location writes/sec" is the number that forces you toward an in-memory index. "25 ride requests/sec per city" shows matching isn't a throughput problem. Derive these from assumptions, don't assert them.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🎯</span>
+        <div class="tip-content">
+          <strong>Name the geospatial approach explicitly</strong><br/>
+          Interviewers want to hear "geohash," "quadtree," or "S2 cells." Don't just say "spatial index." Start with geohash (simple, correct), then mention S2 for production scale.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🔒</span>
+        <div class="tip-content">
+          <strong>The matching lock is where you show depth</strong><br/>
+          Discuss CAS on driver status, the 15-second timeout, phantom accepts, and how multiple matcher instances can coexist without double-matching. This is distributed systems in action.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">📊</span>
+        <div class="tip-content">
+          <strong>Highlight the read/write asymmetry</strong><br/>
+          Location writes are 100× more frequent than ride requests. The location ingestion path and the matching path have completely different characteristics and should be separate subsystems.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🌍</span>
+        <div class="tip-content">
+          <strong>Uber scales geographically, not globally</strong><br/>
+          "A rider in Dubai never matches with a driver in London. The hot path is per-city — 7,500 location writes/sec fits on one Redis instance. Scale by adding cities, not by sharding within a city."
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🔥</span>
+        <div class="tip-content">
+          <strong>Discuss demand spikes — most candidates don't</strong><br/>
+          "Not every problem is a software problem. A concert ending creates a 100:1 ratio. The system manages scarcity with surge pricing (demand shaping), request coalescing (batch assignment), and supply reservation (prevent dead zones)."
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 14 · SIMILAR PROBLEMS ═══════════════ -->
+    <div class="section" id="similar">
+      <div class="section-number">14</div>
+      <h2>Similar Problems</h2>
+
+      <div class="similar-grid">
+        <a href="../whatsapp/index.html" class="similar-card">
+          <h4>WhatsApp / Chat System</h4>
+          <p>Shares WebSocket connection management, real-time message delivery, and presence tracking patterns.</p>
+        </a>
+        <a href="../notification-system/index.html" class="similar-card">
+          <h4>Notification System</h4>
+          <p>Push notification delivery to specific devices, fan-out patterns, and connection gateway architecture.</p>
+        </a>
+        <a href="../rate-limiter/index.html" class="similar-card">
+          <h4>Rate Limiter</h4>
+          <p>Surge pricing is essentially rate limiting by price. Sliding window counters, token buckets — same patterns.</p>
+        </a>
+        <a href="../search-autocomplete/index.html" class="similar-card">
+          <h4>Search Autocomplete</h4>
+          <p>Location search and geospatial prefix matching share trie/index patterns with autocomplete systems.</p>
+        </a>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 15 · EVOLUTION ═══════════════ -->
+    <div class="section" id="evolution">
+      <div class="section-number">15</div>
+      <h2>Evolution</h2>
+      <p>How this design grows from MVP to planet-scale.</p>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">1</div>
+        <div class="evolution-content">
+          <h4>Single City MVP</h4>
+          <p>One server, PostgreSQL with PostGIS, simple "closest driver" matching via Haversine. HTTP polling for location updates. Works for 1K drivers. Prove the market before scaling.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">2</div>
+        <div class="evolution-content">
+          <h4>Multi-City Scale</h4>
+          <p>Geospatial index moves to Redis with geohashing. Location ingestion becomes a separate service. WebSocket connections for real-time tracking. Shard by city. Add surge pricing watching supply/demand ratios.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">3</div>
+        <div class="evolution-content">
+          <h4>Regional Isolation</h4>
+          <p>Each region gets its own deployment of the hot path (location, matching, surge, ETA). Global services (auth, payments, analytics) remain shared. If London goes down, NYC keeps running. Deploy per-region independently.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">4</div>
+        <div class="evolution-content">
+          <h4>Planet Scale</h4>
+          <p>S2-based geospatial indexing with adaptive cell sizes. ML-powered matching with ETA prediction, driver acceptance probability, and optimal batch assignment. Contraction Hierarchies for routing. Kafka for event streaming. Billions of trip data feeding the ML flywheel.</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: 'hsl(38, 80%, 94%)',
+      primaryTextColor: '#111110',
+      primaryBorderColor: 'hsl(38, 60%, 80%)',
+      lineColor: '#ccc9c4',
+      secondaryColor: '#f7f7f5',
+      tertiaryColor: '#f0eeeb',
+      fontFamily: 'Geist, system-ui, sans-serif',
+      fontSize: '13px'
+    }
+  });
+
+  // Sidebar scroll observer
+  (function() {
+    const sections = document.querySelectorAll('.section[id]');
+    const navLinks = document.querySelectorAll('#sidebar-nav a');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+          navLinks.forEach(link => {
+            link.classList.toggle('active', link.getAttribute('href') === '#' + id);
+          });
+        }
+      });
+    }, { rootMargin: '-80px 0px -60% 0px', threshold: 0 });
+    sections.forEach(s => observer.observe(s));
+  })();
+
+  // Architecture node highlight
+  let highlightedNode = null;
+  function hlNode(id) {
+    if (highlightedNode) document.getElementById(highlightedNode).classList.remove('node-highlight');
+    if (highlightedNode === id) { highlightedNode = null; return; }
+    document.getElementById(id).classList.add('node-highlight');
+    highlightedNode = id;
+  }
+
+  // Flow stepper
+  const FLOW_NODES = [
+    'Rider App',
+    'API Gateway',
+    'Trip Service',
+    'Matching Svc',
+    'Geo Index',
+    'Driver Status (CAS)',
+    'Push to Driver',
+    'Driver Accepts',
+    'Notify Rider'
+  ];
+
+  const FLOW_DESCS = [
+    'Rider opens the app, enters pickup & dropoff, and taps "Request Ride." The app sends a POST /v1/rides to the API Gateway.',
+    'The API Gateway authenticates the request, validates the inputs, and routes to the Trip Service. Stateless — any instance can handle it.',
+    'The Trip Service creates a trip record in PostgreSQL with status REQUESTED, stores the pickup/dropoff coordinates and fare estimate. Then hands the trip to the Matching Service.',
+    'The Matching Service queries the Geospatial Index: "give me all available drivers within 3km of this pickup point, ranked by ETA."',
+    'The Geo Index (Redis sorted set with S2 cell IDs) returns candidate drivers: [D1 (0.5km, 3min), D2 (1.2km, 5min), D3 (1.8km, 4min)]. Ranked by ETA: D1, D3, D2.',
+    'The Matching Service attempts an atomic CAS on the best candidate: SET D1.status = OFFERED WHERE status = AVAILABLE. If successful, D1 is locked — no other trip can claim them. A 15-second timer starts.',
+    'A push notification is sent to Driver D1: "New trip request — 0.5km away, $18 estimated fare." The driver sees the offer on their screen with an Accept/Decline UI.',
+    'Driver D1 taps Accept within 15 seconds. The server validates: trip.status == OFFERED AND trip.offered_driver == D1. Passes! D1.status → ON_TRIP. Trip.status → MATCHED.',
+    'The rider receives a push: "Driver found! Bob is 3 minutes away." Both apps now subscribe to the Redis Pub/Sub channel trip:{id} for live location tracking. The little car icon appears on the map.'
+  ];
+
+  let flowStep = -1;
+  const flowStepsEl = document.getElementById('flow-steps');
+  const flowDescEl  = document.getElementById('flow-desc');
+  const flowCounter = document.getElementById('flow-counter');
+  const flowNextBtn = document.getElementById('flow-next');
+  const flowResetBtn = document.getElementById('flow-reset');
+
+  FLOW_NODES.forEach((name, i) => {
+    if (i > 0) {
+      const arrow = document.createElement('span');
+      arrow.className = 'flow-arrow';
+      arrow.textContent = '→';
+      flowStepsEl.appendChild(arrow);
+    }
+    const node = document.createElement('span');
+    node.className = 'flow-node';
+    node.id = 'fnode-' + i;
+    node.textContent = name;
+    flowStepsEl.appendChild(node);
+  });
+
+  function runFlow() {
+    flowStep++;
+    if (flowStep >= FLOW_NODES.length) {
+      flowNextBtn.disabled = true;
+      flowDescEl.innerHTML = '<strong>✓ Flow complete.</strong> The rider is now watching the driver approach on the live map. Click Reset to start over.';
+      return;
+    }
+    flowResetBtn.disabled = false;
+    for (let i = 0; i < flowStep; i++) {
+      document.getElementById('fnode-' + i).classList.remove('active');
+      document.getElementById('fnode-' + i).classList.add('done');
+    }
+    document.getElementById('fnode-' + flowStep).classList.add('active');
+    document.getElementById('fnode-' + flowStep).scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    flowDescEl.innerHTML = FLOW_DESCS[flowStep];
+    flowCounter.textContent = `Step ${flowStep + 1} of ${FLOW_NODES.length}`;
+    if (flowStep === FLOW_NODES.length - 1) flowNextBtn.textContent = 'Finish ✓';
+  }
+
+  function resetFlow() {
+    flowStep = -1;
+    FLOW_NODES.forEach((_, i) => {
+      const el = document.getElementById('fnode-' + i);
+      el.classList.remove('active', 'done');
+    });
+    flowDescEl.innerHTML = 'Click <strong>Next Step</strong> to walk through the ride request flow.';
+    flowCounter.textContent = '';
+    flowNextBtn.disabled = false;
+    flowNextBtn.textContent = 'Next Step →';
+    flowResetBtn.disabled = true;
+  }
+</script>
+
+</body>
+</html>

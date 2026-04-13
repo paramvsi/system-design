@@ -1,0 +1,71 @@
+{
+  "slug": "microservices-vs-monolith",
+  "title": "Microservices vs Monolith",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 25,
+    "s": 80,
+    "l": 48
+  },
+  "category": "Architecture Patterns",
+  "blurb": "\"Should we go microservices?\" is one of the most consequential — and most misunderstood — architectural decisions. Pick microservices too early and you'll spend years debugging distributed systems instead of building fea",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>\"Should we go microservices?\" is one of the most consequential — and most misunderstood — architectural decisions. Pick microservices too early and you'll spend years debugging distributed systems instead of building features. Pick monolith too long and your team grinds to a halt as everyone steps on each other's deploys. The right answer depends entirely on team size, complexity, and operational maturity.</p>\n      <p>Most teams who say \"we're moving to microservices\" should actually build a <strong>modular monolith</strong> first. Most teams already on microservices wish they had started with one.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The spectrum",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The spectrum</h2></div>\n    <div class=\"prose\">\n      <p>It's not a binary. Real architectures live on a spectrum:</p>\n      <ul>\n        <li><strong>Big-ball-of-mud monolith</strong> — single deploy, no internal boundaries. The horror story. What every monolith becomes if undisciplined.</li>\n        <li><strong>Modular monolith</strong> — single deploy, but enforced internal module boundaries (separate packages, no cross-imports, talks via interfaces). 80% of microservices benefits, 5% of the cost.</li>\n        <li><strong>Service-oriented (a few services)</strong> — 3-10 services aligned to subdomains. Most companies' sweet spot.</li>\n        <li><strong>Microservices (many small services)</strong> — 50+ services. Only justifies itself at FAANG scale or in genuinely independent product teams.</li>\n        <li><strong>Nanoservices / Lambda functions</strong> — every endpoint is its own deployment. Operational nightmare. Almost always wrong.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "What microservices actually buy you",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">What microservices actually buy you</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>Independent deploy.</strong> Team A ships without coordinating with Team B. The biggest real benefit.</li>\n        <li><strong>Independent scaling.</strong> The recommendation service needs 10× the capacity of the user service. Scale just it.</li>\n        <li><strong>Tech heterogeneity.</strong> Use Rust for the latency-critical service, Python for the ML service. Each team picks.</li>\n        <li><strong>Fault isolation.</strong> One service crashing doesn't take everything down (with proper <a href=\"/concepts/circuit-breaker\">circuit breakers</a>).</li>\n        <li><strong>Team autonomy.</strong> Conway's Law says your architecture mirrors your org. Microservices align technical boundaries with team boundaries.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "What microservices cost you",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">What microservices cost you</h2></div>\n    <div class=\"prose\">\n      <p>The hidden taxes nobody talks about until they're paying them:</p>\n      <ul>\n        <li><strong>Network calls everywhere.</strong> What was a function call is now an HTTP/gRPC request. 1ms becomes 10ms. Failures everywhere.</li>\n        <li><strong>Distributed transactions.</strong> The atomic UPDATE across two tables becomes a <a href=\"/concepts/transactions-distributed\">saga with compensating actions</a>.</li>\n        <li><strong>Operational complexity.</strong> 50 services × 3 environments × 5 dependencies each = thousands of deployment artifacts. Need <a href=\"/concepts/service-mesh\">service mesh</a>, distributed tracing, centralized logging.</li>\n        <li><strong>Schema coordination.</strong> Service A depends on Service B's API. B changes the API → A breaks. Now you need API versioning, backwards compatibility forever, contract tests.</li>\n        <li><strong>Local development hell.</strong> \"To run my service I need to spin up 12 dependencies.\" Hours of setup; productivity drops.</li>\n        <li><strong>Cost.</strong> Each service has overhead — its own pod, its own DB connections, its own monitoring, its own on-call rotation.</li>\n      </ul>\n      <div class=\"callout callout-warn\">\n        <div class=\"callout-label\">Conway's Law in reverse</div>\n        <p>If you have 5 engineers and you build 50 microservices, you're guaranteed to fail. Each service needs ~2-5 engineers to maintain it well. Don't build more services than you have teams.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — the modular monolith middle path",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — the modular monolith middle path</h2></div>\n    <div class=\"prose\">\n      <p>The pattern most successful product teams converge on:</p>\n      <ol>\n        <li>Single deployable artifact (one Docker image, one fleet, one DB connection pool).</li>\n        <li>Internally organized into <strong>modules</strong> that mirror your <a href=\"/concepts/domain-driven-design\">bounded contexts</a> — orders, users, payments, inventory.</li>\n        <li>Modules can only call each other through <strong>explicit interfaces</strong> — never direct DB joins, never importing internal classes.</li>\n        <li>Each module owns its tables; cross-module queries go through the owning module's interface.</li>\n        <li>Linter/CI enforces the boundaries: \"orders module cannot import payments.internal.*\"</li>\n      </ol>\n      <p>You get 80% of the architectural benefits (clear boundaries, replaceable modules, isolated changes) without the operational cost. When a module genuinely needs independent scaling or its own deploy cadence, you can extract it to a service — and the work is straightforward because the boundaries are already clean.</p>\n      <p>Shopify's monolith — millions of lines of Ruby — runs this way. So does Stripe's main API. Both could afford full microservices; both deliberately avoided it.</p>\n\n      <div class=\"diagram-wrap\">\n        <div class=\"diagram-head\">\n          <span class=\"diagram-label\">The Three Stages</span>\n          <span class=\"diagram-type\">Mermaid</span>\n        </div>\n        <div class=\"diagram-body\">\n          <div class=\"mermaid\">\nflowchart LR\n    A[\"Big-ball-of-mud<br>monolith\"]\n    B[\"Modular monolith<br>(80% of teams should be here)\"]\n    C[\"Microservices<br>(only at scale)\"]\n    A --&gt;|refactor| B\n    B --&gt;|extract when justified| C\n    style A fill:#fce8e6,stroke:#8b1a12\n    style B fill:#e4f5ec,stroke:#1a5c38\n    style C fill:#fff7d4,stroke:#8b6914\n          </div>\n        </div>\n      </div>\n\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">Interview answer</div>\n        <p>\"For a team of N engineers I'd start with a modular monolith — single deploy, enforced module boundaries aligned to bounded contexts. Extract a service only when there's a concrete forcing function: independent scale, separate language, or genuine team-of-teams autonomy.\"</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Shopify</div><h4>Modular Ruby monolith</h4><p>Millions of LOC, billions in GMV. Deliberately monolithic with strict module boundaries. Extracted only a handful of services (Tax, Identity).</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Stripe</div><h4>Mostly monolith</h4><p>Most of Stripe's API is one Ruby service. Specific concerns (Radar, Connect) are separate. Strong internal libraries enforce boundaries.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Amazon</div><h4>Microservices done right</h4><p>The \"two-pizza team\" rule + every team owns a service end-to-end. ~10,000 services. Forced by org scale, not preference.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Netflix</div><h4>Pure microservices</h4><p>Pioneered the pattern. Hundreds of services. Justifies the cost because of streaming-scale ops + independent product teams.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>E-commerce architectures choose modular monolith vs services per domain. News feed at scale uses microservices for ranker / feed-store / fan-out independently. Uber's microservice fleet is the textbook example of the pattern at scale.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [
+    {
+      "sectionId": "deep-dive",
+      "source": "flowchart LR\n    A[\"Big-ball-of-mudmonolith\"]\n    B[\"Modular monolith(80% of teams should be here)\"]\n    C[\"Microservices(only at scale)\"]\n    A -->|refactor| B\n    B -->|extract when justified| C\n    style A fill:#fce8e6,stroke:#8b1a12\n    style B fill:#e4f5ec,stroke:#1a5c38\n    style C fill:#fff7d4,stroke:#8b6914",
+      "index": 0
+    }
+  ],
+  "related": [],
+  "similar": [],
+  "readMinutes": 4
+}

@@ -1,0 +1,1210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>WhatsApp / Messenger — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+
+  <style>
+/* ux-v2-bumped */
+
+  :root {
+    --accent-h:       145;
+    --accent-s:       63%;
+    --accent-l:       42%;
+    --accent:         hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+    --accent-light:   hsl(var(--accent-h), 60%, 94%);
+    --accent-mid:     hsl(var(--accent-h), 50%, 88%);
+    --accent-text:    hsl(var(--accent-h), var(--accent-s), 28%);
+    --accent-border:  hsl(var(--accent-h), 45%, 76%);
+    --hl-yellow:      #fff0a0;
+    --hl-yellow-dark: #a07a00;
+    --hl-accent:      hsl(var(--accent-h), 70%, 88%);
+    --hl-accent-dark: hsl(var(--accent-h), 60%, 26%);
+    --bg:             #ffffff;
+    --bg-subtle:      #f7f7f5;
+    --bg-raised:      #f0eeeb;
+    --bg-code:        #f4f3f0;
+    --border:         #e4e2de;
+    --border-strong:  #ccc9c4;
+    --text-primary:   #111110;
+    --text-secondary: #4a4845;
+    --text-muted:     #878480;
+    --text-code:      #2d2c2b;
+    --red:            #c0392b;
+    --green:          #1a7a4a;
+    --amber:          #92601a;
+    --font-serif:     'Instrument Serif', Georgia, serif;
+    --font-sans:      'Geist', system-ui, sans-serif;
+    --font-mono:      'JetBrains Mono', 'Fira Code', monospace;
+    --radius-sm:      4px;
+    --radius-md:      8px;
+    --radius-lg:      12px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; font-size: 15px; }
+  body { font-family: var(--font-sans); background: var(--bg); color: var(--text-primary); line-height: 1.65; -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--hl-yellow); color: var(--text-primary); }
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg-subtle); }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+
+  .layout { display: grid; grid-template-columns: 228px 1fr; grid-template-rows: 52px 1fr; min-height: 100vh; }
+
+  .topbar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding: 0 1.5rem; height: 52px; border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.92); backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 100; }
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+  .back-link { display: flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); text-decoration: none; padding: 4px 8px; border-radius: var(--radius-sm); transition: all 0.15s; letter-spacing: 0.02em; }
+  .back-link:hover { color: var(--text-primary); background: var(--bg-subtle); }
+  .topbar-sep { width: 1px; height: 16px; background: var(--border); }
+  .topbar-problem { font-family: var(--font-sans); font-size: 15px; font-weight: 500; color: var(--text-primary); }
+  .topbar-right { display: flex; align-items: center; gap: 8px; }
+  .badge { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; padding: 3px 9px; border-radius: 20px; font-weight: 500; text-transform: uppercase; }
+  .badge-accent { background: var(--accent-light); color: var(--accent-text); border: 1px solid var(--accent-border); }
+  .badge-muted { background: var(--bg-subtle); color: var(--text-muted); border: 1px solid var(--border); }
+
+  .sidebar { position: sticky; top: 52px; height: calc(100vh - 52px); overflow-y: auto; border-right: 1px solid var(--border); padding: 1.25rem 0; background: var(--bg-subtle); }
+  .sidebar-group-label { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); padding: 0 1rem 6px; margin-top: 1.25rem; }
+  .sidebar-group-label:first-child { margin-top: 0; }
+  .sidebar a { display: flex; align-items: center; gap: 9px; padding: 5px 1rem; font-size: 14.5px; font-family: var(--font-sans); font-weight: 400; color: var(--text-secondary); text-decoration: none; border-left: 2px solid transparent; transition: all 0.12s; line-height: 1.4; }
+  .sidebar a:hover { color: var(--text-primary); background: var(--bg-raised); }
+  .sidebar a.active { color: var(--accent-text); border-left-color: var(--accent); background: var(--accent-light); font-weight: 500; }
+  .sidebar-n { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-muted); min-width: 16px; flex-shrink: 0; }
+  .sidebar a.active .sidebar-n { color: var(--accent); }
+
+  .main { padding: 2.5rem 3rem 4rem; max-width: 840px; }
+
+  .hero { padding-bottom: 2rem; margin-bottom: 2rem; border-bottom: 1px solid var(--border); }
+  .hero-kicker { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; display: flex; align-items: center; gap: 7px; }
+  .hero-kicker::before { content: ''; display: inline-block; width: 18px; height: 1.5px; background: var(--accent); border-radius: 1px; }
+  .hero-title { font-family: var(--font-serif); font-size: clamp(2rem, 3.5vw, 2.8rem); font-weight: 400; line-height: 1.15; letter-spacing: -0.01em; color: var(--text-primary); margin-bottom: 12px; }
+  .hero-title em { font-style: italic; color: var(--accent-text); }
+  .hero-desc { font-size: 14.5px; color: var(--text-secondary); max-width: 600px; line-height: 1.75; font-weight: 300; margin-bottom: 1.25rem; }
+  .hero-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag { font-family: var(--font-mono); font-size: 12px; padding: 3px 10px; border-radius: 20px; border: 1px solid var(--border); color: var(--text-secondary); background: var(--bg-subtle); letter-spacing: 0.02em; }
+  .tag.accent { background: var(--accent-light); color: var(--accent-text); border-color: var(--accent-border); font-weight: 500; }
+
+  .section { margin-bottom: 3rem; scroll-margin-top: 72px; }
+  .section-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 1.25rem; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .section-n { font-family: var(--font-mono); font-size: 11px; color: var(--accent); opacity: 0.7; min-width: 22px; letter-spacing: 0.04em; }
+  .section-title { font-family: var(--font-sans); font-size: 15px; font-weight: 600; color: var(--text-primary); letter-spacing: -0.01em; }
+
+  .hl { background: var(--hl-yellow); color: var(--text-primary); padding: 1px 4px; border-radius: 3px; font-weight: 500; }
+  .hl-accent { background: var(--hl-accent); color: var(--hl-accent-dark); padding: 1px 4px; border-radius: 3px; font-weight: 500; }
+  .hl-red { background: #fce8e6; color: #8b1a12; padding: 1px 4px; border-radius: 3px; font-weight: 500; }
+  .hl-green { background: #e4f5ec; color: #1a5c38; padding: 1px 4px; border-radius: 3px; font-weight: 500; }
+
+  .prose { font-size: 16px; color: var(--text-secondary); font-weight: 300; line-height: 1.75; }
+  .prose p { margin-bottom: 0.85em; }
+  .prose p:last-child { margin-bottom: 0; }
+  .prose strong { color: var(--text-primary); font-weight: 600; }
+  .prose code { font-family: var(--font-mono); font-size: 13.5px; background: var(--bg-code); border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; color: var(--text-code); }
+
+  .callout { border-left: 3px solid var(--accent); background: var(--accent-light); border-radius: 0 var(--radius-md) var(--radius-md) 0; padding: 10px 14px; margin: 1rem 0; }
+  .callout-label { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-text); margin-bottom: 4px; font-weight: 500; }
+  .callout p { font-size: 15.5px; color: var(--text-secondary); font-weight: 300; line-height: 1.65; }
+  .callout-warn { border-left-color: #c0392b; background: #fce8e6; }
+  .callout-warn .callout-label { color: #8b1a12; }
+  .callout-good { border-left-color: #1a7a4a; background: #e4f5ec; }
+  .callout-good .callout-label { color: #1a5c38; }
+
+  .req-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .req-box { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.1rem; background: var(--bg); }
+  .req-box-head { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .req-box-head.func { color: var(--accent-text); }
+  .req-box-head.nonfunc { color: var(--text-muted); }
+  .req-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.5; flex-shrink: 0; }
+  .req-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .req-list li { font-size: 15px; color: var(--text-secondary); font-weight: 300; display: flex; align-items: flex-start; gap: 7px; line-height: 1.5; }
+  .req-list li::before { content: ''; width: 4px; height: 4px; border-radius: 50%; background: var(--accent); margin-top: 6px; flex-shrink: 0; opacity: 0.5; }
+
+  .table-wrap { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 1rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  thead th { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); padding: 8px 14px; text-align: left; background: var(--bg-subtle); border-bottom: 1px solid var(--border); font-weight: 400; }
+  tbody td { padding: 9px 14px; border-bottom: 1px solid var(--border); color: var(--text-secondary); font-weight: 300; vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--bg-subtle); }
+  td.t-metric { color: var(--text-primary); font-weight: 500; font-size: 14.5px; }
+  td.t-value { font-family: var(--font-mono); font-size: 13.5px; color: var(--accent-text); font-weight: 500; }
+  td.t-calc { font-family: var(--font-mono); font-size: 13px; color: var(--text-muted); }
+
+  .endpoint { border: 1px solid var(--border); border-radius: var(--radius-lg); margin-bottom: 8px; overflow: hidden; }
+  .endpoint-head { display: flex; align-items: center; gap: 10px; padding: 9px 14px; background: var(--bg-subtle); border-bottom: 1px solid var(--border); }
+  .method { font-family: var(--font-mono); font-size: 12px; font-weight: 500; padding: 2px 7px; border-radius: 4px; letter-spacing: 0.04em; min-width: 46px; text-align: center; }
+  .method.get { background: #dcfce7; color: #166534; }
+  .method.post { background: #dbeafe; color: #1e40af; }
+  .method.put { background: #fef9c3; color: #854d0e; }
+  .method.delete { background: #fee2e2; color: #991b1b; }
+  .ep-path { font-family: var(--font-mono); font-size: 14.5px; color: var(--text-primary); }
+  .ep-desc { font-size: 13.5px; color: var(--text-muted); margin-left: auto; font-style: italic; }
+  .endpoint-body { padding: 10px 14px; }
+
+  .code { background: var(--bg-code); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; font-family: var(--font-mono); font-size: 13.5px; color: var(--text-code); overflow-x: auto; line-height: 1.8; margin: 6px 0; }
+  .c-comment { color: var(--text-muted); font-style: italic; }
+  .c-key { color: var(--accent-text); font-weight: 500; }
+  .c-str { color: #1a6b3a; }
+  .c-num { color: #92601a; }
+  .c-kw { color: #6b21a8; }
+
+  .diagram-wrap { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 1rem; background: var(--bg); }
+  .diagram-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; background: var(--bg-subtle); border-bottom: 1px solid var(--border); }
+  .diagram-label { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+  .diagram-type { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.04em; }
+  .diagram-body { padding: 1.5rem; }
+  .arch-svg { width: 100%; height: auto; display: block; }
+
+  .anim-wrap { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 1rem; }
+  .anim-head { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--bg-subtle); border-bottom: 1px solid var(--border); }
+  .anim-title { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin-right: auto; }
+  .btn { padding: 4px 12px; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.04em; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--bg); color: var(--text-secondary); cursor: pointer; transition: all 0.12s; }
+  .btn:hover { background: var(--bg-raised); color: var(--text-primary); }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn.primary:hover { opacity: 0.88; }
+  .anim-body { padding: 1.5rem; min-height: 180px; }
+
+  .flow { display: flex; align-items: center; gap: 0; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+  .flow-node { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .flow-box { padding: 8px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary); background: var(--bg-subtle); white-space: nowrap; transition: all 0.25s; font-weight: 400; }
+  .flow-box.active { border-color: var(--accent); background: var(--accent-light); color: var(--accent-text); font-weight: 500; }
+  .flow-sub { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-muted); white-space: nowrap; }
+  .flow-connector { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
+  .flow-line { width: 36px; height: 1px; background: var(--border-strong); position: relative; transition: background 0.25s; }
+  .flow-line.active { background: var(--accent); }
+  .flow-pkt { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); position: absolute; top: -3px; left: -3.5px; opacity: 0; }
+  .flow-pkt.go { animation: pktMove 0.55s ease forwards; }
+  @keyframes pktMove { 0% { left: -3.5px; opacity: 1; } 100% { left: 33px; opacity: 1; } }
+  .flow-step-n { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); margin-top: 3px; }
+  .anim-desc { margin-top: 1rem; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); min-height: 18px; text-align: center; letter-spacing: 0.02em; }
+
+  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1rem; }
+  .card { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.1rem; background: var(--bg); transition: border-color 0.15s; }
+  .card:hover { border-color: var(--border-strong); }
+  .card-head { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
+  .card-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .card-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+  .card p, .card li { font-size: 15px; color: var(--text-secondary); font-weight: 300; line-height: 1.65; }
+  .card ul { padding-left: 1rem; }
+  .card li { margin-bottom: 3px; }
+
+  .tradeoff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .tradeoff { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.1rem; }
+  .tradeoff.chosen { border-color: var(--accent-border); background: var(--accent-light); }
+  .tradeoff-kicker { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 5px; }
+  .tradeoff.chosen .tradeoff-kicker { color: var(--accent-text); }
+  .tradeoff-name { font-size: 15.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+  .tradeoff p { font-size: 15px; color: var(--text-secondary); font-weight: 300; line-height: 1.65; }
+  .verdict { display: inline-block; margin-top: 8px; font-family: var(--font-mono); font-size: 11px; padding: 2px 8px; border-radius: 3px; letter-spacing: 0.03em; }
+  .verdict-yes { background: #dcfce7; color: #166534; }
+  .verdict-maybe { background: #fef9c3; color: #854d0e; }
+  .verdict-no { background: #fee2e2; color: #991b1b; }
+
+  .failure { display: grid; grid-template-columns: 36px 1fr; gap: 0 12px; margin-bottom: 1.5rem; align-items: start; }
+  .failure-icon { width: 36px; height: 36px; border-radius: var(--radius-md); background: #fee2e2; border: 1px solid #fca5a5; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .failure-title { font-size: 15.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 3px; }
+  .failure-desc { font-size: 15px; color: var(--text-secondary); font-weight: 300; line-height: 1.65; margin-bottom: 6px; }
+  .mitigation { font-family: var(--font-mono); font-size: 12px; color: #166534; background: #dcfce7; border: 1px solid #86efac; padding: 3px 9px; border-radius: 4px; display: inline-block; }
+
+  .tips { display: flex; flex-direction: column; gap: 8px; }
+  .tip { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg); transition: border-color 0.12s; }
+  .tip:hover { border-color: var(--accent-border); }
+  .tip-n { font-family: var(--font-mono); font-size: 11px; color: var(--accent); min-width: 18px; padding-top: 1px; font-weight: 500; }
+  .tip-text { font-size: 15px; color: var(--text-secondary); font-weight: 300; line-height: 1.65; }
+  .tip-text strong { color: var(--text-primary); font-weight: 600; }
+
+  .similar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 8px; }
+  .similar-card { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 10px 12px; text-decoration: none; transition: all 0.15s; display: block; background: var(--bg); }
+  .similar-card:hover { border-color: var(--accent-border); background: var(--accent-light); transform: translateY(-1px); }
+  .similar-name { font-size: 14.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 3px; }
+  .similar-reason { font-size: 13px; color: var(--text-muted); font-weight: 300; line-height: 1.5; }
+
+  .timeline { position: relative; padding-left: 1.75rem; }
+  .timeline::before { content: ''; position: absolute; left: 5px; top: 10px; bottom: 10px; width: 1px; background: linear-gradient(to bottom, var(--accent), var(--border)); }
+  .timeline-step { position: relative; margin-bottom: 1.75rem; }
+  .timeline-step:last-child { margin-bottom: 0; }
+  .timeline-step::before { content: ''; position: absolute; left: -1.45rem; top: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); box-shadow: 0 0 0 1.5px var(--accent); }
+  .timeline-phase { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin-bottom: 3px; }
+  .timeline-title { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+  .timeline-desc { font-size: 15px; color: var(--text-secondary); font-weight: 300; line-height: 1.65; }
+
+  /* Trace stepper */
+  .trace-step { display: flex; gap: 14px; align-items: flex-start; padding: 10px 12px; border-radius: var(--radius-md); border: 1px solid var(--border); margin-bottom: 6px; background: var(--bg); transition: all 0.2s; }
+  .trace-step.active { border-color: var(--accent-border); background: var(--accent-light); }
+  .trace-n { font-family: var(--font-mono); font-size: 11px; color: var(--accent); min-width: 22px; padding-top: 2px; font-weight: 500; }
+  .trace-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+  .trace-title { font-size: 15px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
+  .trace-desc { font-size: 13.5px; color: var(--text-secondary); font-weight: 300; line-height: 1.5; }
+  .trace-tag { display: inline-block; font-family: var(--font-mono); font-size: 11px; padding: 1px 7px; border-radius: 4px; margin-top: 4px; background: var(--accent-light); color: var(--accent-text); border: 1px solid var(--accent-border); }
+
+  .mermaid { display: flex; justify-content: center; }
+  .mermaid svg { max-width: 100%; }
+
+  @media (max-width: 820px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .main { padding: 1.5rem 1.1rem 3rem; }
+    .req-grid, .tradeoff-grid, .card-grid { grid-template-columns: 1fr; }
+  }
+
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .hero { animation: fadeUp 0.4s ease both; }
+  .section:nth-child(1) { animation: fadeUp 0.4s 0.04s ease both; }
+  .section:nth-child(2) { animation: fadeUp 0.4s 0.08s ease both; }
+  .section:nth-child(3) { animation: fadeUp 0.4s 0.12s ease both; }
+  .section:nth-child(4) { animation: fadeUp 0.4s 0.16s ease both; }
+  .section:nth-child(5) { animation: fadeUp 0.4s 0.20s ease both; }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- TOP BAR -->
+  <nav class="topbar">
+    <div class="topbar-left">
+      <a href="../index.html" class="back-link">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 2L4 6l4 4"/></svg>
+        All Problems
+      </a>
+      <div class="topbar-sep"></div>
+      <span class="topbar-problem">WhatsApp / Messenger</span>
+    </div>
+    <div class="topbar-right">
+      <span class="badge badge-accent">System Design</span>
+      <span class="badge badge-muted">Advanced</span>
+    </div>
+  </nav>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-group-label">On this page</div>
+    <a href="#problem" class="active"><span class="sidebar-n">01</span>Problem Statement</a>
+    <a href="#requirements"><span class="sidebar-n">02</span>Requirements</a>
+    <a href="#scale"><span class="sidebar-n">03</span>Scale Estimation</a>
+    <a href="#api"><span class="sidebar-n">04</span>API Design</a>
+    <a href="#architecture"><span class="sidebar-n">05</span>Architecture</a>
+    <a href="#deep-dive"><span class="sidebar-n">06</span>Deep Dive</a>
+    <a href="#message-trace"><span class="sidebar-n">07</span>Message Trace</a>
+    <a href="#tradeoffs"><span class="sidebar-n">08</span>Tradeoffs</a>
+    <a href="#failures"><span class="sidebar-n">09</span>Failure Scenarios</a>
+    <a href="#interview-tips"><span class="sidebar-n">10</span>Interview Tips</a>
+    <a href="#similar"><span class="sidebar-n">11</span>Similar Problems</a>
+    <a href="#evolution"><span class="sidebar-n">12</span>Evolution</a>
+    <div class="sidebar-group-label">Related</div>
+    <a href="../url-shortener/index.html"><span class="sidebar-n">→</span>URL Shortener</a>
+    <a href="../twitter-feed/index.html"><span class="sidebar-n">→</span>Twitter Feed</a>
+    <a href="../notification/index.html"><span class="sidebar-n">→</span>Notification System</a>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- HERO -->
+    <div class="hero" id="problem">
+      <div class="hero-kicker">System Design Reference — Problem 04</div>
+      <h1 class="hero-title">Design <em>WhatsApp</em></h1>
+      <p class="hero-desc">
+        A real-time messaging system supporting one-to-one and group chat, delivery receipts, and offline message queuing at 2 billion user scale. The core challenge: maintaining 50 million persistent WebSocket connections while routing messages across hundreds of stateful servers in under 100ms.
+      </p>
+      <div class="hero-tags">
+        <span class="tag accent">⚡ Core: WebSockets + Real-time Routing</span>
+        <span class="tag">2B Users</span>
+        <span class="tag">100B msgs/day</span>
+        <span class="tag">50M Concurrent Connections</span>
+        <span class="tag">Availability > Consistency</span>
+      </div>
+    </div>
+
+    <!-- 02 REQUIREMENTS -->
+    <section class="section" id="requirements">
+      <div class="section-head">
+        <span class="section-n">02</span>
+        <h2 class="section-title">Requirements</h2>
+      </div>
+
+      <div class="req-grid">
+        <div class="req-box">
+          <div class="req-box-head func"><span class="req-dot"></span>Functional — Must Design</div>
+          <ul class="req-list">
+            <li>One-to-one messaging with <span class="hl-accent">three-state delivery receipts</span> — sent / delivered / read</li>
+            <li>Group messaging up to <span class="hl">256 members</span></li>
+            <li>Offline message queuing — held for <span class="hl">30 days</span>, delivered on reconnect</li>
+            <li>Push notifications via <span class="hl-accent">APNs (iOS)</span> and <span class="hl-accent">FCM (Android)</span></li>
+          </ul>
+        </div>
+        <div class="req-box">
+          <div class="req-box-head nonfunc"><span class="req-dot"></span>Non-Functional</div>
+          <ul class="req-list">
+            <li><span class="hl">Availability over consistency</span> — system stays up even if delivery is briefly delayed</li>
+            <li>Online-to-online delivery under <span class="hl">100ms</span></li>
+            <li><span class="hl-accent">At-least-once delivery</span> — duplicates acceptable, loss is not</li>
+            <li>Scale: <span class="hl">100 billion messages/day</span>, 50M concurrent connections</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="req-grid" style="margin-top:1rem">
+        <div class="req-box">
+          <div class="req-box-head nonfunc"><span class="req-dot"></span>Mention — Don't Fully Design</div>
+          <ul class="req-list">
+            <li>Media sending — object storage + URL in message body</li>
+            <li>Typing indicators and online / last seen presence</li>
+            <li>Multi-device sync</li>
+          </ul>
+        </div>
+        <div class="req-box">
+          <div class="req-box-head func"><span class="req-dot"></span>E2EE — Acknowledge Deeply</div>
+          <ul class="req-list">
+            <li><span class="hl-accent">Signal Protocol</span> — per-message key derivation</li>
+            <li>Server is a <span class="hl">blind relay</span> — forwards ciphertext it cannot read</li>
+            <li>Keys stored only on devices, <span class="hl-red">never on server</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 03 SCALE -->
+    <section class="section" id="scale">
+      <div class="section-head">
+        <span class="section-n">03</span>
+        <h2 class="section-title">Scale Estimation</h2>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Metric</th><th>Calculation</th><th>Result</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="t-metric">Total / Daily Active Users</td><td>Industry figures</td><td class="t-value">2B / 500M DAU</td></tr>
+            <tr><td class="t-metric">Messages per day</td><td>Industry figure</td><td class="t-value">100B</td></tr>
+            <tr><td class="t-metric">Average write RPS</td><td class="t-calc">100B ÷ 86,400</td><td class="t-value">~1.16M/sec</td></tr>
+            <tr><td class="t-metric">Peak write RPS</td><td class="t-calc">1.16M × 3 (peak multiplier)</td><td class="t-value">~3.5M/sec</td></tr>
+            <tr><td class="t-metric">Avg message size</td><td>Text + metadata</td><td class="t-value">~500 bytes</td></tr>
+            <tr><td class="t-metric">Storage per day</td><td class="t-calc">1.16M × 500B × 86,400</td><td class="t-value">~50 TB/day</td></tr>
+            <tr><td class="t-metric">Concurrent WebSocket connections</td><td class="t-calc">10% of DAU online simultaneously</td><td class="t-value">~50M</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <div class="callout-label">Chat Server Sizing</div>
+        <p>
+          Memory per WebSocket connection: <span class="hl">~100 KB</span>. A 32 GB server at 65% utilisation holds
+          <span class="hl">~200K connections</span>. To serve 50M concurrent connections:
+          <strong>50M ÷ 200K = ~250 chat servers</strong>. Provision
+          <span class="hl">300–350</span> for failover headroom and traffic spikes.
+        </p>
+      </div>
+
+      <div class="callout callout-warn" style="margin-top:0.75rem">
+        <div class="callout-label">The Write Amplification Trap</div>
+        <p>
+          One message in a 256-person group generates <span class="hl-red">255 delivery receipts + 255 read receipts</span> — ~510 additional writes. At scale, the actual write load is 3–5× the raw message count. Always account for this in your estimates.
+        </p>
+      </div>
+    </section>
+
+    <!-- 04 API -->
+    <section class="section" id="api">
+      <div class="section-head">
+        <span class="section-n">04</span>
+        <h2 class="section-title">API Design</h2>
+      </div>
+
+      <div class="prose" style="margin-bottom:1rem">
+        <p>The primary API is <span class="hl-accent">WebSocket-based</span> for real-time messaging. REST endpoints handle auxiliary operations — fetching history, managing groups, registering devices.</p>
+      </div>
+
+      <div class="endpoint">
+        <div class="endpoint-head">
+          <span class="method post">WS</span>
+          <span class="ep-path">wss://chat.whatsapp.com/connect</span>
+          <span class="ep-desc">Establish persistent connection</span>
+        </div>
+        <div class="endpoint-body">
+          <div class="code">
+<span class="c-comment">// Client sends on connect (auth + registration)</span>
+{ <span class="c-key">"type"</span>: <span class="c-str">"connect"</span>, <span class="c-key">"user_id"</span>: <span class="c-str">"u123"</span>, <span class="c-key">"token"</span>: <span class="c-str">"jwt..."</span>, <span class="c-key">"device_id"</span>: <span class="c-str">"d456"</span> }
+
+<span class="c-comment">// Server registers: SET session:u123 → "chat-server-7"</span>
+{ <span class="c-key">"type"</span>: <span class="c-str">"connected"</span>, <span class="c-key">"server_id"</span>: <span class="c-str">"chat-server-7"</span> }</div>
+        </div>
+      </div>
+
+      <div class="endpoint">
+        <div class="endpoint-head">
+          <span class="method post">WS</span>
+          <span class="ep-path">send_message</span>
+          <span class="ep-desc">Send a message over WebSocket frame</span>
+        </div>
+        <div class="endpoint-body">
+          <div class="code">
+<span class="c-comment">// Client → Server (WebSocket frame)</span>
+{
+  <span class="c-key">"type"</span>:           <span class="c-str">"message"</span>,
+  <span class="c-key">"message_id"</span>:     <span class="c-str">"msg_uuid_abc"</span>,   <span class="c-comment">// client-generated for deduplication</span>
+  <span class="c-key">"conversation_id"</span>: <span class="c-str">"conv_xyz"</span>,
+  <span class="c-key">"recipient_id"</span>:    <span class="c-str">"u456"</span>,
+  <span class="c-key">"content"</span>:         <span class="c-str">"hey"</span>,
+  <span class="c-key">"timestamp"</span>:       <span class="c-num">1711180800000</span>
+}
+
+<span class="c-comment">// Server → Client (immediate ✓ sent receipt)</span>
+{ <span class="c-key">"type"</span>: <span class="c-str">"ack"</span>, <span class="c-key">"message_id"</span>: <span class="c-str">"msg_uuid_abc"</span>, <span class="c-key">"status"</span>: <span class="c-str">"sent"</span> }</div>
+        </div>
+      </div>
+
+      <div class="endpoint">
+        <div class="endpoint-head">
+          <span class="method get">GET</span>
+          <span class="ep-path">/v1/conversations/:id/messages</span>
+          <span class="ep-desc">Fetch message history (paginated)</span>
+        </div>
+        <div class="endpoint-body">
+          <div class="code">
+<span class="c-comment">// Query params: ?before=timestamp&limit=50</span>
+<span class="c-comment">// Response 200</span>
+{
+  <span class="c-key">"messages"</span>: [ { <span class="c-key">"id"</span>: <span class="c-str">"msg_1"</span>, <span class="c-key">"content"</span>: <span class="c-str">"hey"</span>, <span class="c-key">"ts"</span>: <span class="c-num">1711180800000</span>, <span class="c-key">"status"</span>: <span class="c-str">"read"</span> } ],
+  <span class="c-key">"cursor"</span>: <span class="c-str">"eyJ0cyI6MTcxMX0="</span>,
+  <span class="c-key">"has_more"</span>: <span class="c-kw">true</span>
+}</div>
+        </div>
+      </div>
+
+      <div class="endpoint">
+        <div class="endpoint-head">
+          <span class="method post">POST</span>
+          <span class="ep-path">/v1/devices/register</span>
+          <span class="ep-desc">Register push notification token</span>
+        </div>
+        <div class="endpoint-body">
+          <div class="code">
+<span class="c-comment">// Request</span>
+{ <span class="c-key">"user_id"</span>: <span class="c-str">"u123"</span>, <span class="c-key">"platform"</span>: <span class="c-str">"ios"</span>, <span class="c-key">"push_token"</span>: <span class="c-str">"apns_token_xyz"</span> }
+<span class="c-comment">// Response 200</span>
+{ <span class="c-key">"device_id"</span>: <span class="c-str">"d456"</span>, <span class="c-key">"registered"</span>: <span class="c-kw">true</span> }</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 05 ARCHITECTURE -->
+    <section class="section" id="architecture">
+      <div class="section-head">
+        <span class="section-n">05</span>
+        <h2 class="section-title">High-Level Architecture</h2>
+      </div>
+
+      <div class="diagram-wrap">
+        <div class="diagram-head">
+          <span class="diagram-label">Architecture — High Level</span>
+          <span class="diagram-type">SVG Diagram</span>
+        </div>
+        <div class="diagram-body">
+          <svg class="arch-svg" viewBox="0 0 760 560" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                <polygon points="0 0,8 3,0 6" fill="#9ca3af"/>
+              </marker>
+              <marker id="arr-hi" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                <polygon points="0 0,8 3,0 6" fill="#1a7a4a"/>
+              </marker>
+            </defs>
+
+            <!-- Clients -->
+            <g onclick="hlNode(this)" style="cursor:pointer">
+              <rect x="20" y="20" width="100" height="60" rx="8" fill="#f7f7f5" stroke="#e4e2de" stroke-width="1"/>
+              <text x="70" y="44" text-anchor="middle" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">CLIENT</text>
+              <text x="70" y="60" text-anchor="middle" fill="#111110" font-size="12" font-family="Geist,sans-serif" font-weight="600">Alice</text>
+              <text x="70" y="73" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">Mobile</text>
+            </g>
+            <g onclick="hlNode(this)" style="cursor:pointer">
+              <rect x="640" y="20" width="100" height="60" rx="8" fill="#f7f7f5" stroke="#e4e2de" stroke-width="1"/>
+              <text x="690" y="44" text-anchor="middle" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">CLIENT</text>
+              <text x="690" y="60" text-anchor="middle" fill="#111110" font-size="12" font-family="Geist,sans-serif" font-weight="600">Bob</text>
+              <text x="690" y="73" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">Mobile</text>
+            </g>
+
+            <!-- Load Balancer -->
+            <g onclick="hlNode(this)" style="cursor:pointer">
+              <rect x="300" y="20" width="160" height="60" rx="8" fill="#f7f7f5" stroke="#e4e2de" stroke-width="1"/>
+              <text x="380" y="44" text-anchor="middle" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">INFRA</text>
+              <text x="380" y="60" text-anchor="middle" fill="#111110" font-size="12" font-family="Geist,sans-serif" font-weight="600">Load Balancer</text>
+              <text x="380" y="73" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">L4 · sticky sessions</text>
+            </g>
+
+            <!-- Arrows clients → LB -->
+            <line x1="120" y1="50" x2="298" y2="50" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+            <text x="205" y="43" text-anchor="middle" fill="#9ca3af" font-size="8" font-family="JetBrains Mono,monospace">WebSocket</text>
+            <line x1="640" y1="50" x2="462" y2="50" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+            <text x="555" y="43" text-anchor="middle" fill="#9ca3af" font-size="8" font-family="JetBrains Mono,monospace">WebSocket</text>
+
+            <!-- Chat Servers -->
+            <g onclick="hlNode(this)" style="cursor:pointer">
+              <rect x="80" y="150" width="130" height="64" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="1.2"/>
+              <text x="145" y="174" text-anchor="middle" fill="#166534" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">COMPUTE</text>
+              <text x="145" y="190" text-anchor="middle" fill="#111110" font-size="12" font-family="Geist,sans-serif" font-weight="600">Chat Server A</text>
+              <text x="145" y="203" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">Alice connected</text>
+            </g>
+            <g onclick="hlNode(this)" style="cursor:pointer">
+              <rect x="550" y="150" width="130" height="64" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="1.2"/>
+              <text x="615" y="174" text-anchor="middle" fill="#166534" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">COMPUTE</text>
+              <text x="615" y="190" text-anchor="middle" fill="#111110" font-size="12" font-family="Geist,sans-serif" font-weight="600">Chat Server B</text>
+              <text x="615" y="203" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">Bob connected</text>
+            </g>
+
+            <!-- LB → Chat Servers -->
+            <line x1="340" y1="80" x2="175" y2="148" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+            <line x1="420" y1="80" x2="585" y2="148" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+
+            <!-- Redis -->
+            <g onclick="hlNode(this)" style="cursor:pointer">
+              <rect x="315" y="150" width="130" height="64" rx="8" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.2"/>
+              <text x="380" y="174" text-anchor="middle" fill="#9a3412" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">REGISTRY</text>
+              <text x="380" y="190" text-anchor="middle" fill="#111110" font-size="12" font-family="Geist,sans-serif" font-weight="600">Redis</text>
+              <text x="380" y="203" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">user_id → server_id</text>
+            </g>
+
+            <!-- Chat Servers → Redis (dashed) -->
+            <line x1="210" y1="182" x2="313" y2="182" stroke="#d1d5db" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+            <line x1="447" y1="182" x2="549" y2="182" stroke="#d1d5db" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+
+            <!-- Kafka -->
+            <g onclick="hlNode(this)" style="cursor:pointer">
+              <rect x="295" y="280" width="170" height="64" rx="8" fill="#fffbeb" stroke="#fde68a" stroke-width="1.2"/>
+              <text x="380" y="304" text-anchor="middle" fill="#92400e" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">MESSAGE PIPELINE</text>
+              <text x="380" y="320" text-anchor="middle" fill="#111110" font-size="12" font-family="Geist,sans-serif" font-weight="600">Kafka</text>
+              <text x="380" y="333" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">Durable · fan-out · receipts</text>
+            </g>
+
+            <!-- Chat Server A → Kafka -->
+            <path d="M145 214 L145 312 L293 312" fill="none" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+            <text x="200" y="295" fill="#9ca3af" font-size="8" font-family="JetBrains Mono,monospace" text-anchor="middle">publish</text>
+
+            <!-- Consumers row -->
+            <g onclick="hlNode(this)" style="cursor:pointer">
+              <rect x="40" y="410" width="120" height="58" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.2"/>
+              <text x="100" y="432" text-anchor="middle" fill="#1e40af" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.04em">CONSUMER</text>
+              <text x="100" y="448" text-anchor="middle" fill="#111110" font-size="11.5" font-family="Geist,sans-serif" font-weight="600">Msg Writer</text>
+              <text x="100" y="460" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">→ Cassandra</text>
+            </g>
+            <g onclick="hlNode(this)" style="cursor:pointer">
+              <rect x="295" y="410" width="170" height="58" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.2"/>
+              <text x="380" y="432" text-anchor="middle" fill="#1e40af" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.04em">CONSUMER</text>
+              <text x="380" y="448" text-anchor="middle" fill="#111110" font-size="11.5" font-family="Geist,sans-serif" font-weight="600">Delivery Router</text>
+              <text x="380" y="460" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">Redis lookup · route / queue</text>
+            </g>
+            <g onclick="hlNode(this)" style="cursor:pointer">
+              <rect x="600" y="410" width="140" height="58" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.2"/>
+              <text x="670" y="432" text-anchor="middle" fill="#1e40af" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.04em">CONSUMER</text>
+              <text x="670" y="448" text-anchor="middle" fill="#111110" font-size="11.5" font-family="Geist,sans-serif" font-weight="600">Receipt Handler</text>
+              <text x="670" y="460" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">✓✓ → sender</text>
+            </g>
+
+            <!-- Kafka → Consumers -->
+            <path d="M340 344 L100 408" fill="none" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+            <line x1="380" y1="344" x2="380" y2="408" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+            <path d="M420 344 L670 408" fill="none" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+
+            <!-- Storage row -->
+            <g onclick="hlNode(this)" style="cursor:pointer">
+              <rect x="20" y="510" width="130" height="40" rx="8" fill="#f7f7f5" stroke="#e4e2de" stroke-width="1"/>
+              <text x="85" y="527" text-anchor="middle" fill="#111110" font-size="11.5" font-family="Geist,sans-serif" font-weight="600">Cassandra</text>
+              <text x="85" y="541" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">Message history</text>
+            </g>
+            <g onclick="hlNode(this)" style="cursor:pointer">
+              <rect x="280" y="510" width="200" height="40" rx="8" fill="#f7f7f5" stroke="#e4e2de" stroke-width="1"/>
+              <text x="380" y="527" text-anchor="middle" fill="#111110" font-size="11.5" font-family="Geist,sans-serif" font-weight="600">Offline Queue + Push</text>
+              <text x="380" y="541" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">APNs · FCM · 30-day TTL</text>
+            </g>
+            <g onclick="hlNode(this)" style="cursor:pointer">
+              <rect x="580" y="510" width="160" height="40" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+              <text x="660" y="527" text-anchor="middle" fill="#111110" font-size="11.5" font-family="Geist,sans-serif" font-weight="600">Chat Server B</text>
+              <text x="660" y="541" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">Bob → live delivery</text>
+            </g>
+
+            <!-- Consumers → Storage -->
+            <line x1="100" y1="468" x2="85" y2="508" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+            <line x1="380" y1="468" x2="380" y2="508" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+            <line x1="670" y1="468" x2="660" y2="508" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+
+            <!-- Legend -->
+            <line x1="20" y1="562" x2="50" y2="562" stroke="#d1d5db" stroke-width="1"/>
+            <text x="56" y="566" fill="#9ca3af" font-size="8.5" font-family="JetBrains Mono,monospace">Persistent WebSocket</text>
+            <line x1="200" y1="562" x2="230" y2="562" stroke="#d1d5db" stroke-width="1" stroke-dasharray="4,3"/>
+            <text x="236" y="566" fill="#9ca3af" font-size="8.5" font-family="JetBrains Mono,monospace">Async lookup</text>
+            <rect x="380" y="556" width="10" height="10" rx="2" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+            <text x="396" y="566" fill="#9ca3af" font-size="8.5" font-family="JetBrains Mono,monospace">Core real-time path</text>
+          </svg>
+        </div>
+      </div>
+
+      <div class="card-grid">
+        <div class="card">
+          <div class="card-head"><span class="card-dot"></span><span class="card-title">WebSocket + Load Balancer</span></div>
+          <p>Persistent bidirectional connections. The LB uses <span class="hl-accent">sticky sessions</span> — consistent hashing on user ID ensures Alice's frames always reach Server A. If Server A dies, Alice reconnects with exponential backoff + jitter.</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><span class="card-dot"></span><span class="card-title">Redis — Connection Registry</span></div>
+          <p>Maps <code>user_id → server_id</code> with a <span class="hl">60-second TTL</span> refreshed by heartbeat. The most underrated component in this design. Without it, cross-server message routing is impossible. If Redis goes down, delivery degrades gracefully to the offline queue.</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><span class="card-dot"></span><span class="card-title">Kafka — Message Pipeline</span></div>
+          <p>Three jobs: (1) <span class="hl-accent">durable buffer</span> so Alice gets ✓ in &lt;1ms before DB write, (2) <span class="hl-accent">fan-out</span> for group messages — one write triggers N deliveries, (3) carries <span class="hl-accent">receipt events</span> back upstream from recipient to sender.</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><span class="card-dot"></span><span class="card-title">Cassandra — Message Storage</span></div>
+          <p>Partitioned by <code>conversation_id</code>, clustered by <code>timestamp DESC</code>. Chosen over PostgreSQL for <span class="hl">linear write scalability</span> — append-only write path (memtable + commit log) handles 1.2M writes/sec without manual sharding.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 06 DEEP DIVE -->
+    <section class="section" id="deep-dive">
+      <div class="section-head">
+        <span class="section-n">06</span>
+        <h2 class="section-title">Deep Dive — <em style="font-family:var(--font-serif);font-weight:400">WebSockets & Real-Time Routing</em></h2>
+      </div>
+
+      <div class="callout">
+        <div class="callout-label">The Core Problem</div>
+        <p>HTTP is request-response — the server can never reach out unprompted. Chat requires the <span class="hl">server to push to the client at any moment</span>. WebSockets solve this with a persistent bidirectional connection. But persistent connections are stateful — and stateful connections break standard horizontal scaling.</p>
+      </div>
+
+      <!-- Flow Animation -->
+      <div class="anim-wrap">
+        <div class="anim-head">
+          <span class="anim-title">WebSocket message delivery — step through</span>
+          <button class="btn primary" onclick="runFlow()">▶ Run</button>
+          <button class="btn" onclick="resetFlow()">↺ Reset</button>
+        </div>
+        <div class="anim-body">
+          <div class="flow" id="flowWrap"></div>
+          <div class="anim-desc" id="flowDesc">Press Run to walk through real-time message delivery</div>
+        </div>
+      </div>
+
+      <!-- Why Real-Time Feels Instant -->
+      <div class="prose" style="margin-bottom:1.25rem">
+        <p>
+          <strong>Why delivery feels instant across geography.</strong> The naive mental model is Alice → WhatsApp California → Bob. That would be ~250ms of physics. The real path is Alice → nearest regional DC → private backbone → Bob's regional DC → Bob. Multi-region deployment dramatically shortens the actual travel distance.
+        </p>
+        <p>
+          More importantly, the WebSocket is already open. HTTP incurs TCP + TLS handshake overhead on every request — 3-4 round trips before any data moves. WebSocket pays this cost once on connect. Every subsequent message is <span class="hl">one round trip</span>. At 50ms RTT to the nearest DC, that's 50ms latency for same-region delivery.
+        </p>
+        <p>
+          <strong>Receipt latency breakdown</strong> (Bob receives → Alice sees ✓✓): Bob → Server B ~10ms · Server B → Kafka &lt;1ms · Kafka → Receipt Handler ~5ms · Redis lookup &lt;1ms · Handler → Server A ~10ms · Server A → Alice ~10ms = <span class="hl">~37ms total</span>.
+        </p>
+      </div>
+
+      <!-- Mermaid Sequence -->
+      <div class="diagram-wrap">
+        <div class="diagram-head">
+          <span class="diagram-label">Sequence — Message Send &amp; Receipt Flow</span>
+          <span class="diagram-type">Mermaid.js</span>
+        </div>
+        <div class="diagram-body">
+          <div class="mermaid">
+sequenceDiagram
+    participant A  as Alice
+    participant SA as Chat Server A
+    participant K  as Kafka
+    participant R  as Redis
+    participant C  as Cassandra
+    participant SB as Chat Server B
+    participant B  as Bob
+
+    A->>SA: send "hey" (WebSocket frame)
+    SA->>K: publish message event
+    K-->>SA: ack &lt; 1ms
+    SA-->>A: ✓ sent receipt
+
+    par Async consumers
+        K->>C: write to Cassandra
+    and
+        K->>R: GET session:bob
+        R-->>K: "chat-server-B"
+        K->>SB: deliver to Bob
+        SB->>B: push message (WebSocket)
+        B-->>SB: delivered receipt
+        SB->>K: publish receipt event
+        K->>R: GET session:alice
+        R-->>K: "chat-server-A"
+        K->>SA: route receipt
+        SA-->>A: ✓✓ grey (delivered)
+    end
+
+    B->>SB: opens chat (read receipt)
+    SB->>K: publish read event
+    K->>SA: route read receipt
+    SA-->>A: ✓✓ blue (read)
+          </div>
+        </div>
+      </div>
+
+      <!-- Connection Registry Deep Dive -->
+      <div class="callout callout-good" style="margin-top:1.25rem">
+        <div class="callout-label">The Connection Registry — Most Missed Component</div>
+        <p>When Bob connects, Chat Server B writes: <code>SET session:bob → "chat-server-B" EX 60</code>. Every message delivery does <code>GET session:bob</code> first. The 60-second TTL means if Server B crashes, Redis auto-cleans Bob's stale entry — no manual cleanup needed. This is the piece most YouTube tutorials skip entirely.</p>
+      </div>
+    </section>
+
+    <!-- 07 MESSAGE TRACE -->
+    <section class="section" id="message-trace">
+      <div class="section-head">
+        <span class="section-n">07</span>
+        <h2 class="section-title">Complete Message Trace — Alice → Offline Bob</h2>
+      </div>
+
+      <div class="prose" style="margin-bottom:1rem">
+        <p>The most important scenario to understand: Alice sends a message while Bob is offline. Every component in the system is exercised. This is the complete path.</p>
+      </div>
+
+      <div id="traceSteps">
+        <div class="trace-step">
+          <span class="trace-n">01</span>
+          <span class="trace-dot" style="background:#1a7a4a"></span>
+          <div>
+            <div class="trace-title">Alice taps send</div>
+            <div class="trace-desc">WebSocket frame sent to Chat Server A. Payload: sender_id, recipient_id, content, client-generated message_id (for deduplication), client timestamp.</div>
+            <span class="trace-tag">WebSocket · Chat Server A</span>
+          </div>
+        </div>
+        <div class="trace-step">
+          <span class="trace-n">02</span>
+          <span class="trace-dot" style="background:#d97706"></span>
+          <div>
+            <div class="trace-title">Chat Server A publishes to Kafka</div>
+            <div class="trace-desc">Message written to Kafka topic. Kafka acknowledges in &lt;1ms. Server immediately sends ✓ (sent) receipt back to Alice. Alice's tick appears.</div>
+            <span class="trace-tag">Kafka · &lt;1ms · Alice sees ✓</span>
+          </div>
+        </div>
+        <div class="trace-step">
+          <span class="trace-n">03</span>
+          <span class="trace-dot" style="background:#7c3aed"></span>
+          <div>
+            <div class="trace-title">Message Writer → Cassandra</div>
+            <div class="trace-desc">Kafka consumer reads event, persists message to Cassandra. Partition key: conversation_id. Clustering key: timestamp DESC. Message is now durably stored.</div>
+            <span class="trace-tag">Cassandra · message_id persisted</span>
+          </div>
+        </div>
+        <div class="trace-step">
+          <span class="trace-n">04</span>
+          <span class="trace-dot" style="background:#2563eb"></span>
+          <div>
+            <div class="trace-title">Delivery Router checks Redis</div>
+            <div class="trace-desc">Consumer does GET session:bob_id in Redis. Returns null — no active WebSocket session. Bob is offline.</div>
+            <span class="trace-tag">Redis · GET session:bob → null (offline)</span>
+          </div>
+        </div>
+        <div class="trace-step">
+          <span class="trace-n">05</span>
+          <span class="trace-dot" style="background:#dc2626"></span>
+          <div>
+            <div class="trace-title">Offline queue + push notification</div>
+            <div class="trace-desc">Message appended to Bob's offline inbox. Push notification fired to APNs (iOS) or FCM (Android) to wake Bob's device. Messages held for up to 30 days.</div>
+            <span class="trace-tag">Offline Queue · APNs / FCM fired</span>
+          </div>
+        </div>
+        <div class="trace-step">
+          <span class="trace-n">06</span>
+          <span class="trace-dot" style="background:#1a7a4a"></span>
+          <div>
+            <div class="trace-title">Bob's phone wakes and reconnects</div>
+            <div class="trace-desc">Push notification wakes Bob's app. App opens WebSocket to Chat Server B. Server B writes SET session:bob → "chat-server-B" EX 60 to Redis.</div>
+            <span class="trace-tag">WebSocket established · Redis updated</span>
+          </div>
+        </div>
+        <div class="trace-step">
+          <span class="trace-n">07</span>
+          <span class="trace-dot" style="background:#0284c7"></span>
+          <div>
+            <div class="trace-title">Offline messages flushed in batches</div>
+            <div class="trace-desc">Chat Server B reads Bob's offline inbox. Delivers in paginated batches of 50 with a cursor. Bob can start reading immediately while older messages load. Inbox cleared after Bob's app ACKs each batch.</div>
+            <span class="trace-tag">Chat Server B → Bob · batched delivery</span>
+          </div>
+        </div>
+        <div class="trace-step">
+          <span class="trace-n">08</span>
+          <span class="trace-dot" style="background:#d97706"></span>
+          <div>
+            <div class="trace-title">Delivered receipt routes back to Alice</div>
+            <div class="trace-desc">Bob's app fires delivered receipt. Travels: Chat Server B → Kafka → Receipt Handler → Redis GET session:alice → "chat-server-A" → Chat Server A → Alice's WebSocket. Alice sees ✓✓ grey.</div>
+            <span class="trace-tag">Receipt · Kafka · Redis lookup · ✓✓ grey</span>
+          </div>
+        </div>
+        <div class="trace-step">
+          <span class="trace-n">09</span>
+          <span class="trace-dot" style="background:#2563eb"></span>
+          <div>
+            <div class="trace-title">Bob opens chat → read receipt</div>
+            <div class="trace-desc">Bob's app renders the message on screen and immediately fires a read receipt. Same path as step 8. Alice sees ✓✓ turn blue. Full delivery cycle complete.</div>
+            <span class="trace-tag">Read receipt · Alice sees ✓✓ blue</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 08 TRADEOFFS -->
+    <section class="section" id="tradeoffs">
+      <div class="section-head">
+        <span class="section-n">08</span>
+        <h2 class="section-title">Key Design Decisions &amp; Tradeoffs</h2>
+      </div>
+
+      <div class="tradeoff-grid">
+        <div class="tradeoff chosen">
+          <div class="tradeoff-kicker">Chosen</div>
+          <div class="tradeoff-name">WebSockets</div>
+          <p>Persistent bidirectional connection. One-time handshake cost. Idle connections cost only memory (~100KB). <span class="hl">50M connections = ~250 servers</span>. Server can push at any time.</p>
+          <span class="verdict verdict-yes">✓ Necessary at this scale</span>
+        </div>
+        <div class="tradeoff">
+          <div class="tradeoff-kicker">Rejected</div>
+          <div class="tradeoff-name">HTTP Long Polling</div>
+          <p>Works. Used by early chat systems. But every poll is a full HTTP request — TCP + TLS overhead. At 50M users polling every 3 seconds: <span class="hl-red">~17M requests/sec</span> just to check for messages. Unsustainable.</p>
+          <span class="verdict verdict-no">✗ Too expensive at scale</span>
+        </div>
+      </div>
+
+      <div class="tradeoff-grid">
+        <div class="tradeoff chosen">
+          <div class="tradeoff-kicker">Chosen</div>
+          <div class="tradeoff-name">Cassandra</div>
+          <p>Linear horizontal scaling. Append-only write path (memtable + commit log). Access pattern is always "last N messages in conversation X" — perfectly fits partition-by-conversation model. Handles <span class="hl">1.2M writes/sec</span> natively.</p>
+          <span class="verdict verdict-yes">✓ Justified by write characteristics</span>
+        </div>
+        <div class="tradeoff">
+          <div class="tradeoff-kicker">Rejected for messages</div>
+          <div class="tradeoff-name">PostgreSQL</div>
+          <p>ACID, joins, complex queries. But primary-node writes become the bottleneck. Manual sharding by conversation_id is operationally painful. No advantage here since we never need joins on the message read path.</p>
+          <span class="verdict verdict-maybe">~ Right for users / metadata tables</span>
+        </div>
+      </div>
+
+      <div class="tradeoff-grid">
+        <div class="tradeoff chosen">
+          <div class="tradeoff-kicker">Chosen</div>
+          <div class="tradeoff-name">At-Least-Once Delivery</div>
+          <p>Kafka publishes, DB consumer and delivery consumer run independently. If delivery consumer crashes post-delivery but pre-ack, message is replayed. Client deduplicates via <span class="hl-accent">message_id</span>. Duplicates are rare and invisible.</p>
+          <span class="verdict verdict-yes">✓ Industry standard approach</span>
+        </div>
+        <div class="tradeoff">
+          <div class="tradeoff-kicker">Rejected</div>
+          <div class="tradeoff-name">Exactly-Once Delivery</div>
+          <p>Requires distributed transactions and two-phase commits across Kafka + DB + delivery layer. Adds <span class="hl-red">significant latency overhead</span>. At 1.2M writes/sec the cost is prohibitive. The benefit (no duplicates) is solvable client-side for free.</p>
+          <span class="verdict verdict-no">✗ Too expensive for marginal gain</span>
+        </div>
+      </div>
+
+      <div class="tradeoff-grid">
+        <div class="tradeoff chosen">
+          <div class="tradeoff-kicker">Chosen</div>
+          <div class="tradeoff-name">Availability over Consistency</div>
+          <p>Messages queue when downstream components degrade. Kafka accepts writes even if Cassandra is slow. Delivery router queues offline even if Redis is flaky. System <span class="hl">never rejects a send</span> — it just delivers later.</p>
+          <span class="verdict verdict-yes">✓ Users tolerate delay, not failure</span>
+        </div>
+        <div class="tradeoff">
+          <div class="tradeoff-kicker">Rejected</div>
+          <div class="tradeoff-name">Consistency over Availability</div>
+          <p>Would require all replicas to confirm before acknowledging a send. Under any network partition, sends fail with errors. <span class="hl-red">UX catastrophe</span> — users panic on failed sends, retry storms compound the problem.</p>
+          <span class="verdict verdict-no">✗ Wrong tradeoff for chat</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 09 FAILURES -->
+    <section class="section" id="failures">
+      <div class="section-head">
+        <span class="section-n">09</span>
+        <h2 class="section-title">What Can Go Wrong</h2>
+      </div>
+
+      <div class="failure">
+        <div class="failure-icon">💥</div>
+        <div>
+          <div class="failure-title">Chat Server Crash — Thundering Herd</div>
+          <p class="failure-desc">Server holding 200K connections crashes. All 200K users attempt reconnection simultaneously. Remaining servers at 65% capacity get slammed — potentially cascading to more crashes. Redis session entries are stale, pointing to dead server.</p>
+          <p class="failure-desc">Recovery: Load balancer detects dead server via health check (every 5-10s), stops routing. Redis TTL (60s) auto-expires stale session entries — no manual cleanup. Clients reconnect with <span class="hl">exponential backoff + jitter</span>: 200K reconnects spread over 30-60 seconds instead of simultaneously. Messages missed during outage window delivered from offline queue on reconnect.</p>
+          <span class="mitigation">→ Fix: Exponential backoff + jitter on client · Redis TTL self-cleanup · offline queue covers message gap</span>
+        </div>
+      </div>
+
+      <div class="failure">
+        <div class="failure-icon">🔴</div>
+        <div>
+          <div class="failure-title">Redis Goes Down — Routing Blind</div>
+          <p class="failure-desc">Connection registry unavailable. Delivery router can't find recipient's server. All real-time delivery to online users breaks. Crucially: <span class="hl-green">no messages are lost</span> — Kafka and Cassandra are still running. The only broken path is real-time delivery.</p>
+          <p class="failure-desc">Recovery: Delivery router treats all users as offline, queues everything. Redis Sentinel / Redis Cluster promotes replica within ~30 seconds. Real-time delivery resumes. Queued messages flush automatically. Users see a ~30s delay on message delivery — not an error.</p>
+          <span class="mitigation">→ Fix: Redis Cluster with automatic failover · graceful degradation to offline queue path</span>
+        </div>
+      </div>
+
+      <div class="failure">
+        <div class="failure-icon">📢</div>
+        <div>
+          <div class="failure-title">Group Fan-out Explosion</div>
+          <p class="failure-desc">One message in a 256-person group where all are online generates: 256 Redis lookups + 256 WebSocket pushes + 256 delivered receipts + 256 receipt deliveries = <span class="hl">~1,000+ operations per message send</span>. At scale with many active groups, the delivery router becomes a bottleneck.</p>
+          <p class="failure-desc">Mitigation: Batch the 256 Redis lookups into a single pipeline call — one round trip instead of 256. WhatsApp's 256-member cap is a deliberate architectural decision, not a product preference — it's the threshold where server-side fan-out remains manageable. For systems with larger groups (Telegram at 200K members), flip to fan-out on read.</p>
+          <span class="mitigation">→ Fix: Redis pipelining for batch lookups · group size caps · fan-out on read for very large groups</span>
+        </div>
+      </div>
+
+      <div class="failure">
+        <div class="failure-icon">⚡</div>
+        <div>
+          <div class="failure-title">Kafka Consumer Lag</div>
+          <p class="failure-desc">If a Kafka consumer (message writer, delivery router, receipt handler) falls behind, messages pile up in the Kafka topic. Delivery delays grow. If the consumer crashes entirely, unprocessed messages wait until it recovers or another instance takes over.</p>
+          <p class="failure-desc">Kafka's consumer group model handles this automatically — multiple consumer instances share partitions. If one crashes, its partitions are reassigned to healthy instances within seconds. Messages are not lost because <span class="hl-green">Kafka retains messages until explicitly committed</span>.</p>
+          <span class="mitigation">→ Fix: Consumer groups with multiple instances · monitor consumer lag · auto-scaling consumers on lag spike</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 10 INTERVIEW TIPS -->
+    
+  <section class="section" id="antipatterns">
+    <div class="section-head"><span class="section-n">⚠</span><h2 class="section-title">Anti-patterns</h2></div>
+    <div class="prose">
+      
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Relational DB with rows per message</div>
+        <p class="why">~100B messages/day on a RDBMS is hopeless.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Cassandra (partition by chat_id, clustering by ts); cold data tiered to cheaper storage.</div>
+    </div>
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Always-on server storage for all media</div>
+        <p class="why">S3 bills at EB scale get expensive.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> E2E encrypted media; server holds encrypted blob briefly, expires after recipient fetches.</div>
+    </div>
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Single global WebSocket gateway</div>
+        <p class="why">Cross-region latency kills typing indicators + delivery receipts.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Regional gateways; users connect nearest; cross-region messages routed via Kafka-style log.</div>
+    </div>
+    </div>
+  </section>
+
+  <section class="section" id="interview-tips">
+      <div class="section-head">
+        <span class="section-n">10</span>
+        <h2 class="section-title">Interview Tips</h2>
+      </div>
+
+      <div class="tips">
+        <div class="tip">
+          <span class="tip-n">01</span>
+          <p class="tip-text"><strong>Lead with why WebSockets, not just that you're using them.</strong> Say: "HTTP long polling would generate ~17M requests/second at our scale just to check for new messages. WebSockets are persistent — 50M idle connections costs only ~5TB of RAM across ~250 servers." Numbers win interviews.</p>
+        </div>
+        <div class="tip">
+          <span class="tip-n">02</span>
+          <p class="tip-text"><strong>Name the connection registry immediately.</strong> Most candidates skip this. The question "how does Server A know Bob is on Server B?" will always come. Have the answer ready: Redis maps user_id → server_id, 60-second TTL refreshed by heartbeat, auto-expires on crash. This one component differentiates good answers from great ones.</p>
+        </div>
+        <div class="tip">
+          <span class="tip-n">03</span>
+          <p class="tip-text"><strong>Kafka appears in two directions.</strong> Interviewers will ask "what is Kafka doing here?" The answer has two parts: (1) message delivery pipeline from sender to recipient, and (2) receipt events flowing back from recipient to sender. Make sure you explain both or your design feels incomplete.</p>
+        </div>
+        <div class="tip">
+          <span class="tip-n">04</span>
+          <p class="tip-text"><strong>The 256 group cap is an architecture decision.</strong> When asked why WhatsApp limits group size, don't say "product choice." Say: one group message to 256 online members generates ~1,000 operations. At scale with millions of active groups, the fan-out math dictates the cap. Shows you think in systems, not features.</p>
+        </div>
+        <div class="tip">
+          <span class="tip-n">05</span>
+          <p class="tip-text"><strong>E2EE in one sentence, then move on.</strong> "Signal Protocol — keys are exchanged on registration and stored only on devices. The server is a blind relay forwarding ciphertext it cannot read." This shows depth without burning 10 minutes on cryptography that won't be tested.</p>
+        </div>
+        <div class="tip">
+          <span class="tip-n">06</span>
+          <p class="tip-text"><strong>When asked about consistency:</strong> say "availability over consistency" and immediately explain what that means concretely — messages queue, not fail. Users tolerate a 300ms delay. They do not tolerate a send failure. The CAP tradeoff should come with a user experience justification, not just the theory.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 11 SIMILAR -->
+    <section class="section" id="similar">
+      <div class="section-head">
+        <span class="section-n">11</span>
+        <h2 class="section-title">Similar Problems</h2>
+      </div>
+
+      <p class="prose" style="margin-bottom:1rem">
+        WhatsApp contains several sub-problems that appear as standalone system design questions. <span class="hl">Mastering this one gives you significant head starts on all of them.</span>
+      </p>
+
+      <div class="similar-grid">
+        <a href="../notification/index.html" class="similar-card">
+          <div class="similar-name">Notification System</div>
+          <div class="similar-reason">Push notification pipeline (APNs/FCM) is a sub-problem here</div>
+        </a>
+        <a href="../twitter-feed/index.html" class="similar-card">
+          <div class="similar-name">Twitter Feed</div>
+          <div class="similar-reason">Same fan-out tradeoff — push vs pull — appears in group messaging</div>
+        </a>
+        <a href="../rate-limiter/index.html" class="similar-card">
+          <div class="similar-name">Rate Limiter</div>
+          <div class="similar-reason">Needed to prevent spam in group chats — Redis counter pattern</div>
+        </a>
+        <a href="../google-drive/index.html" class="similar-card">
+          <div class="similar-name">Google Drive</div>
+          <div class="similar-reason">Media attachments follow same object storage + metadata URL pattern</div>
+        </a>
+      </div>
+    </section>
+
+    <!-- 12 EVOLUTION -->
+    <section class="section" id="evolution">
+      <div class="section-head">
+        <span class="section-n">12</span>
+        <h2 class="section-title">How the Design Evolves</h2>
+      </div>
+
+      <div class="timeline">
+        <div class="timeline-step">
+          <div class="timeline-phase">Phase 1 — 0 to 10K users</div>
+          <div class="timeline-title">Simple Server + Long Polling</div>
+          <p class="timeline-desc">Single Node.js server with Socket.io or basic long polling. SQLite or PostgreSQL for messages. No Kafka, no Redis, no separate push service. <span class="hl">Ship fast</span> — premature real-time infrastructure kills early-stage products.</p>
+        </div>
+
+        <div class="timeline-step">
+          <div class="timeline-phase">Phase 2 — 10K to 500K users</div>
+          <div class="timeline-title">Upgrade to True WebSockets + Add Redis</div>
+          <p class="timeline-desc">Migrate to real WebSocket connections. Add <span class="hl-accent">Redis</span> for session registry and presence. Separate the database. Add read replicas. Introduce basic push notifications. Most startups live here for years — this handles tens of millions of messages per day comfortably.</p>
+        </div>
+
+        <div class="timeline-step">
+          <div class="timeline-phase">Phase 3 — 500K to 50M users</div>
+          <div class="timeline-title">Kafka + Cassandra + Dedicated Chat Servers</div>
+          <p class="timeline-desc">Introduce Kafka as the message pipeline. Migrate message storage to <span class="hl-accent">Cassandra</span> as write volume overwhelms PostgreSQL. Separate chat servers from REST API servers. Add consumer microservices for delivery routing, receipts, offline queuing. This is the architecture we designed today.</p>
+        </div>
+
+        <div class="timeline-step">
+          <div class="timeline-phase">Phase 4 — 50M+ users</div>
+          <div class="timeline-title">Multi-Region + Custom Infrastructure</div>
+          <p class="timeline-desc">Deploy to multiple geographic regions — Americas, Europe, Asia-Pacific. Private fibre backbone between DCs for sub-50ms inter-region latency. Global load balancing routes users to nearest region. Cassandra multi-region replication. At WhatsApp scale: <span class="hl-red">~250 chat servers</span> hold 50M WebSocket connections — surprisingly lean for 2 billion users.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'default',
+  themeVariables: {
+    background: '#ffffff',
+    primaryColor: '#f0fdf4',
+    primaryBorderColor: '#86efac',
+    primaryTextColor: '#111110',
+    lineColor: '#9ca3af',
+    secondaryColor: '#f7f7f5',
+    tertiaryColor: '#f0eeeb',
+    fontFamily: 'JetBrains Mono, monospace',
+    fontSize: '12px',
+  },
+  sequence: { actorMargin: 50, messageMargin: 24, mirrorActors: false }
+});
+
+/* Sidebar scroll tracking */
+const sidebarLinks = document.querySelectorAll('.sidebar a[href^="#"]');
+const sectionEls = [...sidebarLinks].map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+const sectionObserver = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (!e.isIntersecting) return;
+    sidebarLinks.forEach(l => l.classList.remove('active'));
+    const match = document.querySelector(`.sidebar a[href="#${e.target.id}"]`);
+    if (match) match.classList.add('active');
+  });
+}, { threshold: 0.3, rootMargin: '-52px 0px 0px 0px' });
+sectionEls.forEach(s => sectionObserver.observe(s));
+
+/* Arch diagram node highlight */
+function hlNode(g) {
+  document.querySelectorAll('[onclick="hlNode(this)"] rect').forEach(r => { r.style.stroke = ''; r.style.fill = ''; });
+  const rect = g.querySelector('rect');
+  rect.style.stroke = 'hsl(145,63%,42%)';
+  rect.style.fill = 'hsl(145,60%,94%)';
+}
+
+/* Flow animation */
+const FLOW_NODES = [
+  { label: 'Alice',        sub: 'Mobile'       },
+  { label: 'Chat Server A',sub: 'WebSocket'    },
+  { label: 'Kafka',        sub: 'Pipeline'     },
+  { label: 'Redis Lookup', sub: 'session:bob'  },
+  { label: 'Chat Server B',sub: 'Bob\'s server'},
+  { label: 'Bob',          sub: 'Mobile'       },
+];
+const FLOW_DESCS = [
+  'Alice sends "hey" — WebSocket frame to Chat Server A',
+  'Chat Server A writes to Kafka in <1ms — Alice immediately gets ✓ sent',
+  'Kafka fans out: Message Writer → Cassandra, Delivery Router → checks Redis',
+  'Redis GET session:bob → "chat-server-B" — routing solved',
+  'Delivery Router pushes message to Chat Server B',
+  'Chat Server B delivers over WebSocket — Bob sees the message',
+];
+
+function buildFlow() {
+  const wrap = document.getElementById('flowWrap');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  FLOW_NODES.forEach((n, i) => {
+    const node = document.createElement('div');
+    node.className = 'flow-node';
+    node.innerHTML = `<div class="flow-box" id="fb${i}">${n.label}</div><div class="flow-sub">${n.sub}</div>`;
+    wrap.appendChild(node);
+    if (i < FLOW_NODES.length - 1) {
+      const conn = document.createElement('div');
+      conn.className = 'flow-connector';
+      conn.innerHTML = `<div class="flow-line" id="fl${i}"><div class="flow-pkt" id="fp${i}"></div></div><div class="flow-step-n">step ${i+1}</div>`;
+      wrap.appendChild(conn);
+    }
+  });
+}
+buildFlow();
+
+let flowTimer = null;
+function runFlow() {
+  resetFlow();
+  let step = 0;
+  function tick() {
+    if (step >= FLOW_NODES.length) return;
+    document.getElementById(`fb${step}`).classList.add('active');
+    document.getElementById('flowDesc').textContent = FLOW_DESCS[step] || '';
+    if (step > 0) {
+      const line = document.getElementById(`fl${step-1}`);
+      const pkt = document.getElementById(`fp${step-1}`);
+      if (line) line.classList.add('active');
+      if (pkt) { pkt.classList.remove('go'); void pkt.offsetWidth; pkt.classList.add('go'); }
+    }
+    step++;
+    if (step < FLOW_NODES.length) flowTimer = setTimeout(tick, 720);
+  }
+  tick();
+}
+function resetFlow() {
+  clearTimeout(flowTimer);
+  FLOW_NODES.forEach((_, i) => {
+    const b = document.getElementById(`fb${i}`);
+    const l = document.getElementById(`fl${i}`);
+    const p = document.getElementById(`fp${i}`);
+    if (b) b.classList.remove('active');
+    if (l) l.classList.remove('active');
+    if (p) p.classList.remove('go');
+  });
+  const desc = document.getElementById('flowDesc');
+  if (desc) desc.textContent = 'Press Run to walk through real-time message delivery';
+}
+</script>
+</body>
+</html>

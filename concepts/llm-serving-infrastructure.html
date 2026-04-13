@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>LLM Serving Infrastructure — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 280; --accent-s: 65%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Serving GPT-class LLMs is unlike serving any model that came before. A single inference can take 30 seconds, generates thousands of tokens, requires tens of GB of GPU memory, and costs $0.001-0.10 per request. Multiply by 10k QPS and a naive serving stack burns hundreds of GPUs while still hitting OOM errors and 10-second tail latencies.</p>
+      <p><strong>LLM serving infrastructure</strong> is the specialized stack — vLLM, TensorRT-LLM, SGLang, Triton — that solves this. Continuous batching, KV cache management, token streaming, paged attention, speculative decoding. Each squeezes more throughput from the same GPU. Newest area in production ML; biggest gap in most engineering teams' knowledge.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">What's different about LLM inference</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Variable-length output.</strong> One request might generate 10 tokens; another 4000. Batch sizes are unpredictable.</li>
+        <li><strong>Autoregressive generation.</strong> Token N depends on tokens 1..N-1. Can't parallelize within one request — must generate sequentially.</li>
+        <li><strong>Massive KV cache.</strong> Each generated token caches its key/value tensors; cache grows linearly with output length. A 4k-token response holds ~10 GB of GPU memory just in cache.</li>
+        <li><strong>Token streaming.</strong> Users want tokens as they're generated, not after the full response. SSE or HTTP chunked responses, not standard JSON.</li>
+        <li><strong>GPU underutilization.</strong> Decode phase is memory-bandwidth-bound, not FLOP-bound. GPUs sit at 30-40% utilization without specialized batching.</li>
+      </ul>
+      <p>None of these problems exist in classic CNN/recommendation serving. LLMs broke every assumption.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">The four key optimizations</h2></div>
+    <div class="prose">
+      <p><strong>1. Continuous batching.</strong> Old batching: collect 32 requests, pad to longest, run together. With variable-length outputs, the 31 short requests wait for the one long one. Continuous batching: when one request finishes, immediately swap in the next from a queue. GPU never idle. <span class="hl">2-3× throughput</span>.</p>
+      <p><strong>2. Paged attention (vLLM).</strong> KV cache traditionally allocated as a contiguous block — wasteful (allocate for max length, use less). Paged attention treats KV cache like virtual memory — pages of cache allocated per generated token. ~50% memory savings; supports more concurrent requests.</p>
+      <p><strong>3. Token streaming (SSE).</strong> Server pushes tokens as generated. User sees output flowing word-by-word instead of waiting full duration. UX hugely better; same total compute.</p>
+      <p><strong>4. Speculative decoding.</strong> Run a small "draft" model 5 tokens ahead; large model verifies in parallel. If the draft was right (often), 5× throughput on those tokens. Cost: extra small-model compute. Net win: 1.5-3× speedup.</p>
+    </div>
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-val">~30 ms</div><div class="kv-lbl">per-token decode (Llama-70B on H100)</div></div>
+      <div class="kv-card"><div class="kv-val">~100 GB</div><div class="kv-lbl">model weights + KV cache for 70B</div></div>
+      <div class="kv-card"><div class="kv-val">~10 GB</div><div class="kv-lbl">KV cache per 4k-token request</div></div>
+      <div class="kv-card"><div class="kv-val">2-5×</div><div class="kv-lbl">vLLM throughput vs naive serving</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Deep dive — prefill vs decode and why they need different infra</h2></div>
+    <div class="prose">
+      <p>An LLM inference splits into two phases:</p>
+      <p><strong>Prefill</strong> — process the entire input prompt to populate the KV cache. Compute-heavy (matmul-bound), parallelizable across all input tokens. ~50-200ms for a typical prompt. Saturates GPU compute.</p>
+      <p><strong>Decode</strong> — generate output tokens one at a time. Memory-bandwidth-bound (each token reads the entire KV cache). 10-30ms per token. GPU compute mostly idle.</p>
+      <p>These phases have <em>opposite</em> bottlenecks. Mixing them on the same GPU is suboptimal:</p>
+      <ul>
+        <li>One long prefill stalls all decodes happening on the same GPU.</li>
+        <li>Memory-bound decode underutilizes GPU compute.</li>
+      </ul>
+      <p><strong>Disaggregated serving</strong> (the 2024 SOTA): dedicate one fleet of GPUs to prefill and another to decode. KV cache transfers between them via high-bandwidth interconnect. Each fleet runs at its bottleneck. ~2-3× throughput vs co-located. DistServe, Splitwise papers; productized by major cloud providers.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"We serve LLMs with vLLM on H100s. Continuous batching + paged attention give ~3× throughput vs HuggingFace transformers. Token streaming via SSE for UX. At higher scale we'd disaggregate prefill and decode onto separate GPU pools to optimize their different bottlenecks."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Real-world serving stacks</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">vLLM</div><h4>Open-source, dominant</h4><p>Berkeley research → most-used OSS LLM server. Paged attention + continuous batching. Used by Anthropic Workbench, Vercel, hundreds of startups.</p></div>
+      <div class="rw-card"><div class="rw-name">TensorRT-LLM</div><h4>NVIDIA-optimized</h4><p>Hand-tuned kernels for NVIDIA GPUs. Best raw performance on H100/A100. Tighter integration; less flexibility.</p></div>
+      <div class="rw-card"><div class="rw-name">SGLang</div><h4>Newer, structured outputs</h4><p>Adds caching of common prefixes (system prompts), structured JSON output. Strong for tool-using agents.</p></div>
+      <div class="rw-card"><div class="rw-name">Anthropic / OpenAI / Google internal</div><h4>Custom infrastructure</h4><p>The big foundation-model labs run proprietary serving stacks. Disaggregated, multi-region, sub-second p99 at trillion-token scale.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">When to self-host vs use API</h2></div>
+    <div class="prose">
+      <p><strong>Use the API (OpenAI, Anthropic, Google):</strong> low to moderate volume. ~$1-15 per million tokens. Zero ops. Always get the latest model. Default for &lt; 1B tokens/day.</p>
+      <p><strong>Self-host with vLLM/TensorRT-LLM:</strong></p>
+      <ul>
+        <li>Volume crossover point: ~10-100B tokens/day depending on model size.</li>
+        <li>Data sensitivity: data can't leave your network.</li>
+        <li>Custom fine-tuned model: APIs limit fine-tune, you have your own weights.</li>
+        <li>Latency: dedicated GPUs avoid shared-tenant variability.</li>
+      </ul>
+      <p>Catches: GPUs are scarce + expensive; ops complexity is significant; staying current with model releases is engineering work. Most teams underestimate the operational tax.</p>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Typeahead with semantic completions calls an LLM per keystroke — needs sub-100ms p99 + token streaming. Recommendation systems use LLM-generated explanations in cards. News feed uses LLMs for content moderation, summary generation. Any modern chat-shaped product depends on a serving stack like this.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

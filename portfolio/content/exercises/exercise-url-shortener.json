@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-url-shortener",
+  "title": "URL Shortener — bit.ly / TinyURL",
+  "problemNumber": "30",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "30 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 180,
+    "s": 70,
+    "l": 45
+  },
+  "category": "Infrastructure",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>Design a URL shortener. 100M URLs/day, 10:1 read:write, &lt; 100ms p99 redirect latency, analytics on click counts.</p>\n      <p><strong>Time budget:</strong> 30 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n      \n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Short-code generation: base62 over a 64-bit counter = ~11 chars; or hash + collision check.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Write path: Postgres sharded by counter-range; read path: Redis cache + DB fallback.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Analytics is async: click event → Kafka → batch aggregate into clickhouse/BigQuery.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+1</span> Short-code: base62 of counter (~7 chars for 62^7 = 3.5T URLs) OR hash + collision check</li>\n      <li><span class=\"rubric-points\">+2</span> Counter-based via distributed sequence generator (Snowflake / Ticket servers); no central bottleneck</li>\n      <li><span class=\"rubric-points\">+2</span> Read path: Redis cache (hot URLs) → Postgres (warm) — sharded by short_code hash</li>\n      <li><span class=\"rubric-points\">+1</span> Click analytics async: emit event → Kafka → aggregator → ClickHouse for query</li>\n      <li><span class=\"rubric-points\">+1</span> BoE: 100M/day → 1K writes/sec, 10K reads/sec; ~500 GB/yr URL storage</li>\n      <li><span class=\"rubric-points\">+1</span> Custom short-codes: reserve namespace; collision detection on pick</li>\n      <li><span class=\"rubric-points\">+1</span> Expiry + analytics retention: cold URL cleanup; tiered storage for old data</li>\n      <li><span class=\"rubric-points\">+1</span> Abuse prevention: rate-limit per IP on creation; URL reputation check (Safe Browsing)</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>UUID as short-code (too long — defeats the purpose)</li>\n        <li>Sequential INT from one DB counter (becomes bottleneck)</li>\n        <li>Synchronous click-count increment in redirect path</li>\n        <li>No cache — every redirect hits DB</li>\n        <li>No abuse prevention (becomes phishing relay)</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 1
+}

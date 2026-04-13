@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Instagram — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+
+    :root { --accent-h: 330; --accent-s: 72%; --accent-l: 52%;
+      --accent: hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light: hsl(var(--accent-h), 80%, 94%);
+      --accent-mid: hsl(var(--accent-h), 70%, 88%);
+      --accent-text: hsl(var(--accent-h), var(--accent-s), 32%);
+      --accent-border: hsl(var(--accent-h), 60%, 80%);
+      --hl-yellow:#fff0a0; --hl-yellow-dark:#a07a00;
+      --hl-accent: hsl(var(--accent-h), 90%, 88%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 30%);
+      --bg:#fff; --bg-subtle:#f7f7f5; --bg-raised:#f0eeeb; --bg-code:#f4f3f0;
+      --border:#e4e2de; --border-strong:#ccc9c4;
+      --text-primary:#111110; --text-secondary:#4a4845; --text-muted:#878480;
+      --font-serif:'Instrument Serif',Georgia,serif;
+      --font-sans:'Geist',system-ui,sans-serif;
+      --font-mono:'JetBrains Mono','Fira Code',monospace;
+      --radius-sm:4px; --radius-md:8px; --radius-lg:12px;
+    }
+    .req-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px; }
+    .req-box { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 20px; }
+    .req-box-head { display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size: 12px; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent-text); margin-bottom:10px; font-weight:500; }
+    .req-box-head.nonfunc { color:hsl(38,80%,30%); }
+    .req-list { padding-left:20px; font-size: 15px; color:var(--text-secondary); }
+    .req-list li { margin-bottom:6px; }
+    .endpoint { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px 18px; margin-bottom:10px; }
+    .endpoint-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+    .method { font-family:var(--font-mono); font-size: 11px; font-weight:600; padding:2px 8px; border-radius:3px; letter-spacing:0.05em; }
+    .method.get { background:hsl(190,70%,90%); color:hsl(190,70%,28%); }
+    .method.post { background:hsl(145,55%,90%); color:hsl(145,55%,28%); }
+    .method.delete { background:hsl(0,70%,92%); color:hsl(0,70%,38%); }
+    .ep-path { font-family:var(--font-mono); font-size: 15px; color:var(--text-primary); font-weight:500; }
+    .ep-desc { font-size: 15px; color:var(--text-secondary); margin:6px 0 0; }
+    .failure { display:flex; gap:14px; padding:14px 18px; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); margin-bottom:10px; }
+    .failure-icon { font-size:18px; flex-shrink:0; margin-top:2px; }
+    .failure-title { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .failure-desc { font-size: 15px; color:var(--text-secondary); margin-bottom:4px; }
+    .mitigation { font-family:var(--font-mono); font-size: 12px; color:hsl(145,55%,28%); }
+    .similar-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+    .similar-card { display:block; text-decoration:none; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 18px; transition:all 0.15s; }
+    .similar-card:hover { border-color:var(--accent-border); background:var(--accent-light); }
+    .similar-card h4 { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .similar-card p { font-size: 13.5px; color:var(--text-muted); margin:0; }
+    .evolution-step { display:flex; gap:14px; margin-bottom:18px; }
+    .evolution-marker { width:32px; height:32px; border-radius:50%; background:var(--accent-light); border:2px solid var(--accent-border); display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size: 12px; font-weight:600; color:var(--accent-text); flex-shrink:0; }
+    .evolution-content h4 { font-size: 16px; font-weight:600; margin-bottom:4px; }
+    .evolution-content p { font-size: 15px; color:var(--text-secondary); margin:0; }
+  </style>
+</head>
+<body>
+
+<main>
+
+  <div class="hero" id="problem">
+    <div class="hero-kicker">System Design — Photo &amp; Reels Sharing at Planet Scale</div>
+    <h1 class="hero-title">Design <em>Instagram</em></h1>
+    <p class="hero-desc">
+      A photo and short-video sharing platform with feeds, stories, reels, and direct messaging serving 2 billion monthly active users. The hard parts:
+      a <span class="hl">media upload pipeline</span> handling 95M+ daily uploads with on-the-fly transcoding, a <span class="hl-accent">ranked feed</span> blending followed accounts and algorithmic recommendations,
+      and a stories/reels delivery system that's effectively a global short-video CDN. Twitter solved feeds; Instagram solved feeds + media at heavier per-item cost.
+    </p>
+    <div class="hero-tags">
+      <span class="tag accent">⚡ Core: Media Pipeline + Ranked Feed</span>
+      <span class="tag">2B MAU</span>
+      <span class="tag">95M uploads/day</span>
+      <span class="tag">Read-heavy 100:1</span>
+      <span class="tag">Heavy media (~3 MB/photo, ~10 MB/reel)</span>
+    </div>
+  </div>
+
+  <section class="section" id="requirements">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Requirements</h2></div>
+    <div class="req-grid">
+      <div class="req-box">
+        <div class="req-box-head">Functional</div>
+        <ul class="req-list">
+          <li>Upload <span class="hl-accent">photos and short videos (reels)</span> with caption, location, tags</li>
+          <li>Browse a <span class="hl-accent">ranked home feed</span> blending followed accounts + algorithmic suggestions</li>
+          <li>Post and view <span class="hl-accent">stories</span> (24-hour ephemeral content)</li>
+          <li>Like, comment, save, share posts and reels</li>
+          <li>Follow / unfollow accounts; view profile feeds</li>
+          <li>Search by username, hashtag, location</li>
+        </ul>
+      </div>
+      <div class="req-box">
+        <div class="req-box-head nonfunc">Non-Functional</div>
+        <ul class="req-list">
+          <li><span class="hl">Feed load &lt; 200 ms</span> p99 globally</li>
+          <li><span class="hl">Media upload</span> resilient to flaky mobile networks (resumable, retry)</li>
+          <li>Reel playback starts in &lt; <span class="hl">500 ms</span> with adaptive bitrate</li>
+          <li>99.95% availability for read; 99.9% for write</li>
+          <li>Scale to 2B MAU, 500M DAU, 95M uploads/day</li>
+          <li>Eventual consistency on counts (likes, views) is fine; strong on follow graph</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="scale">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Scale Estimation</h2></div>
+    <div class="prose">
+      <p>500M DAU. Average user uploads ~0.2 posts/day → <strong>100M uploads/day ≈ 1,200 writes/sec</strong>. Reads are heavier: ~50 feed loads/user/day × 500M = 25B reads/day ≈ <strong>290k feed loads/sec</strong>.</p>
+      <p>Each feed load fetches ~30 posts metadata → <strong>~9M post fetches/sec</strong>. Each post displays media; even with CDN cache the origin bandwidth is dominated by uploads:</p>
+    </div>
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-val">500M</div><div class="kv-lbl">DAU</div></div>
+      <div class="kv-card"><div class="kv-val">~1,200</div><div class="kv-lbl">writes/sec (uploads)</div></div>
+      <div class="kv-card"><div class="kv-val">~290k</div><div class="kv-lbl">feed loads/sec</div></div>
+      <div class="kv-card"><div class="kv-val">~9M</div><div class="kv-lbl">post fetches/sec</div></div>
+      <div class="kv-card"><div class="kv-val">~3 PB/day</div><div class="kv-lbl">new media (avg 30 MB after transcoding ladder)</div></div>
+      <div class="kv-card"><div class="kv-val">~20 EB</div><div class="kv-lbl">total stored media (5 years)</div></div>
+      <div class="kv-card"><div class="kv-val">~50 Tbps</div><div class="kv-lbl">peak read bandwidth (CDN edge)</div></div>
+      <div class="kv-card"><div class="kv-val">~500 GB</div><div class="kv-lbl">graph storage (2B users × ~250 follows avg)</div></div>
+    </div>
+    <div class="prose">
+      <p>The dominant cost is media — both storage (PB-scale) and egress bandwidth (Tbps-scale). Compute cost is dominated by transcoding and feed ranking. Database load is small relative to media; the post metadata DB at ~1,200 writes/sec sits comfortably in a sharded Postgres or Cassandra.</p>
+    </div>
+  </section>
+
+  <section class="section" id="api">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">API Design</h2></div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/v1/uploads/initiate</span></div>
+      <p class="ep-desc">Returns a pre-signed S3 URL + upload_id. Client uploads media bytes directly to S3 in chunks (resumable). Server never touches bytes.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/v1/posts</span></div>
+      <p class="ep-desc"><code>{ upload_id, caption, tags, location, audience }</code>. Creates the post once media is uploaded. Triggers async transcoding + fan-out.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/v1/feed?cursor=&amp;limit=30</span></div>
+      <p class="ep-desc">Returns ranked feed page. Cursor-based pagination over a per-user feed cache. Includes posts + interleaved reels + ad slots.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/v1/users/{id}/posts</span></div>
+      <p class="ep-desc">Profile grid. Reverse chronological. Includes media URLs from CDN.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/v1/posts/{id}/like</span></div>
+      <p class="ep-desc">Idempotent like. Increments engagement counter (eventual consistency); tags user_id in like-set for "who liked this."</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/v1/follows</span></div>
+      <p class="ep-desc"><code>{ followee_id }</code>. Strong consistency — affects feed eligibility immediately.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/v1/stories</span></div>
+      <p class="ep-desc">Stories from followed accounts within 24h TTL. Pre-joined per-viewer cache.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/v1/reels?cursor=</span></div>
+      <p class="ep-desc">Algorithmic reel feed. Pure recommendation — not constrained to follows. Vertical autoplay stream.</p>
+    </div>
+  </section>
+
+  <section class="section" id="architecture">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">High-Level Architecture</h2></div>
+    <div class="prose">
+      <p>Three concurrent pipelines fan out from a single upload:</p>
+      <ul>
+        <li><strong>Media path</strong>: client → S3 (direct) → transcoding workers → multi-rendition derivatives → CDN.</li>
+        <li><strong>Metadata path</strong>: post created in sharded Postgres; emits <code>PostCreated</code> event to Kafka.</li>
+        <li><strong>Distribution path</strong>: fan-out workers consume <code>PostCreated</code>; push post_id into followers' Redis feed sorted-sets (for normal users), plus emit to recommendation pipelines (for ML-driven reel feed).</li>
+      </ul>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head"><span class="diagram-label">Architecture — Upload + Feed Read</span><span class="diagram-type">SVG</span></div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 760 420" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="ig-arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#9ca3af"/></marker>
+          </defs>
+          <g font-family="Geist, system-ui, sans-serif" font-size="11">
+            <!-- Client -->
+            <rect x="20" y="20" width="100" height="40" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="70" y="44" text-anchor="middle" font-weight="500">Client app</text>
+            <!-- CDN -->
+            <rect data-tooltip="Lazy-pulls derivatives on first viewer request. Hot edge cache; regional shield; tiered storage." data-concept-link="/concepts/cdn" x="160" y="20" width="100" height="40" rx="6" fill="hsl(190,70%,92%)" stroke="hsl(190,60%,42%)"/>
+            <text x="210" y="44" text-anchor="middle" font-weight="500">CDN edge</text>
+            <!-- API -->
+            <rect data-tooltip="Validates auth, applies rate limits per user (e.g. 5 posts/min). Routes to upload, feed, or graph service." data-concept-link="/concepts/api-gateway" x="300" y="20" width="120" height="40" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="360" y="44" text-anchor="middle" font-weight="500">API gateway</text>
+            <!-- Upload service -->
+            <rect x="460" y="20" width="120" height="40" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="520" y="44" text-anchor="middle" font-weight="500">Upload service</text>
+            <!-- S3 -->
+            <rect data-tooltip="Direct-to-S3 multipart upload. Triggers a validator Lambda on ObjectCreated." data-concept-link="/s3-object-storage" x="620" y="20" width="120" height="40" rx="6" fill="hsl(45,80%,90%)" stroke="hsl(45,75%,45%)"/>
+            <text x="680" y="44" text-anchor="middle" font-weight="500">S3 originals</text>
+
+            <!-- Read services -->
+            <rect x="300" y="100" width="120" height="40" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="360" y="124" text-anchor="middle" font-weight="500">Feed service</text>
+            <rect x="460" y="100" width="120" height="40" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="520" y="124" text-anchor="middle" font-weight="500">Reel service</text>
+
+            <!-- Caches / DBs -->
+            <rect x="180" y="180" width="120" height="40" rx="6" fill="hsl(0,72%,90%)" stroke="hsl(0,70%,40%)"/>
+            <text x="240" y="204" text-anchor="middle" font-weight="500">Redis · feed cache</text>
+            <rect x="320" y="180" width="120" height="40" rx="6" fill="hsl(0,72%,90%)" stroke="hsl(0,70%,40%)"/>
+            <text x="380" y="204" text-anchor="middle" font-weight="500">Redis · counters</text>
+            <rect x="460" y="180" width="140" height="40" rx="6" fill="hsl(217,80%,90%)" stroke="hsl(217,80%,42%)"/>
+            <text x="530" y="204" text-anchor="middle" font-weight="500">Postgres · posts (sharded)</text>
+            <rect x="620" y="180" width="120" height="40" rx="6" fill="hsl(217,80%,90%)" stroke="hsl(217,80%,42%)"/>
+            <text x="680" y="204" text-anchor="middle" font-weight="500">Cassandra · graph</text>
+
+            <!-- Kafka -->
+            <rect x="40" y="260" width="160" height="40" rx="6" fill="hsl(0,0%,15%)" stroke="hsl(0,0%,15%)"/>
+            <text x="120" y="284" text-anchor="middle" fill="#fff" font-weight="500">Kafka · PostCreated</text>
+
+            <!-- Transcoding -->
+            <rect x="240" y="260" width="160" height="40" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="320" y="284" text-anchor="middle" font-weight="500">Transcoding workers (GPU)</text>
+            <!-- Fan-out -->
+            <rect x="420" y="260" width="160" height="40" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="500" y="284" text-anchor="middle" font-weight="500">Fan-out workers</text>
+            <!-- Reel ranker -->
+            <rect x="600" y="260" width="140" height="40" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="670" y="284" text-anchor="middle" font-weight="500">Reel ranker (ML)</text>
+
+            <!-- CDN feeds back -->
+            <rect x="240" y="340" width="280" height="40" rx="6" fill="hsl(190,70%,92%)" stroke="hsl(190,60%,42%)"/>
+            <text x="380" y="364" text-anchor="middle" font-weight="500">CDN derivative cache (HLS + thumbs)</text>
+
+            <!-- Lines -->
+            <line x1="120" y1="40" x2="160" y2="40" stroke="#9ca3af" marker-end="url(#ig-arr)"/>
+            <line x1="260" y1="40" x2="300" y2="40" stroke="#9ca3af" marker-end="url(#ig-arr)"/>
+            <line x1="420" y1="40" x2="460" y2="40" stroke="#9ca3af" marker-end="url(#ig-arr)"/>
+            <line x1="580" y1="40" x2="620" y2="40" stroke="#9ca3af" marker-end="url(#ig-arr)"/>
+
+            <line x1="360" y1="60" x2="360" y2="100" stroke="#9ca3af" marker-end="url(#ig-arr)"/>
+            <line x1="520" y1="60" x2="520" y2="100" stroke="#9ca3af" marker-end="url(#ig-arr)"/>
+            <line x1="360" y1="140" x2="240" y2="180" stroke="#9ca3af" marker-end="url(#ig-arr)"/>
+            <line x1="360" y1="140" x2="380" y2="180" stroke="#9ca3af" marker-end="url(#ig-arr)"/>
+            <line x1="360" y1="140" x2="530" y2="180" stroke="#9ca3af" marker-end="url(#ig-arr)"/>
+            <line x1="520" y1="140" x2="680" y2="180" stroke="#9ca3af" marker-end="url(#ig-arr)"/>
+
+            <line x1="520" y1="60" x2="120" y2="260" stroke="#9ca3af" stroke-dasharray="3 3"/>
+            <line x1="120" y1="300" x2="320" y2="260" stroke="#9ca3af" marker-end="url(#ig-arr)"/>
+            <line x1="120" y1="300" x2="500" y2="260" stroke="#9ca3af" marker-end="url(#ig-arr)"/>
+            <line x1="120" y1="300" x2="670" y2="260" stroke="#9ca3af" marker-end="url(#ig-arr)"/>
+
+            <line x1="320" y1="300" x2="380" y2="340" stroke="#9ca3af" marker-end="url(#ig-arr)"/>
+            <line x1="500" y1="300" x2="240" y2="200" stroke="#9ca3af" stroke-dasharray="3 3"/>
+            <line x1="380" y1="380" x2="210" y2="60" stroke="#9ca3af" stroke-dasharray="3 3"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Deep Dive — The Media Upload Pipeline</h2></div>
+    <div class="callout">
+      <div class="callout-label">The Core Question</div>
+      <p>How do you accept 95M uploads/day, transcode each into 4-6 renditions, and have them globally available within seconds — without your servers ever touching the bytes?</p>
+    </div>
+
+    <div class="prose">
+      <p><strong>Step 1 — Direct-to-S3 upload.</strong> Client requests a pre-signed multi-part upload URL. Uploads chunks of ~5 MB directly to S3, resumable (network drops? resume from last chunk). Server sees only metadata: upload_id, expected size, declared MIME. Saves <strong>~50 Tbps</strong> of inbound bandwidth at the API tier.</p>
+
+      <p><strong>Step 2 — Validate + extract.</strong> S3 event triggers a Lambda. Reads the original, validates format/size, extracts EXIF, runs initial moderation (NSFW classifier + virus scan). Marks the upload ready or rejects.</p>
+
+      <p><strong>Step 3 — Transcode ladder.</strong> A GPU worker pool consumes ready uploads. Photos get resized to 5 sizes (thumbnail 150², card 600², feed 1080², profile 1440², full 2048²) + 2 formats (WebP for modern, JPEG fallback). Reels get the full HLS ladder: 240p / 480p / 720p / 1080p (+ AV1 for newer clients) split into 4-second segments. <strong>One reel = ~40 derivative files; one photo = ~10.</strong></p>
+
+      <p><strong>Step 4 — Push to CDN.</strong> Derivatives written to S3 with predictable paths. CDN pulls on first request (lazy) or pre-warmed via API call (for high-confidence viral content from verified accounts). HLS manifest stitched with adaptive bitrate URLs.</p>
+
+      <p><strong>Step 5 — Ack to client.</strong> Original Kafka <code>UploadReady</code> → <code>PostCreated</code> handlers update the post status. Client polls the post; once status is <em>processed</em>, post becomes visible in feeds.</p>
+
+      <p>Latency budget: <span class="hl">first thumbnail in 1-2s, full HLS ladder in 10-30s</span> for reels. Users see their photo immediately (we serve the original or a fast-path resize); the optimal rendition replaces it within seconds.</p>
+
+      <p>Cost realities — a 30-second reel transcoded into 4 renditions × 2 codecs takes ~30 GPU-seconds. At 95M uploads/day with say 30% reels, that's <strong>~280 GPU-hours/day</strong> for transcoding alone. At AWS spot pricing ($0.50/GPU-hour for older A10G), ~$140/day. At Instagram's actual scale with H100s and AV1 re-encoding, it's millions in annual GPU spend.</p>
+
+      <div class="diagram-wrap">
+        <div class="diagram-head"><span class="diagram-label">Sequence — Upload &amp; Transcode</span><span class="diagram-type">Mermaid.js</span></div>
+        <div class="diagram-body">
+          <div class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant API as API
+    participant S3 as S3
+    participant L as Validator (Lambda)
+    participant K as Kafka
+    participant T as Transcode workers
+    participant CDN as CDN
+
+    C->>API: POST /uploads/initiate
+    API->>S3: pre-sign multipart URL
+    API-->>C: { upload_url, upload_id }
+    C->>S3: PUT chunks (5 MB each, resumable)
+    S3->>L: ObjectCreated event
+    L->>L: validate, EXIF, NSFW, virus
+    L->>K: UploadReady{ id, type }
+    K->>T: consume
+    T->>S3: read original
+    T->>T: encode 5 sizes + 2 formats (photo)<br/>or HLS ladder (reel)
+    T->>S3: write derivatives
+    T->>K: TranscodeComplete{ id, manifest }
+    K->>API: status update
+    CDN->>S3: lazy pull on first request
+    CDN-->>C: serve derivative
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Key Design Decisions &amp; Tradeoffs</h2></div>
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">Hybrid fan-out</div>
+        <h4>Fan-out on write for normal users; fan-out on read for celebrities</h4>
+        <p>Normal user (≤ 10K followers) — push <code>PostCreated</code> into each follower's Redis feed sorted-set. O(followers) work but happens once. Reads become O(1) ZRANGE.</p>
+        <p>Celebrity (≥ 1M followers, e.g. @cristiano @selenagomez) — fan-out write would mean 600M Redis writes for one post. Skip; instead, at read time, merge celebrity posts from a smaller "celebrity feed" cache pulled per-followed-celebrity. Avoids the celebrity fan-out storm.</p>
+      </div>
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">Pure fan-out on read</div>
+        <h4>Compute every feed at request time</h4>
+        <p>Cleaner, no fan-out workers. But 290k feed loads/sec × 250 follows avg = 73M Redis lookups/sec just to compose feeds. Too expensive at this scale.</p>
+      </div>
+    </div>
+
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">Cassandra for the social graph</div>
+        <h4>Wide-column for follow relationships</h4>
+        <p>Graph queries are simple (one hop: who do I follow / who follows me). Volume is huge: 2B users × 250 avg follows = 500B edges. Cassandra scales linearly; reads of "all my follows" are one partition lookup.</p>
+      </div>
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">Graph DB (Neo4j)</div>
+        <h4>True graph traversals</h4>
+        <p>Better for multi-hop ("friends of friends") but Instagram's actual product needs are 1-hop. Neo4j at 500B edges is operationally hard. Cassandra wins for this workload.</p>
+      </div>
+    </div>
+
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">Pre-generate photo derivatives</div>
+        <h4>Encode all sizes on upload</h4>
+        <p>Photo set sizes are small (5 sizes × 2 formats = 10 files). Pre-generate; serve from CDN. Predictable cost; instant first-byte.</p>
+      </div>
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">On-demand image proxy (Imgix-style)</div>
+        <h4>Generate any size on first request</h4>
+        <p>Better when you have many possible sizes (responsive design); not the case here. Pre-generation is simpler at this product's known sizes.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="failures">
+    <div class="section-head"><span class="section-n">08</span><h2 class="section-title">What Can Go Wrong</h2></div>
+    <div class="failure">
+      <div class="failure-icon">🌪</div>
+      <div>
+        <div class="failure-title">Celebrity post fan-out storm</div>
+        <div class="failure-desc">A verified account with 600M followers posts. Naive fan-out = 600M Redis writes in seconds → Redis cluster melts.</div>
+        <div class="mitigation">→ Mitigation: hybrid fan-out (skip write for celebrities; merge at read time from a small per-celebrity feed cache).</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🎥</div>
+      <div>
+        <div class="failure-title">Transcoding queue backlog</div>
+        <div class="failure-desc">Big creator drops a 60-second reel; 50M downstream re-shares trigger transcoding; queue fills; new uploads delayed by hours.</div>
+        <div class="mitigation">→ Mitigation: priority lanes (verified accounts, organic uploads first); autoscale GPU pool on queue depth; degrade gracefully (serve original + lower-quality fallback while ladder finishes).</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">📵</div>
+      <div>
+        <div class="failure-title">Mobile upload failure mid-stream</div>
+        <div class="failure-desc">User on subway uploads a 20 MB reel; tunnel kills connection at 80%. Without resumable, full re-upload — terrible UX.</div>
+        <div class="mitigation">→ Mitigation: S3 multipart resumable; client retries individual chunks; idempotent <code>upload_id</code> survives across app restarts.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">💾</div>
+      <div>
+        <div class="failure-title">Storage cost explosion</div>
+        <div class="failure-desc">Naive 3× replication of 20 EB media = 60 EB. At $0.023/GB/month S3 standard, ~$1.4B/year just for storage.</div>
+        <div class="mitigation">→ Mitigation: tiered storage. Hot (last 30 days) on standard with 3× replication. Warm (30d-1y) on Infrequent Access (1.4×). Cold (older + rarely-viewed) on Glacier with erasure coding (1.5×). ~70% cost reduction.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">⚖</div>
+      <div>
+        <div class="failure-title">Counter inconsistency</div>
+        <div class="failure-desc">Likes counter shows 1.4M; refresh shows 1.39M. Replicated counter drift visible to user.</div>
+        <div class="mitigation">→ Mitigation: per-shard counter increments + periodic reconciliation; round display to 1.4M for any value &gt; 100K (spec ambiguity hides drift).</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🧨</div>
+      <div>
+        <div class="failure-title">Hot feed cache key</div>
+        <div class="failure-desc">Celebrity-of-the-week's feed is the most-read key in Redis. One Redis shard drowns; 100k followers see latency spikes.</div>
+        <div class="mitigation">→ Mitigation: replicate hot keys across multiple Redis shards via consistent-hashing virtual nodes; client-side load-balance reads across replicas.</div>
+      </div>
+    </div>
+  </section>
+
+  
+  <section class="section" id="antipatterns">
+    <div class="section-head"><span class="section-n">⚠</span><h2 class="section-title">Anti-patterns</h2></div>
+    <div class="prose">
+      
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Store photos + videos in Postgres as blobs</div>
+        <p class="why">Database sharding is for rows, not multi-MB binaries. Every query pulls massive bytes; cache churn destroys hit ratio.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Direct-to-S3 via pre-signed URLs; metadata rows in Postgres reference S3 keys; CDN serves derivatives.</div>
+    </div>
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Fan out on write to all 500k followers of a celebrity</div>
+        <p class="why">10M celebrities × average-follower-count = trillions of writes/day. Hot-key Redis explodes.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Hybrid fan-out: push to normal users' timelines, pull-on-read for celebrity accounts.</div>
+    </div>
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Transcode video synchronously on upload</div>
+        <p class="why">CPU-bound work on the request path. One viral moment = API tier down.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Upload returns immediately; async transcoder consumes from a queue and emits derivatives.</div>
+    </div>
+    </div>
+  </section>
+
+  <section class="section" id="interview-tips">
+    <div class="section-head"><span class="section-n">09</span><h2 class="section-title">Interview Tips</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>Lead with the media pipeline.</strong> Most candidates over-focus on the feed (which is just a Twitter clone) and skim the photo/video pipeline. The transcoding ladder + storage tiering is what makes Instagram different.</li>
+        <li><strong>Acknowledge the hybrid fan-out tradeoff.</strong> Push-on-write for normal users + pull-on-read for celebrities is THE Instagram-specific design choice. Naming it explicitly earns credibility.</li>
+        <li><strong>Storage tiering as cost answer.</strong> When asked "how much will this cost?", show storage tiering math. 70% reduction via cold tiers is concrete; "we'll use S3" is hand-waving.</li>
+        <li><strong>Reels &amp; feed are different feeds.</strong> Home feed is follow-graph based; reels feed is purely algorithmic recommendation. Different ranker, different infra. Treat them as separate problems.</li>
+        <li><strong>Direct-to-S3 upload.</strong> Mention it explicitly. Saves bandwidth at API tier; avoids common candidate mistake of assuming app servers proxy media bytes.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="similar">
+    <div class="section-head"><span class="section-n">10</span><h2 class="section-title">Similar Problems</h2></div>
+    <div class="similar-grid">
+      <a href="../002-news-feed/index.html" class="similar-card"><h4>Twitter / News Feed</h4><p>Same fan-out pattern; less media-heavy</p></a>
+      <a href="../005-youtube-netflix/index.html" class="similar-card"><h4>YouTube / Netflix</h4><p>Video transcoding + adaptive streaming at deeper scale</p></a>
+      <a href="../recommendation-algorithm/index.html" class="similar-card"><h4>Recommendation Algorithm</h4><p>The reels ranker is fundamentally a recommendation system</p></a>
+      <a href="../004-whatsapp-system-design/index.html" class="similar-card"><h4>WhatsApp / Chat</h4><p>Direct messaging + media sharing pattern</p></a>
+      <a href="../live-streaming/index.html" class="similar-card"><h4>Live Streaming</h4><p>Instagram Live shares architecture with general live-streaming systems</p></a>
+    </div>
+  </section>
+
+  <section class="section" id="evolution">
+    <div class="section-head"><span class="section-n">11</span><h2 class="section-title">Evolution</h2></div>
+    <div class="evolution-step">
+      <div class="evolution-marker">1</div>
+      <div class="evolution-content">
+        <h4>MVP — single Postgres + S3</h4>
+        <p>One DB. App server transcodes synchronously. CDN wrapping S3. Works to ~100K MAU. Instagram literally launched this way (Django + Postgres) in 2010.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">2</div>
+      <div class="evolution-content">
+        <h4>Direct-to-S3 + async transcoding</h4>
+        <p>App server stops touching bytes. Transcoding moves to a worker queue. Critical for ~10M MAU.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">3</div>
+      <div class="evolution-content">
+        <h4>Sharded Postgres + Redis feed cache</h4>
+        <p>Posts table sharded by user_id; Redis sorted-set per follower for feed. Fan-out workers consume Kafka. Carries to ~500M MAU.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">4</div>
+      <div class="evolution-content">
+        <h4>Hybrid fan-out + tiered storage</h4>
+        <p>Celebrity exception added. Storage tiered hot/warm/cold. CDN multi-region. Scales to ~2B MAU (current).</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">5</div>
+      <div class="evolution-content">
+        <h4>ML-driven feed + AV1 video</h4>
+        <p>Home feed transitions from chronological to ranked-with-recommendations. Reels added with separate purely-algorithmic ranker. AV1 transcoding cuts bandwidth ~40% over H.264.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const FLOW_NODES = [
+  { label: 'Client',       sub: 'Mobile app' },
+  { label: 'API Gateway',  sub: 'Auth + rate-limit' },
+  { label: 'Upload svc',   sub: 'pre-sign URL' },
+  { label: 'S3 originals', sub: 'multipart upload' },
+  { label: 'Validator',    sub: 'NSFW + EXIF' },
+  { label: 'Transcoder',   sub: 'GPU pool' },
+  { label: 'CDN',          sub: 'derivative cache' },
+];
+const FLOW_DESCS = [
+  'Client opens upload flow; reads token from local storage',
+  'API gateway validates auth, applies per-user rate limit',
+  'Upload service issues a multipart pre-signed S3 URL + upload_id',
+  'Client streams chunks of ~5 MB directly to S3 (resumable)',
+  'S3 ObjectCreated triggers validator: NSFW classifier + virus scan + EXIF',
+  'Transcoder consumes UploadReady event, writes 5-10 derivatives',
+  'CDN lazy-pulls derivatives on first viewer request, caches at edge',
+];
+</script>
+
+</body>
+</html>

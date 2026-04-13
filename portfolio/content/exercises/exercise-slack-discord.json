@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-slack-discord",
+  "title": "Slack / Discord — Real-Time Messaging",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 250,
+    "s": 65,
+    "l": 55
+  },
+  "category": "Communication",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>Design Slack or Discord. Real-time team messaging with channels, DMs, threads, reactions, presence, file sharing. 10M concurrent WebSocket connections per region; channels up to 500k members (Discord large guilds).</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n      \n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>The hard part is the WebSocket gateway tier — tens of millions of long-lived connections. Stateful, sticky, connection-oriented. Different from REST.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Large channels break naive fan-out. A 500k-member channel can't push every message to every member's WebSocket.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Separate the durable message log (Cassandra) from the real-time notify fabric (Redis pub/sub). They have different consistency + latency needs.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+1</span> WebSocket gateway tier ~500 servers × 20k conns each; consistent-hash LB by conn_id</li>\n      <li><span class=\"rubric-points\">+2</span> Per-channel publish fan-out: only gateways with active subscribers get the message (not all N gateways)</li>\n      <li><span class=\"rubric-points\">+2</span> Cassandra for durable message history: partition by channel_id, clustering by monotonic message_id</li>\n      <li><span class=\"rubric-points\">+1</span> Redis pub/sub (not Kafka) for real-time delivery — sub-ms latency; durability is Cassandra's job</li>\n      <li><span class=\"rubric-points\">+1</span> Large-guild lazy load: channels &gt; 75k members don't push real-time to non-viewers; only unread counts</li>\n      <li><span class=\"rubric-points\">+1</span> Presence as separate service; batched + coalesced; tolerates brief staleness</li>\n      <li><span class=\"rubric-points\">+1</span> Client-side message_id + nonce for dedup; clients sort by message_id</li>\n      <li><span class=\"rubric-points\">+1</span> Graceful reconnect: session resume with sequence number for replay</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Proposes single Postgres table for all messages</li>\n        <li>Doesn't mention WebSocket — uses HTTP polling</li>\n        <li>Broadcasts every large-channel message to every member's WebSocket</li>\n        <li>Conflates durable storage with notify fabric (e.g., Kafka for both)</li>\n        <li>Ignores presence as a scale problem</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 1
+}

@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-notification-system",
+  "title": "Notification System",
+  "problemNumber": "30",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "30 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 30,
+    "s": 80,
+    "l": 50
+  },
+  "category": "Communication",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>Design a notification system. Push (iOS/Android/web), SMS, email. 10M messages/sec peak. Per-user preferences. Delivery tracking.</p>\n      <p><strong>Time budget:</strong> 30 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n      \n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Fan-out on a pub/sub (Kafka) — decouple producers from per-channel delivery workers.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Per-channel worker pools (APNs, FCM, web-push, SMS, email) each with its own rate limits.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Dedup + preferences + throttling live in a central service before fan-out.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Event-sourced via Kafka; producers emit notification-request; delivery workers consume per-channel</li>\n      <li><span class=\"rubric-points\">+2</span> Per-channel worker pools (APNs/FCM/SMS/email) each obeying provider rate limits + retries</li>\n      <li><span class=\"rubric-points\">+1</span> Central preferences service: user opt-in/opt-out per channel + notification type; filter before fan-out</li>\n      <li><span class=\"rubric-points\">+1</span> Dedup by (user, notification_id) within TTL window to prevent duplicate delivery</li>\n      <li><span class=\"rubric-points\">+1</span> Collapse / rate-limit notifications: '3 mentions in #general' beats 3 separate pushes</li>\n      <li><span class=\"rubric-points\">+1</span> Token management: APNs/FCM tokens expire; cleanup pipeline from delivery errors</li>\n      <li><span class=\"rubric-points\">+1</span> Delivery tracking: status DB (queued → sent → delivered → clicked); expose via API</li>\n      <li><span class=\"rubric-points\">+1</span> Priority lanes: transactional (auth codes) vs marketing; separate queues + SLAs</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Synchronous notification in request path</li>\n        <li>Single worker pool serves all channels (APNs throttle blocks everything)</li>\n        <li>No preferences / opt-out handling (violates GDPR/CAN-SPAM)</li>\n        <li>Doesn't clean up dead tokens (keeps sending to them, gets throttled)</li>\n        <li>No dedup (sends same notification N times on retry)</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 1
+}

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Heartbeat &amp; Failure Detection — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 12; --accent-s: 72%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Is node 7 dead, or is its network link just slow? You can't tell from a missed response. Decide too quickly → false-positive, you kick a healthy node. Decide too slowly → real failures go unnoticed, requests time out for minutes. Every distributed system has to answer this question <em>constantly</em>, for hundreds of nodes. The answer is a failure-detection algorithm, driven by heartbeats.</p>
+      <p>Get it wrong and you thrash: healthy nodes marked dead, re-joined, re-dead, re-joined. Every replicated DB, LB, and orchestrator runs some variant of this machinery.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The simple model — timeout-based heartbeats</h2></div>
+    <div class="prose">
+      <p>Each node periodically sends a heartbeat ("I'm alive") to its peers. If a peer hasn't heard from a node in T seconds → mark it suspect. T more seconds without heartbeat → mark it dead.</p>
+      <p>Two parameters rule everything:</p>
+      <ul>
+        <li><strong>Heartbeat interval</strong> (100ms – 1s). Too fast = network noise. Too slow = late detection.</li>
+        <li><strong>Timeout</strong> (2–5× interval). Too tight = false positives on jitter. Too loose = real failures wait.</li>
+      </ul>
+      <p>Timeout-based detection is simple but binary. A node is either "alive" or "dead" — no nuance for "seems slow today." Real systems want something better.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Phi accrual failure detector</h2></div>
+    <div class="prose">
+      <p>Pioneered by Hayashibara et al. (2004), used in Cassandra and Akka. Instead of a binary dead/alive flag, maintain a running <strong>suspicion level φ</strong> that grows continuously as time passes without a heartbeat.</p>
+      <ul>
+        <li>Track the history of inter-arrival times for a peer's heartbeats (rolling window).</li>
+        <li>Fit a probability distribution (usually normal) over that history.</li>
+        <li>At time t since last heartbeat, φ = −log<sub>10</sub>(P[next heartbeat arrives ≥ t]). As t grows, probability shrinks, φ rises.</li>
+      </ul>
+      <p>Application subscribes at a threshold: "treat node as suspect when φ &gt; 8" (about 1 in 10⁸ chance of being a false alarm). Adaptive to network conditions — if the peer's heartbeats are normally jittery, the distribution widens, the detector tolerates it. On a normally-stable peer, small delays already trigger suspicion.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">SWIM — the push-less alternative</h2></div>
+    <div class="prose">
+      <p>SWIM (Scalable Weakly-consistent Infection-style Membership) flips the script: instead of everyone pinging everyone, each tick a node pings <em>one random peer</em>. If the ping fails, it asks <em>k other random peers</em> to try indirectly. Only if all indirect probes also fail does it mark the node suspect.</p>
+      <p>Why it works: a direct ping can fail due to local network jitter between just two nodes. If three other nodes <em>also</em> can't reach the target, it's probably really down. Dramatic reduction in false positives vs timeout-based.</p>
+      <p>SWIM is what Hashicorp Serf, Consul, and Memberlist run. Scales to 10k+ nodes because ping traffic is O(1) per node per tick, not O(N).</p>
+      <p>See <a href="/concepts/gossip-protocols">gossip protocols</a> for how failure-detection state spreads through the cluster.</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — the tuning rule nobody tells you</h2></div>
+    <div class="prose">
+      <p>All failure detectors face the same fundamental tradeoff (formalized by Chandra-Toueg, 1996):</p>
+      <ul>
+        <li><strong>Completeness</strong> — every dead node is eventually detected.</li>
+        <li><strong>Accuracy</strong> — no live node is incorrectly suspected.</li>
+      </ul>
+      <p>You can't have both perfectly. The tradeoff shifts with the environment:</p>
+      <ul>
+        <li><strong>Datacenter (sub-ms latency, minimal jitter)</strong> — tight timeouts work. 3× heartbeat interval ≈ 1.5s is safe.</li>
+        <li><strong>Cross-region (100ms+ latency, occasional jitter)</strong> — use longer timeouts (10–30s) and adaptive detection.</li>
+        <li><strong>Mobile / edge (unpredictable)</strong> — accept higher false-positive rate; design the app to tolerate reconnects rather than fighting for detection accuracy.</li>
+      </ul>
+      <p>Critical production rule: when a node is marked dead, <strong>do not take destructive action immediately</strong>. Evict from rotation (easy to undo), re-route new requests, but don't drop existing connections or delete data for several minutes. Many "node down" events recover on their own.</p>
+      <div class="callout callout-warn">
+        <div class="callout-label">Anti-pattern</div>
+        <p>Auto-failover that triggers in 5 seconds based on a single missed ping. One bad switch causes a stampede of failovers across the cluster. Use consensus-backed election (Raft) or require a quorum of nodes to agree on "X is down" before acting.</p>
+      </div>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">The Tuning Tradeoff — False Positives vs Detection Latency</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg">
+          <g font-family="Geist, system-ui, sans-serif" font-size="11">
+            <!-- Axes -->
+            <line x1="80"  y1="40"  x2="80"  y2="220" stroke="#ccc9c4" stroke-width="1.5"/>
+            <line x1="80"  y1="220" x2="680" y2="220" stroke="#ccc9c4" stroke-width="1.5"/>
+            <text x="80" y="32" font-size="10" fill="#878480">false positive rate</text>
+            <text x="380" y="245" text-anchor="middle" font-size="10" fill="#878480">timeout duration →</text>
+            <text x="380" y="262" text-anchor="middle" font-size="10" fill="#878480">(longer = slower detection)</text>
+
+            <!-- Curve -->
+            <path d="M80,60 C150,70 220,130 320,170 S500,210 680,215" stroke="hsl(12,72%,50%)" stroke-width="2.5" fill="none"/>
+
+            <!-- Markers -->
+            <circle cx="180" cy="100" r="6" fill="hsl(0,70%,55%)"/>
+            <text x="195" y="95" font-size="11" font-weight="500" fill="hsl(0,70%,40%)">1s timeout</text>
+            <text x="195" y="110" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">FP ~20% · detect 1s</text>
+
+            <circle cx="320" cy="170" r="6" fill="hsl(45,80%,50%)"/>
+            <text x="335" y="165" font-size="11" font-weight="500" fill="hsl(45,80%,30%)">5s timeout</text>
+            <text x="335" y="180" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">FP ~5% · detect 5s</text>
+
+            <circle cx="500" cy="208" r="6" fill="hsl(145,55%,42%)"/>
+            <text x="515" y="203" font-size="11" font-weight="500" fill="hsl(145,55%,28%)">30s timeout</text>
+            <text x="515" y="218" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">FP ~0.5% · detect 30s</text>
+
+            <!-- Sweet spot annotation -->
+            <text x="80" y="50" font-size="10" fill="#878480" font-family="JetBrains Mono, monospace">tighter</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-val">100 ms</div><div class="kv-lbl">heartbeat interval (in-DC)</div></div>
+      <div class="kv-card"><div class="kv-val">3-5×</div><div class="kv-lbl">timeout in interval units</div></div>
+      <div class="kv-card"><div class="kv-val">k=3</div><div class="kv-lbl">SWIM indirect-probe peers</div></div>
+      <div class="kv-card"><div class="kv-val">φ=8</div><div class="kv-lbl">Cassandra phi-accrual default threshold</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Cassandra</div><h4>Phi accrual</h4><p>Ring-wide failure detection via gossip + adaptive φ. Tuneable threshold (default 8).</p></div>
+      <div class="rw-card"><div class="rw-name">Consul / Serf</div><h4>SWIM</h4><p>Push-less; probes random peers. Default 1s tick. Indirect probes through k=3 peers.</p></div>
+      <div class="rw-card"><div class="rw-name">Kubernetes</div><h4>Readiness + liveness probes</h4><p>Simple timeout-based. kubelet probes each pod; 3 failures → unready → pulled from service endpoints.</p></div>
+      <div class="rw-card"><div class="rw-name">Zookeeper / etcd</div><h4>Session-based</h4><p>Clients hold sessions with heartbeats. Session expiry = client dead → ephemeral znodes cleaned up.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Distributed locking relies on heartbeat-driven lease renewal. Distributed job scheduler detects worker failures via heartbeats. Stock exchange uses low-timeout detection to re-elect matching engines within 200ms. Count active users literally counts heartbeat signals.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

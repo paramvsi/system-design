@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Distributed Locking — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 355; --accent-s: 70%; --accent-l: 48%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Two instances of your service want to send a reminder email for order #42. Both run the cron job at the same second. Without coordination, the user gets two emails. Or two payment workers process the same refund. Or two job schedulers pick the same task.</p>
+      <p>In a single process, a mutex solves this — <span class="hl">across machines, mutexes don't exist</span>. Distributed locking is the class of techniques that emulates mutual exclusion across a cluster. Getting it wrong produces duplicate work at best, silent data corruption at worst.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Why it's hard</h2></div>
+    <div class="prose">
+      <p>A distributed lock is just a shared register: "whoever writes their ID first owns the resource." But three failure modes destroy naive implementations:</p>
+      <ol>
+        <li><strong>Lock holder pauses.</strong> Process A acquires the lock, then GC-pauses for 5 seconds. Lock expires. Process B acquires it, does work. A wakes up and <em>also</em> thinks it holds the lock. Both do the work.</li>
+        <li><strong>Network partition.</strong> A holds the lock. Network to the lock store is cut. A can't renew. Lock server expires the lease. B acquires. Partition heals — A now writes with stale belief it's the holder.</li>
+        <li><strong>Lock server fails over.</strong> A holds lock on Redis master. Master dies before replicating to replica. Replica promoted. B acquires same lock on new master. Two holders.</li>
+      </ol>
+      <p>These are real. A correct distributed lock must survive all three.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">The Redis SET NX pattern (the one you'll use)</h2></div>
+    <div class="prose">
+      <p>The simplest working lock, from Redis docs:</p>
+      <ul>
+        <li><strong>Acquire:</strong> <code>SET lock:orders:42 &lt;unique-token&gt; NX PX 30000</code> — sets the key only if absent, with 30s expiry. Returns OK if you won, nil if someone else holds.</li>
+        <li><strong>Release:</strong> Lua script: <code>if GET lock:orders:42 == unique-token then DEL</code>. Atomic — you can only release a lock you own.</li>
+        <li><strong>Renewal:</strong> If your work takes longer than 30s, periodically extend the TTL via Lua: <code>if GET == token then PEXPIRE 30000</code>.</li>
+      </ul>
+      <p>This works for 95% of use cases. The gap: if Redis fails over before replicating your SET, the replica doesn't know the lock is held, and another process can acquire it. For critical correctness, you need the next level.</p>
+    
+      <div class="code-caption" data-code-snippet="1">Optimistic concurrency (version column)</div>
+      <pre><code class="lang-sql">-- Version column incremented on every write.
+CREATE TABLE orders (
+  id      BIGSERIAL PRIMARY KEY,
+  status  TEXT NOT NULL,
+  version INT NOT NULL DEFAULT 1,
+  ...
+);
+
+-- Update with CAS semantics:
+UPDATE orders
+SET status = 'shipped', version = version + 1
+WHERE id = $1 AND version = $2;   -- $2 = version client fetched
+
+-- If 0 rows updated: conflict; client re-reads + retries.
+-- No locks held during user think-time. Wins on low-contention paths;
+-- retry-storms on hot rows (use pessimistic there).</code></pre>
+  </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head"><span class="diagram-label">Redis SET NX Lock</span><span class="diagram-type">Mermaid</span></div>
+      <div class="diagram-body">
+        <div class="mermaid">
+sequenceDiagram
+    participant A as Worker A
+    participant B as Worker B
+    participant R as Redis
+
+    A->>R: SET lock:job NX PX 30000 token=a1
+    R-->>A: OK (won)
+
+    B->>R: SET lock:job NX PX 30000 token=b1
+    R-->>B: nil (A holds)
+
+    A->>A: do work ...
+    A->>R: Lua: if GET == a1 then DEL
+    R-->>A: released
+
+    B->>R: SET lock:job NX PX 30000 token=b2
+    R-->>B: OK (won)
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Options in order of strength</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Strategy</th><th>Correctness</th><th>Complexity</th><th>Use when</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Redis SET NX</td><td>Best-effort</td><td>Low</td><td>Deduping work, not correctness-critical (email sends, cron)</td></tr>
+        <tr><td class="algo-name">Redlock (multi-Redis)</td><td>Stronger but controversial (Kleppmann vs antirez debate)</td><td>Medium</td><td>Redis-only shops who want more safety</td></tr>
+        <tr><td class="algo-name">Consensus-backed (etcd / Zookeeper)</td><td>Strong</td><td>Medium</td><td>When correctness matters; running these anyway for coordination</td></tr>
+        <tr><td class="algo-name">Fencing tokens</td><td>Strong</td><td>High (needs resource-side check)</td><td>Correctness-critical: payments, inventory decrements</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — fencing tokens</h2></div>
+    <div class="prose">
+      <p>A lock alone can't save you from the GC-pause scenario: A holds lock → pauses → lock expires → B acquires → A unpauses and writes. B's state gets overwritten.</p>
+      <p><strong>Fencing token</strong>: every time the lock is acquired, the lock server returns a monotonically-increasing token. A gets token 33. Pauses. B acquires, gets token 34. B writes to the resource, tagging the write with "token 34." The resource (database) remembers the highest token it's seen. When A finally writes with token 33, the resource says "I've already seen 34, rejecting."</p>
+      <p>This requires the resource to participate — it must know about tokens and reject stale ones. That's the catch. Not every resource can do this (e.g., third-party APIs). For critical invariants (payments, inventory), make your own backend enforce the token check.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">Design pattern</div>
+        <p>"Redis SET NX for coordination (dedup work, avoid duplicate emails) + fencing tokens in the database for anything that must not double-execute (decrement inventory, charge card)."</p>
+      </div>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">GC Pause + Fencing Token</span>
+        <span class="diagram-type">Mermaid</span>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+sequenceDiagram
+    participant A as Worker A
+    participant B as Worker B
+    participant L as Lock Server
+    participant DB as Resource (DB)
+
+    A->>L: acquire(orders)
+    L-->>A: granted, token=33
+    Note over A: GC pause · 15s
+    Note over L: TTL expires · 30s
+    B->>L: acquire(orders)
+    L-->>B: granted, token=34
+    B->>DB: write x, token=34
+    DB->>DB: max_token = 34
+    DB-->>B: ok
+    Note over A: GC done · A still thinks it holds the lock
+    A->>DB: write y, token=33
+    DB->>DB: 33 < max_token (34) · REJECT
+    DB-->>A: stale-token error
+        </div>
+      </div>
+    </div>
+
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-val">30 s</div><div class="kv-lbl">typical Redis SET NX TTL</div></div>
+      <div class="kv-card"><div class="kv-val">10 s</div><div class="kv-lbl">renewal interval (TTL/3)</div></div>
+      <div class="kv-card"><div class="kv-val">~5 s</div><div class="kv-lbl">JVM long-GC pause we must survive</div></div>
+      <div class="kv-card"><div class="kv-val">1</div><div class="kv-lbl">monotonically-increasing token per acquire</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Redis + Redlock</div><h4>Most common</h4><p>Most web apps use the basic SET NX pattern. Redlock (lock across N Redis instances) is used when the team takes distributed-systems purity seriously.</p></div>
+      <div class="rw-card"><div class="rw-name">etcd / Zookeeper locks</div><h4>Strong, battle-tested</h4><p>Kubernetes leader election, Kafka broker coordination — all built on Zookeeper / etcd locks. Consensus-backed so failover is safe.</p></div>
+      <div class="rw-card"><div class="rw-name">DB row lock</div><h4>Simpler than distributed locks</h4><p><code>SELECT ... FOR UPDATE</code> in one DB. Works for single-DB coordination. Limited to DB throughput; doesn't help across services.</p></div>
+      <div class="rw-card"><div class="rw-name">Idempotency keys</div><h4>Better alternative for API deduplication</h4><p>Client sends <code>Idempotency-Key</code> header; server stores first response by key. Retries return cached response. No locks needed. Stripe pioneered this.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Ticketmaster uses distributed locks to prevent double-booking. Payment gateway uses fencing tokens for idempotent charge processing. Distributed job scheduler uses etcd locks for exclusive leadership. Bidding platform locks the auction record during settlement.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

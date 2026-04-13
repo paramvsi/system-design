@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-youtube-netflix",
+  "title": "YouTube / Netflix — Video Streaming",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 0,
+    "s": 75,
+    "l": 50
+  },
+  "category": "Media & Streaming",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>Design YouTube's video delivery. Hundreds of millions of hours/day streamed, 4K support, adaptive bitrate, global latency &lt; 500ms playback-start.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n      \n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Transcoding ladder: single upload becomes 5–10 renditions (240p through 4K) in multiple codecs (H.264, H.265, AV1).</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Adaptive bitrate (HLS / DASH) — manifest file + 6-second segments. Client switches rendition per segment.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Multi-CDN: edge caches serve most traffic. Origin is rarely hit.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+1</span> BoE: 500 hours uploaded/min → 720K hours/day; avg bitrate 5 Mbps; ~30 PB/day egress peak</li>\n      <li><span class=\"rubric-points\">+2</span> Transcoding ladder on upload: 240p/480p/720p/1080p/4K × H.264/H.265/AV1; async via GPU farm</li>\n      <li><span class=\"rubric-points\">+2</span> HLS/DASH adaptive bitrate with 6-sec segments; client measures bandwidth, picks next segment's rendition</li>\n      <li><span class=\"rubric-points\">+1</span> Multi-CDN edge caching; origin shield for missed edge queries; cold tail eviction</li>\n      <li><span class=\"rubric-points\">+1</span> Manifest file (.m3u8) + segment URLs; player downloads manifest + segments from CDN</li>\n      <li><span class=\"rubric-points\">+1</span> Pre-encode popular videos to all renditions immediately; long-tail can lazily transcode on first view</li>\n      <li><span class=\"rubric-points\">+1</span> Direct-to-S3 upload; transcoder consumes from queue; 30-min 1080p = ~30 sec GPU transcode</li>\n      <li><span class=\"rubric-points\">+1</span> Metrics + playback analytics: bitrate switches, rebuffers; fed into CDN routing decisions</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Streams single 1080p file to all devices (no adaptive)</li>\n        <li>Transcodes on playback request</li>\n        <li>Origin directly serves viewers (no CDN)</li>\n        <li>Uses WebRTC or similar real-time protocol for video-on-demand (wrong tool)</li>\n        <li>Ignores codec diversity (H.264 + H.265 + AV1) and client compatibility</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 1
+}

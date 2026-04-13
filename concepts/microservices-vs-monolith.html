@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Microservices vs Monolith — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 25; --accent-s: 80%; --accent-l: 48%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>"Should we go microservices?" is one of the most consequential — and most misunderstood — architectural decisions. Pick microservices too early and you'll spend years debugging distributed systems instead of building features. Pick monolith too long and your team grinds to a halt as everyone steps on each other's deploys. The right answer depends entirely on team size, complexity, and operational maturity.</p>
+      <p>Most teams who say "we're moving to microservices" should actually build a <strong>modular monolith</strong> first. Most teams already on microservices wish they had started with one.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The spectrum</h2></div>
+    <div class="prose">
+      <p>It's not a binary. Real architectures live on a spectrum:</p>
+      <ul>
+        <li><strong>Big-ball-of-mud monolith</strong> — single deploy, no internal boundaries. The horror story. What every monolith becomes if undisciplined.</li>
+        <li><strong>Modular monolith</strong> — single deploy, but enforced internal module boundaries (separate packages, no cross-imports, talks via interfaces). 80% of microservices benefits, 5% of the cost.</li>
+        <li><strong>Service-oriented (a few services)</strong> — 3-10 services aligned to subdomains. Most companies' sweet spot.</li>
+        <li><strong>Microservices (many small services)</strong> — 50+ services. Only justifies itself at FAANG scale or in genuinely independent product teams.</li>
+        <li><strong>Nanoservices / Lambda functions</strong> — every endpoint is its own deployment. Operational nightmare. Almost always wrong.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">What microservices actually buy you</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Independent deploy.</strong> Team A ships without coordinating with Team B. The biggest real benefit.</li>
+        <li><strong>Independent scaling.</strong> The recommendation service needs 10× the capacity of the user service. Scale just it.</li>
+        <li><strong>Tech heterogeneity.</strong> Use Rust for the latency-critical service, Python for the ML service. Each team picks.</li>
+        <li><strong>Fault isolation.</strong> One service crashing doesn't take everything down (with proper <a href="/concepts/circuit-breaker">circuit breakers</a>).</li>
+        <li><strong>Team autonomy.</strong> Conway's Law says your architecture mirrors your org. Microservices align technical boundaries with team boundaries.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">What microservices cost you</h2></div>
+    <div class="prose">
+      <p>The hidden taxes nobody talks about until they're paying them:</p>
+      <ul>
+        <li><strong>Network calls everywhere.</strong> What was a function call is now an HTTP/gRPC request. 1ms becomes 10ms. Failures everywhere.</li>
+        <li><strong>Distributed transactions.</strong> The atomic UPDATE across two tables becomes a <a href="/concepts/transactions-distributed">saga with compensating actions</a>.</li>
+        <li><strong>Operational complexity.</strong> 50 services × 3 environments × 5 dependencies each = thousands of deployment artifacts. Need <a href="/concepts/service-mesh">service mesh</a>, distributed tracing, centralized logging.</li>
+        <li><strong>Schema coordination.</strong> Service A depends on Service B's API. B changes the API → A breaks. Now you need API versioning, backwards compatibility forever, contract tests.</li>
+        <li><strong>Local development hell.</strong> "To run my service I need to spin up 12 dependencies." Hours of setup; productivity drops.</li>
+        <li><strong>Cost.</strong> Each service has overhead — its own pod, its own DB connections, its own monitoring, its own on-call rotation.</li>
+      </ul>
+      <div class="callout callout-warn">
+        <div class="callout-label">Conway's Law in reverse</div>
+        <p>If you have 5 engineers and you build 50 microservices, you're guaranteed to fail. Each service needs ~2-5 engineers to maintain it well. Don't build more services than you have teams.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — the modular monolith middle path</h2></div>
+    <div class="prose">
+      <p>The pattern most successful product teams converge on:</p>
+      <ol>
+        <li>Single deployable artifact (one Docker image, one fleet, one DB connection pool).</li>
+        <li>Internally organized into <strong>modules</strong> that mirror your <a href="/concepts/domain-driven-design">bounded contexts</a> — orders, users, payments, inventory.</li>
+        <li>Modules can only call each other through <strong>explicit interfaces</strong> — never direct DB joins, never importing internal classes.</li>
+        <li>Each module owns its tables; cross-module queries go through the owning module's interface.</li>
+        <li>Linter/CI enforces the boundaries: "orders module cannot import payments.internal.*"</li>
+      </ol>
+      <p>You get 80% of the architectural benefits (clear boundaries, replaceable modules, isolated changes) without the operational cost. When a module genuinely needs independent scaling or its own deploy cadence, you can extract it to a service — and the work is straightforward because the boundaries are already clean.</p>
+      <p>Shopify's monolith — millions of lines of Ruby — runs this way. So does Stripe's main API. Both could afford full microservices; both deliberately avoided it.</p>
+
+      <div class="diagram-wrap">
+        <div class="diagram-head">
+          <span class="diagram-label">The Three Stages</span>
+          <span class="diagram-type">Mermaid</span>
+        </div>
+        <div class="diagram-body">
+          <div class="mermaid">
+flowchart LR
+    A["Big-ball-of-mud<br/>monolith"]
+    B["Modular monolith<br/>(80% of teams should be here)"]
+    C["Microservices<br/>(only at scale)"]
+    A -->|refactor| B
+    B -->|extract when justified| C
+    style A fill:#fce8e6,stroke:#8b1a12
+    style B fill:#e4f5ec,stroke:#1a5c38
+    style C fill:#fff7d4,stroke:#8b6914
+          </div>
+        </div>
+      </div>
+
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"For a team of N engineers I'd start with a modular monolith — single deploy, enforced module boundaries aligned to bounded contexts. Extract a service only when there's a concrete forcing function: independent scale, separate language, or genuine team-of-teams autonomy."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Shopify</div><h4>Modular Ruby monolith</h4><p>Millions of LOC, billions in GMV. Deliberately monolithic with strict module boundaries. Extracted only a handful of services (Tax, Identity).</p></div>
+      <div class="rw-card"><div class="rw-name">Stripe</div><h4>Mostly monolith</h4><p>Most of Stripe's API is one Ruby service. Specific concerns (Radar, Connect) are separate. Strong internal libraries enforce boundaries.</p></div>
+      <div class="rw-card"><div class="rw-name">Amazon</div><h4>Microservices done right</h4><p>The "two-pizza team" rule + every team owns a service end-to-end. ~10,000 services. Forced by org scale, not preference.</p></div>
+      <div class="rw-card"><div class="rw-name">Netflix</div><h4>Pure microservices</h4><p>Pioneered the pattern. Hundreds of services. Justifies the cost because of streaming-scale ops + independent product teams.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>E-commerce architectures choose modular monolith vs services per domain. News feed at scale uses microservices for ranker / feed-store / fan-out independently. Uber's microservice fleet is the textbook example of the pattern at scale.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

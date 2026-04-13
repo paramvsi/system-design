@@ -1,0 +1,1670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Battle Royale (PUBG) — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+
+    :root {
+      --accent-h:       38;
+      --accent-s:       92%;
+      --accent-l:       50%;
+      --accent:         hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light:   hsl(var(--accent-h), 80%, 94%);
+      --accent-mid:     hsl(var(--accent-h), 70%, 88%);
+      --accent-text:    hsl(var(--accent-h), var(--accent-s), 32%);
+      --accent-border:  hsl(var(--accent-h), 60%, 80%);
+      --hl-yellow:      #fff0a0;
+      --hl-yellow-dark: #a07a00;
+      --hl-accent:      hsl(var(--accent-h), 90%, 88%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 30%);
+      --bg:             #ffffff;
+      --bg-subtle:      #f7f7f5;
+      --bg-raised:      #f0eeeb;
+      --bg-code:        #f4f3f0;
+      --border:         #e4e2de;
+      --border-strong:  #ccc9c4;
+      --text-primary:   #111110;
+      --text-secondary: #4a4845;
+      --text-muted:     #878480;
+      --text-code:      #2d2c2b;
+      --font-serif:     'Instrument Serif', Georgia, serif;
+      --font-sans:      'Geist', system-ui, sans-serif;
+      --font-mono:      'JetBrains Mono', 'Fira Code', monospace;
+      --radius-sm:      4px;
+      --radius-md:      8px;
+      --radius-lg:      12px;
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+    body {
+      font-family: var(--font-sans);
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--text-primary);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      grid-template-rows: auto 1fr;
+      min-height: 100vh;
+    }
+    .topbar {
+      grid-column: 1 / -1;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 52px;
+      padding: 0 24px;
+      background: rgba(255,255,255,0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .topbar-left a {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .topbar-left a:hover { color: var(--accent); }
+    .topbar-sep { color: var(--border-strong); user-select: none; }
+    .topbar-problem { color: var(--accent-text); font-weight: 500; }
+    .topbar-right { display: flex; align-items: center; gap: 16px; }
+    .topbar-tag {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      background: var(--accent-light);
+      color: var(--accent-text);
+    }
+    .sidebar {
+      position: sticky;
+      top: 52px;
+      height: calc(100vh - 52px);
+      overflow-y: auto;
+      padding: 28px 20px 40px;
+      border-right: 1px solid var(--border);
+      background: var(--bg-subtle);
+    }
+    .sidebar::-webkit-scrollbar { width: 3px; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+    .sidebar-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+    .sidebar-nav { list-style: none; margin-bottom: 32px; }
+    .sidebar-nav li { margin-bottom: 2px; }
+    .sidebar-nav a {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 15px;
+      font-weight: 400;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: all 0.15s ease;
+      position: relative;
+    }
+    .sidebar-nav a::before {
+      content: '';
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--border-strong);
+      flex-shrink: 0;
+      transition: all 0.2s ease;
+    }
+    .sidebar-nav a:hover {
+      background: var(--bg-raised);
+      color: var(--text-primary);
+    }
+    .sidebar-nav a.active {
+      background: var(--accent-light);
+      color: var(--accent-text);
+      font-weight: 500;
+    }
+    .sidebar-nav a.active::before {
+      background: var(--accent);
+      width: 6px;
+      height: 6px;
+    }
+    .sidebar-related { list-style: none; margin-top: 8px; }
+    .sidebar-related li { margin-bottom: 4px; }
+    .sidebar-related a {
+      font-size: 14.5px;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .sidebar-related a:hover { color: var(--accent); }
+    .main {
+      padding: 0 48px 120px;
+      max-width: 860px;
+      min-width: 0;
+    }
+    .hero {
+      padding: 56px 0 40px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 48px;
+    }
+    .hero-number {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+    .hero h1 {
+      font-family: var(--font-serif);
+      font-size: 48px;
+      font-weight: 400;
+      line-height: 1.1;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+      letter-spacing: -0.02em;
+    }
+    .hero-desc {
+      font-size: 17px;
+      line-height: 1.65;
+      color: var(--text-secondary);
+      max-width: 600px;
+      margin-bottom: 20px;
+    }
+    .hero-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+    .hero-tag {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 400;
+      letter-spacing: 0.04em;
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-raised);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+    .section {
+      margin-bottom: 56px;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeUp 0.5s ease forwards;
+    }
+    .section:nth-child(1)  { animation-delay: 0.05s; }
+    .section:nth-child(2)  { animation-delay: 0.10s; }
+    .section:nth-child(3)  { animation-delay: 0.15s; }
+    .section:nth-child(4)  { animation-delay: 0.20s; }
+    .section:nth-child(5)  { animation-delay: 0.25s; }
+    .section:nth-child(6)  { animation-delay: 0.30s; }
+    .section:nth-child(7)  { animation-delay: 0.35s; }
+    .section:nth-child(8)  { animation-delay: 0.40s; }
+    .section:nth-child(9)  { animation-delay: 0.45s; }
+    .section:nth-child(10) { animation-delay: 0.50s; }
+    .section:nth-child(11) { animation-delay: 0.55s; }
+    @keyframes fadeUp {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .section-number {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    .section h2 {
+      font-family: var(--font-serif);
+      font-size: 30px;
+      font-weight: 400;
+      color: var(--text-primary);
+      margin-bottom: 20px;
+      letter-spacing: -0.01em;
+    }
+    .section h3 {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin: 28px 0 10px;
+    }
+    .section p {
+      color: var(--text-secondary);
+      margin-bottom: 14px;
+      max-width: 680px;
+    }
+    .section ul, .section ol {
+      padding-left: 20px;
+      margin-bottom: 16px;
+      color: var(--text-secondary);
+    }
+    .section li { margin-bottom: 6px; }
+    .hl {
+      background: var(--hl-yellow);
+      color: var(--hl-yellow-dark);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+    .hl-accent {
+      background: var(--hl-accent);
+      color: var(--hl-accent-dark);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+    .hl-red {
+      background: hsl(0, 85%, 93%);
+      color: hsl(0, 70%, 35%);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+    .hl-green {
+      background: hsl(145, 60%, 90%);
+      color: hsl(145, 55%, 28%);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+    .card {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+    .card-accent {
+      background: var(--accent-light);
+      border-color: var(--accent-border);
+    }
+    .card h4 {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+    .card p {
+      font-size: 16px;
+      color: var(--text-secondary);
+      margin-bottom: 0;
+    }
+    .card-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .code-block {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      overflow-x: auto;
+    }
+    .code-block code {
+      font-family: var(--font-mono);
+      font-size: 14.5px;
+      font-weight: 400;
+      color: var(--text-code);
+      line-height: 1.7;
+    }
+    .code-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .inline-code {
+      font-family: var(--font-mono);
+      font-size: 15px;
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      padding: 1px 6px;
+      border-radius: var(--radius-sm);
+      color: var(--text-code);
+    }
+    .table-wrap {
+      overflow-x: auto;
+      margin-bottom: 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+    }
+    .table-wrap table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 15.5px;
+    }
+    .table-wrap th {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      text-align: left;
+      padding: 10px 16px;
+      background: var(--bg-subtle);
+      border-bottom: 1px solid var(--border);
+    }
+    .table-wrap td {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+    .table-wrap tr:last-child td { border-bottom: none; }
+    .scale-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .scale-card {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      text-align: center;
+    }
+    .scale-card .number {
+      font-family: var(--font-mono);
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--accent-text);
+      margin-bottom: 2px;
+    }
+    .scale-card .label {
+      font-size: 13.5px;
+      color: var(--text-muted);
+    }
+    .arch-diagram {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+    }
+    .arch-diagram svg { display: block; margin: 0 auto; }
+    .arch-diagram .node { cursor: pointer; transition: filter 0.2s; }
+    .arch-diagram .node:hover { filter: brightness(0.95); }
+    .arch-diagram .node rect, .arch-diagram .node-rect { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arch-diagram .node-label {
+      font-family: 'Geist', system-ui, sans-serif;
+      font-size: 13.5px;
+      font-weight: 500;
+      fill: var(--text-primary);
+      text-anchor: middle;
+      dominant-baseline: central;
+      pointer-events: none;
+    }
+    .arch-diagram .node-sublabel {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      fill: var(--text-muted);
+      text-anchor: middle;
+      dominant-baseline: central;
+      pointer-events: none;
+    }
+    .arch-diagram .edge { stroke: var(--border-strong); stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+    .arch-diagram .edge-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      fill: var(--text-muted);
+      text-anchor: middle;
+    }
+    .node-highlight rect { stroke: var(--accent) !important; stroke-width: 2.5 !important; }
+    .node-highlight .node-label { fill: var(--accent-text) !important; }
+    .flow-stepper {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .flow-stepper-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .flow-stepper-title {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .flow-stepper-controls { display: flex; gap: 8px; }
+    .flow-btn {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 5px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .flow-btn:hover {
+      background: var(--accent-light);
+      border-color: var(--accent-border);
+      color: var(--accent-text);
+    }
+    .flow-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .flow-btn-primary { background: var(--accent); border-color: var(--accent); color: white; }
+    .flow-btn-primary:hover { opacity: 0.9; background: var(--accent); color: white; }
+    .flow-steps {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      margin-bottom: 16px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .flow-node {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      white-space: nowrap;
+      transition: all 0.3s ease;
+    }
+    .flow-node.active {
+      background: var(--accent-light);
+      border-color: var(--accent);
+      color: var(--accent-text);
+      box-shadow: 0 0 0 3px var(--accent-mid);
+    }
+    .flow-node.done {
+      background: var(--accent-light);
+      border-color: var(--accent-border);
+      color: var(--accent-text);
+    }
+    .flow-arrow { color: var(--border-strong); font-size: 16px; flex-shrink: 0; }
+    .flow-desc {
+      font-size: 16px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      padding: 14px 16px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      min-height: 52px;
+    }
+    .flow-counter {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 10px;
+      text-align: right;
+    }
+    .mermaid-wrap {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+    }
+    .mermaid { text-align: center; }
+    .tradeoff {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .tradeoff-option {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+    }
+    .tradeoff-option.chosen {
+      border-color: var(--accent-border);
+      background: var(--accent-light);
+    }
+    .tradeoff-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .tradeoff-label.yes { color: hsl(145, 55%, 32%); }
+    .tradeoff-label.no  { color: var(--text-muted); }
+    .tradeoff-option h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+    .tradeoff-option p {
+      font-size: 15px;
+      color: var(--text-secondary);
+      margin-bottom: 0;
+    }
+    .callout {
+      border-left: 3px solid var(--accent);
+      padding: 14px 18px;
+      background: var(--accent-light);
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+      margin-bottom: 16px;
+    }
+    .callout p {
+      font-size: 16px;
+      color: var(--accent-text);
+      margin-bottom: 0;
+    }
+    .callout-warn {
+      border-left-color: hsl(38, 92%, 50%);
+      background: hsl(38, 80%, 94%);
+    }
+    .callout-warn p { color: hsl(38, 70%, 28%); }
+    .callout-danger {
+      border-left-color: hsl(0, 72%, 52%);
+      background: hsl(0, 80%, 95%);
+    }
+    .callout-danger p { color: hsl(0, 65%, 32%); }
+    .tip-card {
+      display: flex;
+      gap: 14px;
+      padding: 16px 20px;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      margin-bottom: 10px;
+    }
+    .tip-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+    .tip-content { font-size: 16px; color: var(--text-secondary); line-height: 1.6; }
+    .tip-content strong { color: var(--text-primary); font-weight: 600; }
+    .similar-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .similar-card {
+      display: block;
+      text-decoration: none;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 18px 20px;
+      transition: all 0.2s ease;
+    }
+    .similar-card:hover {
+      border-color: var(--accent-border);
+      background: var(--accent-light);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    }
+    .similar-card h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    .similar-card p {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      margin-bottom: 0;
+    }
+    .evolution-step {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+      position: relative;
+    }
+    .evolution-step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      left: 15px;
+      top: 36px;
+      bottom: -20px;
+      width: 2px;
+      background: var(--border);
+    }
+    .evolution-marker {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--accent-light);
+      border: 2px solid var(--accent-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--accent-text);
+      flex-shrink: 0;
+    }
+    .evolution-content h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    .evolution-content p {
+      font-size: 15.5px;
+      color: var(--text-secondary);
+      margin-bottom: 0;
+    }
+
+    /* ── Netcode Visual ── */
+    .netcode-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .netcode-card {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 18px 20px;
+    }
+    .netcode-card h4 {
+      font-family: var(--font-sans);
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .netcode-card p {
+      font-size: 15px;
+      color: var(--text-secondary);
+      margin-bottom: 0;
+      line-height: 1.55;
+    }
+    .netcode-card .where {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--accent-text);
+      background: var(--accent-light);
+      padding: 2px 6px;
+      border-radius: 3px;
+      margin-bottom: 8px;
+      display: inline-block;
+    }
+
+    /* ── Protocol table ── */
+    .proto-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .proto-card {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+    }
+    .proto-card h4 {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .main { padding: 0 20px 80px; }
+      .hero h1 { font-size: 34px; }
+      .tradeoff { grid-template-columns: 1fr; }
+      .card-grid { grid-template-columns: 1fr; }
+      .netcode-grid { grid-template-columns: 1fr; }
+      .proto-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- ═══════════════════ TOPBAR ═══════════════════ -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <a href="../index.html">System Design</a>
+      <span class="topbar-sep">/</span>
+      <span class="topbar-problem">Battle Royale (PUBG)</span>
+    </div>
+    <div class="topbar-right">
+      <span class="topbar-tag">Hard</span>
+    </div>
+  </header>
+
+  <!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-label">Sections</div>
+    <ul class="sidebar-nav" id="sidebar-nav">
+      <li><a href="#problem">Problem Statement</a></li>
+      <li><a href="#requirements">Requirements</a></li>
+      <li><a href="#scale">Scale Estimation</a></li>
+      <li><a href="#api">API Design</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#deep-dive">Deep Dive</a></li>
+      <li><a href="#tradeoffs">Tradeoffs</a></li>
+      <li><a href="#failures">Failure Scenarios</a></li>
+      <li><a href="#interview-tips">Interview Tips</a></li>
+      <li><a href="#similar">Similar Problems</a></li>
+      <li><a href="#evolution">Evolution</a></li>
+    </ul>
+    <div class="sidebar-label">Related</div>
+    <ul class="sidebar-related">
+      <li><a href="../uber/index.html">Uber / Ride Sharing</a></li>
+      <li><a href="../whatsapp/index.html">WhatsApp / Chat</a></li>
+      <li><a href="../youtube/index.html">YouTube / Netflix</a></li>
+      <li><a href="../kafka/index.html">Distributed Queue</a></li>
+    </ul>
+  </aside>
+
+  <!-- ═══════════════════ MAIN ═══════════════════ -->
+  <main class="main">
+
+    <!-- ── Hero ── -->
+    <div class="hero">
+      <div class="hero-number">System Design — Battle Royale</div>
+      <h1>Design PUBG</h1>
+      <p class="hero-desc">
+        Design a multiplayer battle royale system where 100 players drop onto a large map, scavenge for equipment, and fight until one player or squad survives — all synchronized in real-time over unreliable networks.
+      </p>
+      <div class="hero-tags">
+        <span class="hero-tag">Real-Time Networking</span>
+        <span class="hero-tag">UDP Protocol</span>
+        <span class="hero-tag">Ephemeral Servers</span>
+        <span class="hero-tag">Lag Compensation</span>
+        <span class="hero-tag">Spatial Partitioning</span>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 01 · PROBLEM STATEMENT ═══════════════ -->
+    <div class="section" id="problem">
+      <div class="section-number">01</div>
+      <h2>Problem Statement</h2>
+      <p>
+        Design the backend infrastructure for a battle royale game at PUBG scale. <span class="hl">100 players</span> connect to a single game server, drop onto an 8km × 8km map, collect weapons and equipment, and fight in real-time combat while a shrinking zone forces encounters. The last player or squad standing wins.
+      </p>
+      <p>
+        Unlike traditional web systems, this is a <span class="hl-accent">real-time simulation</span> problem. The server must process inputs, simulate physics, detect hits, and broadcast state to all players every <span class="hl">50 milliseconds</span> (at 20 Hz tick rate). Latency is measured in frames, not seconds.
+      </p>
+
+      <div class="callout">
+        <p><strong>Core question:</strong> How do you synchronize the real-time state of 100 players, thousands of items, projectiles, and a shrinking zone across unreliable networks with sub-100ms perceived latency?</p>
+      </div>
+
+      <p>
+        The system has two distinct halves: a <span class="hl-accent">platform layer</span> (matchmaking, profiles, inventory — standard microservices) and a <span class="hl-accent">game server layer</span> (real-time simulation — ephemeral, stateful, latency-critical). The architecture challenge is the bridge between them.
+      </p>
+    </div>
+
+    <!-- ═══════════════ 02 · REQUIREMENTS ═══════════════ -->
+    <div class="section" id="requirements">
+      <div class="section-number">02</div>
+      <h2>Requirements</h2>
+
+      <h3>Functional Requirements</h3>
+      <div class="card">
+        <ul>
+          <li><strong>Matchmaking</strong> — Group ~100 players of similar skill and region into a lobby, start when full</li>
+          <li><strong>Game world</strong> — Large map with loot spawns, vehicles, destructible objects</li>
+          <li><strong>Real-time combat</strong> — Player positions, shooting, hit detection, health at <span class="hl">20–60 Hz</span></li>
+          <li><strong>Shrinking zone</strong> — Timed circle that damages players outside it, forcing encounters</li>
+          <li><strong>Inventory system</strong> — Pick up, drop, equip weapons, attachments, and consumables</li>
+          <li><strong>Squad support</strong> — Solo, duo, and squad (4-player) modes with voice chat</li>
+          <li><strong>Match results</strong> — Kill feed, final standings, persistent stats (K/D, wins, rank)</li>
+          <li><strong>Spectating</strong> — Watch after death, anti-cheat replay data collection</li>
+        </ul>
+      </div>
+
+      <h3>Non-Functional Requirements</h3>
+      <div class="card">
+        <ul>
+          <li><strong>Low latency</strong> — Server tick rate of 20–60 Hz, perceived client latency <span class="hl">&lt; 100ms</span></li>
+          <li><strong>Consistency</strong> — <span class="hl-accent">Authoritative server</span> for all critical game actions; no desync on hit registration</li>
+          <li><strong>Scalability</strong> — Support millions of concurrent players across thousands of simultaneous matches</li>
+          <li><strong>Availability</strong> — Matchmaking and platform services highly available; individual match servers are ephemeral</li>
+          <li><strong>Anti-cheat</strong> — Server-side validation of all game actions, client-side kernel driver, post-match ML analysis</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 03 · SCALE ESTIMATION ═══════════════ -->
+    <div class="section" id="scale">
+      <div class="section-number">03</div>
+      <h2>Scale Estimation</h2>
+
+      <p>All numbers derived from assumptions, not pulled from thin air. Starting from <span class="hl">50M MAU</span> (PUBG's peak scale).</p>
+
+      <div class="scale-grid">
+        <div class="scale-card">
+          <div class="number">1.5M</div>
+          <div class="label">Peak CCU</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">12,000</div>
+          <div class="label">Concurrent Matches</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">750K</div>
+          <div class="label">Matches / Day</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~115 Gbps</div>
+          <div class="label">Aggregate Bandwidth</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~3,000</div>
+          <div class="label">Game Servers at Peak</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~10 Mbps</div>
+          <div class="label">Bandwidth per Match</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~4K/s</div>
+          <div class="label">Matchmaking Req (Peak)</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~100 GB</div>
+          <div class="label">Player Profile Storage</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>Derivation</h4>
+        <p>
+          <strong>50M MAU → 15M DAU</strong> (30% daily active) <strong>→ 1.5M CCU</strong> (10% concurrent at peak).
+          80% in-match = 1.2M players in matches. At 100 per match = <strong>12,000 concurrent matches</strong>.
+          Each player plays ~5 matches/day × 15M ÷ 100 = <strong>750K matches/day</strong>.
+        </p>
+        <p>
+          <strong>Bandwidth:</strong> ~20 entities in AOI × 30 bytes/entity × 20 ticks/sec = ~700 bytes/tick. With delta compression: ~<strong>12 KB/s per player</strong> bidirectional.
+          100 players × 12 KB/s = <strong>1.2 MB/s per match</strong> (~10 Mbps). 12K matches × 10 Mbps = <strong>~115 Gbps</strong> aggregate (spread across 3K servers).
+        </p>
+        <p>
+          <strong>Compute:</strong> Each match fits on 2–4 CPU cores. 4–8 matches per bare-metal node = <strong>1,500–3,000 game servers</strong> at peak.
+          Servers are ephemeral (~25 min lifecycle), recycled at ~480/min.
+        </p>
+      </div>
+
+      <div class="callout">
+        <p><strong>Key insight:</strong> Network is the bottleneck, not storage. 115 Gbps aggregate means game servers must be regionally distributed, close to players. Player profile DB is only ~100 GB — trivial.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 04 · API DESIGN ═══════════════ -->
+    <div class="section" id="api">
+      <div class="section-number">04</div>
+      <h2>API Design</h2>
+
+      <p>APIs split into two categories: <span class="hl-accent">Platform APIs</span> (REST/gRPC for matchmaking, profiles, inventory) and the <span class="hl-accent">Game Protocol</span> (custom binary UDP for real-time state sync).</p>
+
+      <h3>Platform APIs (REST over HTTPS)</h3>
+
+      <div class="code-label">Matchmaking — Queue</div>
+      <div class="code-block"><code><pre>POST /api/v1/matchmaking/queue
+Authorization: Bearer &lt;session_token&gt;
+
+{ "mode": "squad", "region": "ap-south-1", "map": "erangel", "perspective": "tpp" }
+
+→ 202 Accepted
+{ "ticket_id": "tkt_a8f3...", "estimated_wait_sec": 12, "status": "queued" }</pre></code></div>
+
+      <div class="code-label">Matchmaking — Poll for Match</div>
+      <div class="code-block"><code><pre>GET /api/v1/matchmaking/ticket/{ticket_id}
+
+→ 200 OK (when matched)
+{
+  "status": "matched",
+  "match_id": "match_7bc2...",
+  "game_server": {
+    "host": "gs-ap-south-42.pubg.internal",
+    "port": 7777, "udp_port": 7778,
+    "token": "eyJhbG..."
+  },
+  "lobby_players": 97, "map": "erangel"
+}</pre></code></div>
+
+      <div class="code-label">Player Profile &amp; Stats</div>
+      <div class="code-block"><code><pre>GET /api/v1/players/{player_id}/profile
+
+→ 200 OK
+{
+  "player_id": "p_9d3f...", "username": "ShroudLite", "level": 47,
+  "rank": { "tier": "platinum", "division": 2, "rating": 1847 },
+  "lifetime_stats": {
+    "matches_played": 3241, "wins": 186, "kills": 9720,
+    "kd_ratio": 3.42, "avg_damage": 312.5
+  }
+}</pre></code></div>
+
+      <h3>Game Server Protocol (Real-Time, UDP)</h3>
+      <p>Once matched, everything switches to a <span class="hl-accent">custom binary UDP protocol</span>. REST doesn't work here — TCP's head-of-line blocking adds 100–300ms spikes on packet loss, and the server must broadcast state every <span class="hl">50ms</span>.</p>
+
+      <div class="proto-grid">
+        <div class="proto-card">
+          <h4>Client → Server (Upstream)</h4>
+          <p style="color:var(--text-secondary);font-size:13px;">
+            <strong>PLAYER_INPUT</strong> (16 bytes, every frame): sequence number, timestamp, WASD direction, look angles, action bitfield (jump/crouch/fire/ADS/reload), weapon slot.<br/><br/>
+            <strong>INTERACT</strong> (10 bytes, on action): pick up item, open door, enter vehicle. Includes target object ID.<br/><br/>
+            <strong>VOICE_FRAME</strong> (~80 bytes, 50/sec while talking): Opus-encoded 20ms audio frame for squad voice chat.
+          </p>
+        </div>
+        <div class="proto-card">
+          <h4>Server → Client (Downstream)</h4>
+          <p style="color:var(--text-secondary);font-size:13px;">
+            <strong>WORLD_STATE_DELTA</strong> (~400–600 bytes, every tick): server tick number, last ACK'd input sequence, array of nearby player states (position, rotation, velocity, animation, health, weapon). Delta-compressed.<br/><br/>
+            <strong>HIT_CONFIRM</strong> (6 bytes, reliable): damage dealt, hit zone, target health, kill flag.<br/><br/>
+            <strong>ZONE_UPDATE</strong> (20 bytes, reliable): new circle center, radius, shrink speed, damage per second.
+          </p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <p><strong>Reliability split:</strong> Position updates are <span class="hl-green">unreliable</span> (fire-and-forget — stale data is worse than lost data). Zone updates, hit confirms, and kill events are <span class="hl-accent">reliable-ordered</span> (ACKs + retransmission). Libraries like <strong>ENet</strong> or <strong>Valve's GameNetworkingSockets</strong> provide both channels over a single UDP socket.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Layer</th><th>Protocol</th><th>Auth</th><th>Peak Rate</th></tr></thead>
+          <tbody>
+            <tr><td>Matchmaking</td><td>REST / HTTPS</td><td>JWT (session)</td><td>~4K req/sec</td></tr>
+            <tr><td>Profile / Stats</td><td>REST / HTTPS</td><td>JWT</td><td>~50K req/sec (cached)</td></tr>
+            <tr><td>Inventory / Shop</td><td>REST / HTTPS</td><td>JWT</td><td>~10K req/sec</td></tr>
+            <tr><td>Social / Squad</td><td>REST + WebSocket</td><td>JWT</td><td>~5K req/sec</td></tr>
+            <tr><td>Game state sync</td><td>Custom binary UDP</td><td>Match token</td><td>20–60 ticks/sec × 100</td></tr>
+            <tr><td>Voice chat</td><td>UDP (Opus frames)</td><td>Match token</td><td>50 frames/sec</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 05 · HIGH-LEVEL ARCHITECTURE ═══════════════ -->
+    <div class="section" id="architecture">
+      <div class="section-number">05</div>
+      <h2>High-Level Architecture</h2>
+
+      <p>Two parallel worlds: an always-on <span class="hl-accent">platform layer</span> (standard microservices) and an ephemeral <span class="hl-accent">game server layer</span> (stateful simulation instances that live for one match). The bridge between them is the <span class="hl">Game Server Orchestrator</span>.</p>
+
+      <div class="arch-diagram">
+        <svg viewBox="0 0 880 520" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="#ccc9c4"/>
+            </marker>
+          </defs>
+
+          <!-- Row 1: Client + CDN -->
+          <g class="node" id="node-client" onclick="hlNode('node-client')">
+            <rect class="node-rect" x="20" y="30" width="120" height="56" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="80" y="52">Game Client</text>
+            <text class="node-sublabel" x="80" y="68">PC / Console / Mobile</text>
+          </g>
+          <g class="node" id="node-cdn" onclick="hlNode('node-cdn')">
+            <rect class="node-rect" x="200" y="30" width="120" height="56" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="260" y="52">CDN</text>
+            <text class="node-sublabel" x="260" y="68">Patches / Assets</text>
+          </g>
+
+          <!-- Row 2: Platform Services -->
+          <g class="node" id="node-auth" onclick="hlNode('node-auth')">
+            <rect class="node-rect" x="20" y="140" width="120" height="56" fill="hsl(38,80%,94%)" stroke="hsl(38,60%,80%)"/>
+            <text class="node-label" x="80" y="162">Auth Service</text>
+            <text class="node-sublabel" x="80" y="178">JWT / OAuth</text>
+          </g>
+          <g class="node" id="node-mm" onclick="hlNode('node-mm')">
+            <rect class="node-rect" x="170" y="140" width="130" height="56" fill="hsl(38,80%,94%)" stroke="hsl(38,60%,80%)"/>
+            <text class="node-label" x="235" y="162">Matchmaker</text>
+            <text class="node-sublabel" x="235" y="178">Skill Bucketing</text>
+          </g>
+          <g class="node" id="node-profile" onclick="hlNode('node-profile')">
+            <rect class="node-rect" x="330" y="140" width="120" height="56" fill="hsl(38,80%,94%)" stroke="hsl(38,60%,80%)"/>
+            <text class="node-label" x="390" y="162">Profile Service</text>
+            <text class="node-sublabel" x="390" y="178">Stats / Rank</text>
+          </g>
+          <g class="node" id="node-social" onclick="hlNode('node-social')">
+            <rect class="node-rect" x="480" y="140" width="120" height="56" fill="hsl(38,80%,94%)" stroke="hsl(38,60%,80%)"/>
+            <text class="node-label" x="540" y="162">Social Service</text>
+            <text class="node-sublabel" x="540" y="178">Squads / Presence</text>
+          </g>
+
+          <!-- Row 3: Orchestrator + Game Servers -->
+          <g class="node" id="node-orch" onclick="hlNode('node-orch')">
+            <rect class="node-rect" x="100" y="260" width="160" height="56" fill="hsl(38,80%,94%)" stroke="hsl(38,60%,80%)"/>
+            <text class="node-label" x="180" y="282">Orchestrator</text>
+            <text class="node-sublabel" x="180" y="298">K8s + Agones</text>
+          </g>
+          <g class="node" id="node-gs" onclick="hlNode('node-gs')">
+            <rect class="node-rect" x="340" y="250" width="200" height="76" fill="hsl(25,90%,94%)" stroke="hsl(25,70%,75%)"/>
+            <text class="node-label" x="440" y="275">Game Server Fleet</text>
+            <text class="node-sublabel" x="440" y="293">~12K concurrent instances</text>
+            <text class="node-sublabel" x="440" y="308">UDP / 20–60 Hz tick loop</text>
+          </g>
+
+          <!-- Row 4: Data Stores -->
+          <g class="node" id="node-pg" onclick="hlNode('node-pg')">
+            <rect class="node-rect" x="20" y="400" width="120" height="56" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="80" y="422">PostgreSQL</text>
+            <text class="node-sublabel" x="80" y="438">Profiles / Stats</text>
+          </g>
+          <g class="node" id="node-redis" onclick="hlNode('node-redis')">
+            <rect class="node-rect" x="170" y="400" width="120" height="56" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="230" y="422">Redis</text>
+            <text class="node-sublabel" x="230" y="438">Cache / Presence</text>
+          </g>
+          <g class="node" id="node-kafka" onclick="hlNode('node-kafka')">
+            <rect class="node-rect" x="340" y="400" width="120" height="56" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="400" y="422">Kafka</text>
+            <text class="node-sublabel" x="400" y="438">Match Results</text>
+          </g>
+          <g class="node" id="node-cass" onclick="hlNode('node-cass')">
+            <rect class="node-rect" x="500" y="400" width="130" height="56" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="565" y="422">Cassandra</text>
+            <text class="node-sublabel" x="565" y="438">Match History</text>
+          </g>
+
+          <!-- Anti-cheat -->
+          <g class="node" id="node-ac" onclick="hlNode('node-ac')">
+            <rect class="node-rect" x="660" y="260" width="140" height="56" fill="hsl(0,80%,95%)" stroke="hsl(0,60%,82%)"/>
+            <text class="node-label" x="730" y="282">Anti-Cheat</text>
+            <text class="node-sublabel" x="730" y="298">ML Pipeline / Replay</text>
+          </g>
+          <g class="node" id="node-s3" onclick="hlNode('node-s3')">
+            <rect class="node-rect" x="680" y="400" width="100" height="56" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="730" y="422">S3</text>
+            <text class="node-sublabel" x="730" y="438">Replays</text>
+          </g>
+
+          <!-- Edges -->
+          <line class="edge" x1="80" y1="86" x2="80" y2="140"/>
+          <line class="edge" x1="140" y1="58" x2="200" y2="58"/>
+          <line class="edge" x1="80" y1="86" x2="235" y2="140"/>
+          <line class="edge" x1="235" y1="196" x2="180" y2="260"/>
+          <line class="edge" x1="260" y1="288" x2="340" y2="288"/>
+          <line class="edge" x1="80" y1="196" x2="80" y2="400"/>
+          <line class="edge" x1="390" y1="196" x2="230" y2="400"/>
+          <line class="edge" x1="540" y1="196" x2="230" y2="400"/>
+          <line class="edge" x1="440" y1="326" x2="400" y2="400"/>
+          <line class="edge" x1="540" y1="288" x2="660" y2="288"/>
+          <line class="edge" x1="730" y1="316" x2="730" y2="400"/>
+          <line class="edge" x1="460" y1="400" x2="500" y2="428"/>
+
+          <!-- Direct client-to-game-server UDP -->
+          <line class="edge" x1="140" y1="58" x2="440" y2="250" stroke="hsl(25,70%,75%)" stroke-dasharray="6,4"/>
+
+          <!-- Edge Labels -->
+          <text class="edge-label" x="50" y="115">HTTPS</text>
+          <text class="edge-label" x="175" y="48">Assets</text>
+          <text class="edge-label" x="295" y="278">Assign</text>
+          <text class="edge-label" x="300" y="60">UDP (gameplay)</text>
+          <text class="edge-label" x="440" y="370">Results</text>
+          <text class="edge-label" x="600" y="278">Replay data</text>
+        </svg>
+      </div>
+
+      <!-- ── Flow Stepper ── -->
+      <div class="flow-stepper">
+        <div class="flow-stepper-header">
+          <span class="flow-stepper-title">Request Flow — "I Click Play"</span>
+          <div class="flow-stepper-controls">
+            <button class="flow-btn" onclick="resetFlow()" id="flow-reset" disabled>Reset</button>
+            <button class="flow-btn flow-btn-primary" onclick="runFlow()" id="flow-next">Next Step →</button>
+          </div>
+        </div>
+        <div class="flow-steps" id="flow-steps"></div>
+        <div class="flow-desc" id="flow-desc">Click <strong>Next Step</strong> to walk through the full match lifecycle.</div>
+        <div class="flow-counter" id="flow-counter"></div>
+      </div>
+
+      <h3>Regional Architecture</h3>
+      <p>Each of 5–6 major regions is nearly self-contained: its own matchmaker, game server fleet, orchestrator, database replicas, and Kafka cluster. Players are matched within their region for latency. Only account/auth, shop/payments, and global leaderboards are truly global services synced asynchronously across regions.</p>
+
+      <h3>Game Server Orchestrator</h3>
+      <p>The most unique component — doesn't exist in typical web systems. Maintains a <span class="hl">warm pool</span> of pre-provisioned game server containers. When the matchmaker fills a lobby, it requests a server from the pool (<span class="hl">&lt; 2 seconds</span>), avoiding cold-start delays. Pre-warming uses predictive scaling based on time-of-day and historical demand. At peak, the orchestrator recycles ~<span class="hl">480 servers per minute</span>.</p>
+    </div>
+
+    <!-- ═══════════════ 06 · DEEP DIVE ═══════════════ -->
+    <div class="section" id="deep-dive">
+      <div class="section-number">06</div>
+      <h2>Deep Dive — Real-Time Game Networking</h2>
+
+      <p>
+        Everything else in this design is standard distributed systems. The hard, novel problem is keeping <span class="hl">100 players in sync</span> on an 8km map with sub-100ms perceived latency over unreliable networks. Four interlocking techniques make this work.
+      </p>
+
+      <div class="callout">
+        <p><strong>The fundamental problem:</strong> The server and every client are always looking at <em>different moments in time</em> because of network latency. A player in Mumbai is ~30ms from the server; add interpolation delay and they see the world ~80ms in the past. The netcode's job is to create the <em>illusion</em> of a shared present moment.</p>
+      </div>
+
+      <div class="netcode-grid">
+        <div class="netcode-card">
+          <span class="where">Client</span>
+          <h4>1. Client-Side Prediction</h4>
+          <p>Your inputs are applied <strong>locally and instantly</strong> — the client runs the same physics engine as the server. You don't wait for the server to confirm movement. The client "predicts" the result. This is why your own movement always feels responsive.</p>
+        </div>
+        <div class="netcode-card">
+          <span class="where">Client</span>
+          <h4>2. Server Reconciliation</h4>
+          <p>When the server's authoritative state arrives, the client checks if its predictions were correct. If not, it <strong>re-simulates all unconfirmed inputs</strong> on top of the server's position. Small errors are blended smoothly; large errors cause a visible "rubber-band" snap.</p>
+        </div>
+        <div class="netcode-card">
+          <span class="where">Client</span>
+          <h4>3. Entity Interpolation</h4>
+          <p>Other players' positions arrive at 20 Hz but must render at 60–144 FPS. The client renders them <strong>one tick behind</strong> (~50ms in the past), smoothly interpolating between the two most recent snapshots. This is why enemies look smooth even at low tick rates.</p>
+        </div>
+        <div class="netcode-card">
+          <span class="where">Server</span>
+          <h4>4. Lag Compensation</h4>
+          <p>When you fire, you're aiming at a target ~80ms in the past. The server <strong>rewinds hitboxes</strong> to the time you saw the world and checks your shot there. This makes shooting feel accurate, but means targets can occasionally die "behind cover."</p>
+        </div>
+      </div>
+
+      <h3>Client-Side Prediction — How It Works</h3>
+      <p>Without prediction, pressing W results in <span class="hl-red">83ms of nothing</span> (30ms to server + 3ms processing + 50ms back), then a sudden teleport. At 60 FPS, that's 5 frames of your character ignoring you. Unplayable.</p>
+      <p>With prediction: the client immediately applies your input to a local physics simulation — the <span class="hl-green">same code the server runs</span>. It stores each predicted result in a <span class="hl-accent">prediction buffer</span> (ring buffer, ~128 entries = 2 seconds of inputs). When the server confirms input #N, the client discards entries up to N and re-simulates everything after N on top of the server's authoritative position.</p>
+      <p>The re-simulation typically processes 4–14 frames and takes <span class="hl">&lt; 0.1ms</span> — invisible in the frame budget. When prediction matches (99% of the time), the player sees nothing. When it doesn't, the correction is blended over 50–200ms depending on error magnitude.</p>
+
+      <h3>Lag Compensation — The Shot Sequence</h3>
+
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+          sequenceDiagram
+              participant A as Player A (Shooter)
+              participant S as Game Server
+              participant B as Player B (Target)
+
+              Note over A: Sees B at position<br/>from 80ms ago
+              A->>A: Click fire — muzzle flash<br/>plays instantly (prediction)
+              A->>S: PLAYER_INPUT {fire, yaw, pitch, seq:47}
+              Note over S: Receives after ~30ms
+              S->>S: Calculate A's view time<br/>T - 30ms - 50ms = T-80ms
+              S->>S: Rewind B's hitbox to T-80ms
+              S->>S: Raycast → HIT on B's torso
+              S->>S: Apply 38 HP damage (AKM)
+              S-->>A: HIT_CONFIRM {damage:38, zone:torso}
+              S-->>B: DAMAGE_EVENT {from:A, dmg:38, dir:NW}
+              Note over A: ~63ms total — sees hit marker
+              Note over B: ~63ms total — takes damage,<br/>screen shakes
+        </div>
+      </div>
+
+      <p>The server maintains a <span class="hl-accent">position history buffer</span> for every player (last 1 second, 20 entries × ~40 bytes = 80 KB total). On a shot, it interpolates between the two history entries bracketing the shooter's view time, reconstructs hitboxes, and checks the ray. The rewind is <span class="hl">capped at 250ms</span> to prevent abuse from players intentionally adding latency.</p>
+
+      <h3>The Peeker's Advantage — An Unavoidable Tradeoff</h3>
+      <p>Because of lag compensation, the player who peeks a corner has a <span class="hl">~80ms advantage</span> over the defender. The peeker sees the defender immediately, but the defender sees the peeker ~80ms late. This is a fundamental consequence of physics (speed of light + network latency) — <span class="hl-red">there is no solution that eliminates it</span> without breaking hit registration for the shooter. Every competitive FPS makes this same tradeoff.</p>
+
+      <h3>The Tick Budget</h3>
+      <p>At 20 Hz, the server has <span class="hl">50ms per tick</span> to process everything:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Phase</th><th>Budget</th><th>What Happens</th></tr></thead>
+          <tbody>
+            <tr><td>Network receive</td><td>~2ms</td><td>Read all queued UDP packets from 100 clients</td></tr>
+            <tr><td>Input processing</td><td>~3ms</td><td>Apply 100 players' inputs to world state</td></tr>
+            <tr><td>Physics simulation</td><td>~8ms</td><td>Movement, collision, vehicles, projectiles</td></tr>
+            <tr><td>Hit detection</td><td>~5ms</td><td>Lag-compensated raycasts for active shooters</td></tr>
+            <tr><td>Game logic</td><td>~4ms</td><td>Zone damage, loot, airdrops, kills/knocks</td></tr>
+            <tr><td>Anti-cheat</td><td>~3ms</td><td>Speed checks, fire rate, position sanity</td></tr>
+            <tr><td>State broadcast</td><td>~10ms</td><td>Per-player AOI filter + delta compress + send</td></tr>
+            <tr><td style="color:var(--accent-text);font-weight:600">Headroom</td><td style="color:var(--accent-text);font-weight:600">~15ms</td><td style="color:var(--accent-text)">Absorbs late-game spikes (30 players in small circle)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Area of Interest (AOI) — Spatial Grid</h3>
+      <p>The 8km × 8km map is divided into <span class="hl">500m × 500m cells</span> (16 × 16 = 256 cells). Each player belongs to one cell. Their AOI = their cell + 8 neighbors (3×3 grid). Only entities within these 9 cells are included in their state update — cutting broadcast from 100 to ~<span class="hl">20 players</span>. Cell lookup is O(1) by hashing position to cell index.</p>
+
+      <h3>Delta Compression — 60–80% Bandwidth Savings</h3>
+      <p>Instead of sending full state every tick, the server tracks what each client has ACK'd and sends only changed fields. A <span class="hl-accent">field bitmask</span> (1 byte) indicates which fields follow. If only position changed: 7 bytes instead of 19 bytes per entity. If nothing changed: 1 byte. Typical savings: <span class="hl">~82%</span>.</p>
+    </div>
+
+    <!-- ═══════════════ 07 · TRADEOFFS ═══════════════ -->
+    <div class="section" id="tradeoffs">
+      <div class="section-number">07</div>
+      <h2>Key Design Decisions &amp; Tradeoffs</h2>
+
+      <h3>1. Server-Authoritative vs Client-Authoritative</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Server-Authoritative</h4>
+          <p>Server runs the simulation, validates all inputs. Client sends inputs, server decides outcomes. Anti-cheat is architecturally possible. Costs 1,500–3,000 game servers at peak.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Client-Authoritative</h4>
+          <p>Client tells server "I'm at X, I hit Y for Z damage." Zero validation possible. Speed hacks, aimbots, teleportation are trivially easy and undetectable. No competitive game uses this.</p>
+        </div>
+      </div>
+
+      <h3>2. Tick Rate — 20 Hz vs 60 Hz vs 128 Hz</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Adaptive 20→60 Hz</h4>
+          <p>Start at 20 Hz with 100 players (50ms budget). Ramp to 30–60 Hz as players die. Balances server cost and mobile bandwidth at scale. 100 players at 60 Hz exceeds tick budget on commodity hardware.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Fixed 128 Hz</h4>
+          <p>Gold standard for competitive FPS (CS2, Valorant). Only viable for 5v5 games — 100 players at 128 Hz is physically impossible. Bandwidth: ~60 KB/s per player, excludes mobile entirely.</p>
+        </div>
+      </div>
+
+      <h3>3. UDP vs TCP for Game Traffic</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Custom UDP Protocol</h4>
+          <p>No head-of-line blocking. Lost position packets are fine (next tick corrects). Full control over reliability, compression, and batching. Must build reliability layer manually.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>TCP / QUIC</h4>
+          <p>TCP: head-of-line blocking causes 100–300ms stalls on every dropped packet (1–5% of frames on WiFi). Completely unplayable. QUIC: promising but unreliable datagrams extension not yet mature for game use.</p>
+        </div>
+      </div>
+
+      <h3>4. Lag Compensation — Favor Shooter vs Favor Target</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Favor Shooter (rewind, 250ms cap)</h4>
+          <p>Shots hit where you aimed. Game is playable worldwide up to ~200ms ping. Tradeoff: victims occasionally die behind cover due to peeker's advantage. Every major FPS (CS2, Overwatch, Apex) makes this same choice.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Favor Target (no rewind)</h4>
+          <p>If behind cover, you're safe. But high-ping players can never hit moving targets — must lead shots by their own latency. Unplayable above ~50ms. Excludes most of the world's players.</p>
+        </div>
+      </div>
+
+      <h3>5. Game Server Lifecycle — Containers vs Bare Metal</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Hybrid (Bare Metal + Cloud Containers)</h4>
+          <p>Bare metal for baseline capacity (~40% of peak, cheapest per-match cost). Kubernetes + Agones containers on cloud for elasticity (peaks, events, new regions). Fast startup: 3–8 seconds for pre-pulled containers.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>VMs Only</h4>
+          <p>Slow startup (30–90s), 15–20% overhead from hypervisor, coarse granularity. Works for older infrastructure but wastes resources and can't handle demand spikes quickly enough.</p>
+        </div>
+      </div>
+
+      <h3>6. AOI — Fixed Spatial Grid vs Quadtree</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Fixed 500m × 500m Grid</h4>
+          <p>O(1) cell lookup by position hash. 256 cells total, 3×3 neighbor query for AOI. Simple, cache-friendly, predictable performance. At 100 players on 8km map, density is low enough that fixed cells work perfectly.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Quadtree / Adaptive</h4>
+          <p>O(log N) operations, must rebalance every tick as players move. More complex, cache-unfriendly. Shines when density varies by 100× (MMOs). Overkill for 100 uniformly-distributed players.</p>
+        </div>
+      </div>
+
+      <h3>7. Anti-Cheat — Kernel-Level vs Server-Only</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Three-Layer Defense</h4>
+          <p>Kernel driver (EasyAntiCheat/BattlEye) catches memory hacks. Server-side validates physics constraints. Post-match ML detects statistical anomalies. Combined: ~85% cheat detection rate.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Server-Only Validation</h4>
+          <p>No invasive client software. But cannot detect wallhacks (client renders what server sends), and "human-plausible" aimbots slip through. Only catches ~40% of cheats. Game reputation suffers.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 08 · FAILURE SCENARIOS ═══════════════ -->
+    <div class="section" id="failures">
+      <div class="section-number">08</div>
+      <h2>What Can Go Wrong</h2>
+
+      <div class="card">
+        <h4>🔥 Game Server Crash Mid-Match</h4>
+        <p>Server process crashes at minute 18 — 100 players lose their match. Causes: memory leaks, unhandled edge cases (vehicle + zone boundary + revival simultaneously). <strong>Mitigation:</strong> Checkpoint state to Redis every 30 sec for crash recovery (complex, rarely implemented). Practically: invest in crash prevention — canary deploys, watchdog processes, memory thresholds that force graceful early match end. Acceptable rate: &lt; 0.05% of matches.</p>
+      </div>
+
+      <div class="card">
+        <h4>⏳ Matchmaking Starvation at Low Population</h4>
+        <p>4 AM in a small region — only 12 players in the platinum squad TPP queue. Queue time exceeds 5 minutes. Players leave → fewer players → longer queues → death spiral. <strong>Mitigation:</strong> Progressive bracket widening (30s: merge skill tiers, 60s: merge perspectives, 90s: fill with bots, 120s: start with 60–80 players). Cross-region matching as last resort (120–150ms ping but playable).</p>
+      </div>
+
+      <div class="card">
+        <h4>🔄 Desync — Client and Server Disagree</h4>
+        <p>Player sees themselves behind a rock; server thinks they're exposed. Causes: floating-point divergence between client and server physics, packet loss bursts, clock drift, physics step mismatch (client at 144 FPS vs server at 20 Hz). <strong>Mitigation:</strong> Quantize positions to 1cm grid, force full state sync every 5 seconds, use fixed physics timestep on both sides, NTP-like clock synchronization.</p>
+      </div>
+
+      <div class="card">
+        <h4>🛡️ DDoS on Game Servers</h4>
+        <p>Attacker discovers game server IPs (exposed via UDP connection handshake) and floods a specific match — especially during esports tournaments. <strong>Mitigation:</strong> Route through UDP relay/proxy (game server IP never exposed, +1–2ms latency), cloud DDoS protection (AWS Shield, Cloudflare Spectrum), kernel-level packet filtering (eBPF/XDP) dropping packets from non-player IPs.</p>
+      </div>
+
+      <div class="card">
+        <h4>📊 Database Hot Spots — Match-End Storm</h4>
+        <p>When a match ends, 100 player stats must be updated simultaneously. Multiple matches ending together = thousands of writes in a burst. <strong>Mitigation:</strong> Game servers emit results to Kafka (fire-and-forget, &lt; 1ms). Consumers process at steady rate. Batch all 100 updates into a single SQL transaction. Stat aggregation runs async via Flink, delayed 30–60 seconds.</p>
+      </div>
+
+      <div class="card">
+        <h4>🎯 Cheater Ruins Competitive Match</h4>
+        <p>Aimbot user climbs to top ranks, ruining every match. Affects 99 players per match directly, destroys game reputation long-term. <strong>Mitigation:</strong> Three-layer anti-cheat (kernel + server + ML). Phone verification for ranked. Hardware ID bans. When a cheater is banned, retroactively void their last N matches and recalculate affected players' ranks.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 09 · INTERVIEW TIPS ═══════════════ -->
+    <div class="section" id="interview-tips">
+      <div class="section-number">09</div>
+      <h2>Interview Tips</h2>
+
+      <div class="tip-card">
+        <span class="tip-icon">💡</span>
+        <div class="tip-content">
+          <strong>Frame the problem as "two systems, not one."</strong><br/>
+          The platform layer (matchmaking, profiles, inventory) is standard microservices — sketch it quickly. The game server layer (real-time UDP simulation) is where the novel engineering is. Say: "I'll spend 70% of our time on the game server because that's where the unique challenges are."
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">⚡</span>
+        <div class="tip-content">
+          <strong>Let numbers drive architecture.</strong><br/>
+          Don't say "we need lots of game servers." Say: "At 1.5M CCU with 100 players per match, we have 12,000 concurrent matches. Each needs 2–4 cores. That's 1,500–3,000 servers, recycling at 480/min — which tells us we need a fast orchestration layer and a warm pool."
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🎯</span>
+        <div class="tip-content">
+          <strong>The networking deep dive is your superpower.</strong><br/>
+          Most candidates say "WebSockets" and stop. Explaining any one of the four netcode techniques (prediction, reconciliation, interpolation, lag compensation) in depth shows real-time systems understanding that most candidates can't match.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🔑</span>
+        <div class="tip-content">
+          <strong>Show the scaling asymmetry.</strong><br/>
+          "Unlike web services where we add stateless instances behind a load balancer, each game server is a stateful island that lives for one match. We can't move a player between servers or merge half-empty matches. This means we need a custom scheduler for ephemeral game instances."
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🧠</span>
+        <div class="tip-content">
+          <strong>Have a clear answer for "What's the hardest part?"</strong><br/>
+          "Making shooting feel fair across varying network conditions. Do I check the shot against where the target IS now, or where they WERE when the shooter saw them? There's no perfect answer — it's a fundamental consequence of the speed of light. The engineering is building a rewind system with the right cap to feel as fair as possible for both players."
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">⚠️</span>
+        <div class="tip-content">
+          <strong>Flag what's different from web systems.</strong><br/>
+          Protocol: UDP, not HTTP. State: ephemeral in-memory, not persistent. Consistency: strong within a match (server-authoritative), eventual for platform services. Failure mode: match is disposable — invest in crash prevention, not crash recovery.
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 10 · SIMILAR PROBLEMS ═══════════════ -->
+    <div class="section" id="similar">
+      <div class="section-number">10</div>
+      <h2>Similar Problems</h2>
+
+      <div class="similar-grid">
+        <a href="../uber/index.html" class="similar-card">
+          <h4>Uber / Real-Time Location</h4>
+          <p>Same spatial indexing concepts (grid cells, AOI). Inverted scale: millions of entities at 1–5 Hz vs 100 entities at 20–60 Hz.</p>
+        </a>
+        <a href="../whatsapp/index.html" class="similar-card">
+          <h4>WhatsApp / Chat System</h4>
+          <p>Persistent connections, delivery guarantees, presence tracking. Similar reliable/unreliable channel design over custom protocol.</p>
+        </a>
+        <a href="../youtube/index.html" class="similar-card">
+          <h4>YouTube / Netflix</h4>
+          <p>CDN for asset delivery (game patches = video segments). Spectator broadcast system mirrors live streaming architecture.</p>
+        </a>
+        <a href="../kafka/index.html" class="similar-card">
+          <h4>Distributed Queue (Kafka)</h4>
+          <p>Post-match pipeline uses Kafka directly. Game server tick loop is conceptually a consumer: batch inputs → process → produce output.</p>
+        </a>
+        <a href="#" class="similar-card">
+          <h4>MMO Game Server</h4>
+          <p>Same AOI, server-authoritative model. Key differences: persistent (not ephemeral) servers, TCP acceptable, 200ms latency tolerance.</p>
+        </a>
+        <a href="#" class="similar-card">
+          <h4>Fortnite / Apex Legends</h4>
+          <p>Identical core architecture. Differences are game mechanics (building, abilities), not infrastructure. If you can design PUBG, you can design any battle royale.</p>
+        </a>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 11 · EVOLUTION ═══════════════ -->
+    <div class="section" id="evolution">
+      <div class="section-number">11</div>
+      <h2>Evolution</h2>
+      <p>How this design grows from MVP to planet-scale.</p>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">1</div>
+        <div class="evolution-content">
+          <h4>MVP — Single Region, 50 Players</h4>
+          <p>One region, 50-player matches, 10 Hz tick rate, single map, solo mode only, no ranked matchmaking, server-side anti-cheat only, no replay system. Game servers run as plain processes on 10–20 EC2 instances with manual scaling. Capacity: ~5,000 CCU, ~100 concurrent matches. Team: 3–5 engineers. Goal: validate the core gameplay loop — can players connect, move, shoot, loot, die, and win?</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">2</div>
+        <div class="evolution-content">
+          <h4>Launch-Ready — Multi-Region, 100 Players</h4>
+          <p>Scale to 100 players, 20 Hz adaptive tick rate (20→30→60 as players die), 3 regions, squad modes, container-based servers with custom orchestrator and warm pools, Kafka for match results, Redis caching, client-side anti-cheat (EasyAntiCheat), basic cosmetics. Full netcode stack: prediction, reconciliation, interpolation, lag compensation with 200ms cap, delta compression, AOI grid. Capacity: ~200K CCU, ~2,000 concurrent matches. Team: 15–25 engineers.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">3</div>
+        <div class="evolution-content">
+          <h4>Scale — Millions of Players</h4>
+          <p>5–6 fully independent regions, Kubernetes + Agones orchestration, bot backfill for low-pop queues, ranked seasons with ELO, full cosmetics economy with battle pass, replay system (5% stored), post-match ML anti-cheat, global leaderboards, spectator mode for esports, cross-platform play (PC + console + mobile with per-platform optimizations). Hybrid infra: bare metal baseline + cloud burst. Capacity: ~1.5M CCU, ~12,000 concurrent matches. Team: 50–100 engineers.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">4</div>
+        <div class="evolution-content">
+          <h4>Planet-Scale — Live Service</h4>
+          <p>Custom bare-metal fleet in 10+ regions with edge compute in ISP PoPs. ML-driven matchmaking (play style, toxicity, connection quality). A/B testing framework for game mechanics. Advanced anti-cheat: behavioral fingerprinting, hardware attestation, legal takedowns. User-generated content (custom modes, map editor). Streaming integration (Twitch drops, anti-stream-sniping). 200+ engineers across multiple studios. The hard problems become organizational (modular codebase for 200 devs), operational (rolling deploys with 2–3 server versions live), and financial ($3–5M/month infrastructure — every 10% efficiency gain saves $500K/year).</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SCRIPTS
+     ═══════════════════════════════════════════════════════ -->
+<script>
+  // ── Mermaid Init ──
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: 'hsl(38, 80%, 94%)',
+      primaryTextColor: '#111110',
+      primaryBorderColor: 'hsl(38, 60%, 80%)',
+      lineColor: '#ccc9c4',
+      secondaryColor: '#f7f7f5',
+      tertiaryColor: '#f0eeeb',
+      fontFamily: 'Geist, system-ui, sans-serif',
+      fontSize: '13px'
+    }
+  });
+
+  // ── Sidebar Scroll Observer ──
+  (function() {
+    const sections = document.querySelectorAll('.section[id]');
+    const navLinks = document.querySelectorAll('#sidebar-nav a');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+          navLinks.forEach(link => {
+            link.classList.toggle('active', link.getAttribute('href') === '#' + id);
+          });
+        }
+      });
+    }, { rootMargin: '-80px 0px -60% 0px', threshold: 0 });
+    sections.forEach(s => observer.observe(s));
+  })();
+
+  // ── Architecture Node Highlight ──
+  let highlightedNode = null;
+  function hlNode(id) {
+    if (highlightedNode) document.getElementById(highlightedNode).classList.remove('node-highlight');
+    if (highlightedNode === id) { highlightedNode = null; return; }
+    document.getElementById(id).classList.add('node-highlight');
+    highlightedNode = id;
+  }
+
+  // ── Flow Stepper ──
+  const FLOW_NODES = [
+    'Client',
+    'Auth Service',
+    'Matchmaker',
+    'Orchestrator',
+    'Game Server',
+    'Tick Loop (×600)',
+    'Kafka',
+    'Match Processor'
+  ];
+
+  const FLOW_DESCS = [
+    'Player launches the game and authenticates via Steam/PSN/Google Play. Client receives a session JWT and loads their profile, inventory, and friends list.',
+    'Auth service validates credentials against the player database, issues a JWT, and pushes the player\'s presence to the Social service via WebSocket.',
+    'Player clicks "Play." Client sends POST /matchmaking/queue with region, mode, and rank. Matchmaker adds them to a skill bucket. Background loop checks: does any bucket have ≥100 players?',
+    'Bucket hits 100. Matchmaker requests a game server from the Orchestrator. Orchestrator assigns a pre-warmed container from the warm pool in < 2 seconds, returns host:port + short-lived match token.',
+    'All 100 clients receive connection details and connect to the game server via UDP using the match token. 60-second lobby countdown begins on the spawn island.',
+    'Match starts. The game server runs the tick loop at 20 Hz: receive inputs → simulate physics → hit detection with lag compensation → anti-cheat validation → per-player AOI filtering → delta-compress and broadcast state. This runs ~600 times per match (20 Hz × 30 min). Zone shrinks every 3–5 min.',
+    'Match ends (1 player/squad survives). Game server emits a match_complete event to Kafka containing all 100 players\' results — kills, damage, placement, rank changes. Server then signals the Orchestrator for recycling.',
+    'Kafka consumer processes results asynchronously: batch-updates all 100 player profiles in PostgreSQL, writes match summary to Cassandra, updates battle pass progress, and flags suspicious matches for anti-cheat ML review. Player sees updated stats within 30–60 seconds.'
+  ];
+
+  let flowStep = -1;
+  const flowStepsEl = document.getElementById('flow-steps');
+  const flowDescEl  = document.getElementById('flow-desc');
+  const flowCounter = document.getElementById('flow-counter');
+  const flowNextBtn = document.getElementById('flow-next');
+  const flowResetBtn = document.getElementById('flow-reset');
+
+  FLOW_NODES.forEach((name, i) => {
+    if (i > 0) {
+      const arrow = document.createElement('span');
+      arrow.className = 'flow-arrow';
+      arrow.textContent = '→';
+      flowStepsEl.appendChild(arrow);
+    }
+    const node = document.createElement('span');
+    node.className = 'flow-node';
+    node.id = 'fnode-' + i;
+    node.textContent = name;
+    flowStepsEl.appendChild(node);
+  });
+
+  function runFlow() {
+    flowStep++;
+    if (flowStep >= FLOW_NODES.length) {
+      flowNextBtn.disabled = true;
+      flowDescEl.innerHTML = '<strong>✓ Flow complete.</strong> The full lifecycle from login to stat persistence takes ~30 minutes of gameplay + a few seconds of async processing. Click Reset to start over.';
+      return;
+    }
+    flowResetBtn.disabled = false;
+    for (let i = 0; i < flowStep; i++) {
+      document.getElementById('fnode-' + i).classList.remove('active');
+      document.getElementById('fnode-' + i).classList.add('done');
+    }
+    document.getElementById('fnode-' + flowStep).classList.add('active');
+    document.getElementById('fnode-' + flowStep).scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    flowDescEl.innerHTML = FLOW_DESCS[flowStep];
+    flowCounter.textContent = `Step ${flowStep + 1} of ${FLOW_NODES.length}`;
+    if (flowStep === FLOW_NODES.length - 1) flowNextBtn.textContent = 'Finish ✓';
+  }
+
+  function resetFlow() {
+    flowStep = -1;
+    FLOW_NODES.forEach((_, i) => {
+      const el = document.getElementById('fnode-' + i);
+      el.classList.remove('active', 'done');
+    });
+    flowDescEl.innerHTML = 'Click <strong>Next Step</strong> to walk through the full match lifecycle.';
+    flowCounter.textContent = '';
+    flowNextBtn.disabled = false;
+    flowNextBtn.textContent = 'Next Step →';
+    flowResetBtn.disabled = true;
+  }
+</script>
+
+</body>
+</html>

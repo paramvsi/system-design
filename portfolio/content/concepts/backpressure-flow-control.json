@@ -1,0 +1,65 @@
+{
+  "slug": "backpressure-flow-control",
+  "title": "Backpressure & Flow Control",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 205,
+    "s": 70,
+    "l": 40
+  },
+  "category": "Reliability",
+  "blurb": "A producer emits 100k events/sec. A consumer can process 10k/sec. With no coordination, the consumer's queue grows unboundedly — memory bloats, latency cliffs, eventually the process OOMs. Backpressure is the mechanism b",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>A producer emits 100k events/sec. A consumer can process 10k/sec. With no coordination, the consumer's queue grows unboundedly — memory bloats, latency cliffs, eventually the process OOMs. <strong>Backpressure</strong> is the mechanism by which downstream components signal upstream to <em>slow down</em>. Without it, any fast producer will eventually crash any slow consumer. This is THE problem in streaming systems.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The three options when overloaded",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The three options when overloaded</h2></div>\n    <div class=\"tradeoff-grid\">\n      <div class=\"tradeoff-option\">\n        <div class=\"tradeoff-label\">Buffer</div>\n        <h4>Queue overflow</h4>\n        <p>Absorb bursts in memory or disk. Fine for short spikes (seconds of headroom). Fails hard when sustained — memory exhausted, latency explodes, process OOMs.</p>\n      </div>\n      <div class=\"tradeoff-option\">\n        <div class=\"tradeoff-label\">Drop</div>\n        <h4>Load shedding</h4>\n        <p>When queue crosses a threshold, drop new messages. Keeps the consumer healthy. You choose what to drop (oldest, newest, low-priority). Acceptable for telemetry; unacceptable for payments.</p>\n      </div>\n      <div class=\"tradeoff-option chosen\">\n        <div class=\"tradeoff-label\">Signal upstream</div>\n        <h4>Real backpressure</h4>\n        <p>Tell the producer \"stop sending.\" Producer throttles, or buffers upstream, or drops <em>there</em>. Problem handled at the correct layer. This is what robust systems do.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "Mechanisms of real backpressure",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Mechanisms of real backpressure</h2></div>\n    <div class=\"prose\">\n      <p><strong>TCP-level</strong> — sockets have send + receive buffers. When receiver's buffer fills, TCP's sliding window shrinks; sender's <code>send()</code> blocks. Happens transparently. Covers \"I'm overwhelmed at the transport layer.\"</p>\n      <p><strong>HTTP 429 / 503</strong> — server signals \"too many requests\" or \"service unavailable\" with <code>Retry-After</code> header. Caller honors (see <a href=\"/concepts/retry-backoff-jitter\">retry with backoff</a>).</p>\n      <p><strong>Reactive Streams spec</strong> (Java, JS, .NET) — consumer calls <code>request(n)</code> to pull at most n items. Producer can only emit up to the outstanding demand. Built-in to RxJava, Project Reactor, akka-streams, Node.js streams.</p>\n      <p><strong>Credit-based flow control</strong> — consumer grants producer N \"credits.\" Each sent message consumes one credit. Producer stops when credits hit 0; more credits sent as consumer processes. Used by AMQP, gRPC streaming, HTTP/2.</p>\n      <p><strong>Pull-based queues</strong> (Kafka, SQS long-poll) — consumer decides when to fetch. Producer writes to durable queue; consumer reads at its own pace. Queue itself acts as buffer with disk as the overflow floor.</p>\n    \n      <div class=\"code-caption\" data-code-snippet=\"1\">Count-Min Sketch (streaming top-K)</div>\n      <pre><code class=\"lang-python\">import mmh3\n\nclass CountMinSketch:\n    def __init__(self, width=10_000, depth=4):\n        self.w, self.d = width, depth\n        self.grid = [[0] * width for _ in range(depth)]\n\n    def add(self, item, count=1):\n        for i in range(self.d):\n            self.grid[i][mmh3.hash(item, i) % self.w] += count\n\n    def estimate(self, item):\n        # MIN across rows — over-estimate only, never under\n        return min(self.grid[i][mmh3.hash(item, i) % self.w]\n                   for i in range(self.d))\n\n# Trade: ~N×W×8 bytes for constant-space approx counts at any scale</code></pre>\n  </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — why push without backpressure fails",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Deep dive — why push without backpressure fails</h2></div>\n    <div class=\"prose\">\n      <p>Classic example: a Node.js stream pipeline.</p>\n      <pre style=\"background:#f4f3f0;padding:12px;border-radius:6px;font-size:12px;font-family:var(--font-mono);overflow-x:auto\">source.on(\"data\", chunk =&gt; destination.write(chunk));\n// destination is slow. Chunks accumulate in memory. OOM.</pre>\n      <p>The fix Node provides:</p>\n      <pre style=\"background:#f4f3f0;padding:12px;border-radius:6px;font-size:12px;font-family:var(--font-mono);overflow-x:auto\">source.pipe(destination);\n// .pipe() reads write()'s return value. false = slow; pauses source until\n// destination emits \"drain\". Transparent backpressure, same API.</pre>\n      <p>Same idea everywhere:</p>\n      <ul>\n        <li>RxJava <code>Flowable</code> (backpressure-aware) vs <code>Observable</code> (not).</li>\n        <li>gRPC server streaming respects client's <code>read()</code> pace.</li>\n        <li>Kafka consumers poll at their own speed; broker never pushes.</li>\n      </ul>\n      <p>Backpressure-aware APIs look almost identical to eager ones. The difference is correctness under load. <strong>Always choose the backpressure-aware variant.</strong> Cost: a little more code complexity. Benefit: your pipeline doesn't implode at peak traffic.</p>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Backpressure vs rate limiting",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Backpressure vs rate limiting</h2></div>\n    <div class=\"prose\">\n      <p>Related but different:</p>\n      <ul>\n        <li><strong><a href=\"/concepts/rate-limiting-algorithms\">Rate limiting</a></strong> = enforce a <em>preset</em> ceiling (\"max 1000 RPS\"). Protect against abusive clients, fair-share resources.</li>\n        <li><strong>Backpressure</strong> = dynamically signal real-time downstream pressure. Protects the system from itself when legit traffic outpaces capacity.</li>\n      </ul>\n      <p>You want both. Rate limits set the outer envelope; backpressure handles normal variance within it.</p>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Kafka consumer-pull model</div><h4>Backpressure by design</h4><p>Brokers never push. Consumers poll at their own pace. If a consumer falls behind, the lag metric rises but the system doesn't implode.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">gRPC streaming + HTTP/2</div><h4>Window-based flow control</h4><p>HTTP/2's per-stream window controls how much data a sender can push before receiving ACKs. Native backpressure.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Reactive Streams</div><h4>request(n) demand</h4><p>Standardized JVM interface. Producer never emits beyond consumer demand. Project Reactor is the most popular implementation.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">AWS Kinesis</div><h4>Shard limits + throttling</h4><p>Each shard allows 1 MB/s writes. Exceeding → <code>ProvisionedThroughputExceededException</code>. Clients must slow down or resize.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Distributed queue's core design challenge is backpressure between producers and consumers. Distributed logging uses credit-based backpressure to avoid overwhelming the storage tier. Live streaming applies per-viewer backpressure to smooth traffic.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

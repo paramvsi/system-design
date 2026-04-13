@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Slack — January 4, 2021 — AWS Transit Gateway</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 160; --accent-s: 55%; --accent-l: 42%; }</style>
+</head>
+<body>
+<main>
+
+  <div class="hero" id="problem">
+    <div class="hero-kicker">Post-mortem · 2021-01-04 · Slack</div>
+    <h1 class="hero-title">Slack <em>First-Day-Of-Year</em> Transit Gateway Overload</h1>
+    <p class="hero-desc">On the first working day of 2021, everyone returning from holiday logged into Slack at once. The spike exposed a surprising limit on AWS Transit Gateway capacity. Retries from clients amplified the load into sustained saturation for hours.</p>
+    <div class="hero-tags">
+      <span class="tag">Surge traffic</span>
+      <span class="tag">AWS TGW</span>
+      <span class="tag">Retry amplification</span>
+      <span class="tag">5h outage</span>
+    </div>
+  </div>
+
+  <section class="section" id="tldr">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">TL;DR</h2></div>
+    <div class="prose">
+      <p>Slack's VPCs connect through AWS Transit Gateway (TGW). On Jan 4, traffic surged as users returned from holiday. TGW was running into per-gateway bandwidth limits that autoscaling couldn't catch up to fast enough. Failed requests caused clients to retry (and WebSocket clients to reconnect), which multiplied the load. The system stayed saturated for hours until engineers + AWS together scaled the infrastructure past the surge.</p>
+    </div>
+  </section>
+
+  <section class="section" id="timeline">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Timeline</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>06:00 PST</strong> — US East Coast workers start logging into Slack after holiday. Traffic ~2× normal start-of-day.</li>
+        <li><strong>07:00 PST</strong> — AWS Transit Gateway capacity in Slack's primary VPC saturates. Packets dropped. Slack's service-to-service traffic degrades.</li>
+        <li><strong>07:15 PST</strong> — Slack engineers paged. Identify TGW saturation.</li>
+        <li><strong>07:30 PST</strong> — Clients seeing errors begin aggressive retry cycles. Increased load compounds the saturation.</li>
+        <li><strong>~09:00 PST</strong> — Slack + AWS engineers coordinate TGW scaling. Multiple scaling events required; autoscaling alone couldn't keep up.</li>
+        <li><strong>~12:00 PST</strong> — Traffic back to nominal. Total outage ~5 hours of degraded service.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="rootcause">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Root cause</h2></div>
+    <div class="prose">
+      <p>Traffic spike from holiday return + multiple secondary issues:</p>
+      <ol>
+        <li><strong>TGW per-gateway bandwidth limits.</strong> Documented, but higher than Slack's normal peak, so not routinely tested.</li>
+        <li><strong>Autoscaling lag.</strong> TGW scaling events take minutes, not seconds; surge exceeded scaling rate.</li>
+        <li><strong>Retry amplification.</strong> Clients timing out retried repeatedly. WebSocket clients reconnected. Each retry added more saturation pressure.</li>
+        <li><strong>Latency-sensitive internal services cascaded.</strong> Authentication service depended on VPC-to-VPC calls. When those slowed, login storms intensified.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="impact">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Blast radius</h2></div>
+    <div class="prose">
+      <p>~5 hours of degraded service across Slack's main geos. Users saw "connecting…" loops, messages undelivered, channel switches failing. Estimated ~10M paid users impacted during working hours.</p>
+    </div>
+  </section>
+
+  <section class="section" id="lessons">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Lessons</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>Load-test at the boundary limits of your cloud primitives.</strong> Normal autoscaling ≠ surge readiness. Know your peak; stress to 2×.</li>
+        <li><strong>Retry storms need client-side jittered backoff with a hard cap.</strong> Otherwise every server-side outage is 2–5× worse than baseline traffic.</li>
+        <li><strong>Anticipate predictable surges.</strong> First day of year, first Monday after DST, Sunday night for Monday standups. Pre-scale before, not after.</li>
+        <li><strong>Exercise capacity with chaos + synthetic load.</strong> Not just prod-like load tests; specifically test the path-through-TGW-under-saturation scenario.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="concepts-used">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Concepts in play</h2></div>
+    <div class="prose">
+      <ul>
+        <li><a href="/concepts/autoscaling">Autoscaling</a> — scaling rate vs surge rate.</li>
+        <li><a href="/concepts/retry-backoff">Retry + backoff</a> — retry amplification is a classic pitfall.</li>
+        <li><a href="/concepts/thundering-herd">Thundering herd</a> — reconnect storms post-outage.</li>
+        <li><a href="/concepts/backpressure-flow-control">Backpressure</a> — shedding load protects what can be saved.</li>
+        <li><a href="/concepts/capacity-planning">Capacity planning</a> — cloud limits must be modeled.</li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

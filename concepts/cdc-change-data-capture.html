@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Change Data Capture (CDC) — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 305; --accent-s: 60%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Your transactional DB has the source-of-truth for orders. You also need: a search index in Elasticsearch, a denormalized read store in Redis, an analytics warehouse, a notifications pipeline triggered on order events. Five downstream systems that all need to react to DB changes.</p>
+      <p>Naive: have your app write to all 5 after each DB write. <span class="hl-red">No atomicity.</span> If the search-index write fails, you have inconsistency. Plus your app code is now coupled to every downstream.</p>
+      <p><strong>Change Data Capture</strong> tails the database's own transaction log (<a href="/concepts/write-ahead-log-wal">WAL</a>) and emits each change as a Kafka event. Every downstream consumes from Kafka independently. The DB stays the single source of truth; sync to N systems is automatic; your app code stays small.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">How CDC works</h2></div>
+    <div class="prose">
+      <p>Every relational DB writes a transaction log: Postgres WAL, MySQL binlog, Oracle redo log. The log records every row insert, update, delete in commit order.</p>
+      <p>CDC tools (Debezium most famously) open a streaming connection to this log. They translate each entry into a structured event: <code>{table: "orders", op: "insert", before: null, after: {...}, ts: ...}</code>. Events publish to Kafka.</p>
+      <p>Consumers do whatever they want. Search-indexer subscribes to <code>orders</code> topic and updates Elasticsearch. Analytics-pipeline subscribes and writes to the warehouse. Cache-invalidator subscribes and DELs Redis keys. None of them touch the source DB; none of them need app-code support.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">CDC vs application-emitted events</h2></div>
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">App emits events</div>
+        <h4>"After commit, publish to Kafka"</h4>
+        <p>App is responsible. Easy to get right for happy path. <span class="hl-red">Atomicity broken</span>: commit succeeds, publish fails → silent inconsistency. Mitigate with the <a href="/concepts/transactions-distributed">outbox pattern</a>.</p>
+      </div>
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">CDC tails the log</div>
+        <h4>WAL is the source of events</h4>
+        <p>If it's in the DB, it's in Kafka. Atomicity guaranteed by the DB itself — no separate publish step to fail. <span class="hl-green">Apps don't change</span>. Adding a new downstream = new consumer, no app deploy.</p>
+      </div>
+    </div>
+    <div class="prose">
+      <p>Outbox + CDC actually combines well: app writes to an "outbox" table in the same transaction, Debezium CDCs the outbox table, downstreams consume. Get app-defined events with CDC's atomicity guarantee.</p>
+    
+      <div class="code-caption" data-code-snippet="1">Event-sourced aggregate rebuild</div>
+      <pre><code class="lang-python">class BankAccount:
+    """State is derived by replaying events; events are source of truth."""
+    def __init__(self):
+        self.balance = 0
+        self.uncommitted = []
+
+    def apply(self, event):
+        if event["type"] == "deposit":
+            self.balance += event["amount"]
+        elif event["type"] == "withdraw":
+            self.balance -= event["amount"]
+
+    @classmethod
+    def from_history(cls, events):
+        account = cls()
+        for e in events: account.apply(e)
+        return account
+
+    def deposit(self, amount):
+        event = {"type": "deposit", "amount": amount}
+        self.apply(event)           # apply to in-memory state
+        self.uncommitted.append(event)
+
+# Store events in append-only log. Rebuild state on load.
+# Snapshots every N events keep replay time bounded.</code></pre>
+  </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Practical considerations</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Schema evolution</strong> — when the source table changes shape, every downstream's parser needs to handle both old + new event shape. Schema registry (Confluent's, Apicurio) helps.</li>
+        <li><strong>Snapshots</strong> — a new consumer that wants ALL data, not just changes from now, needs an initial snapshot. Debezium handles this: dump current rows, then start streaming.</li>
+        <li><strong>Replica lag</strong> — CDC tails async, so downstreams are seconds behind the DB. Fine for analytics; problematic if the user just wrote and immediately reads from the search index.</li>
+        <li><strong>WAL retention</strong> — Postgres throws away WAL segments after they're shipped. If the CDC consumer falls hours behind, WAL fills the disk. Monitor lag aggressively.</li>
+        <li><strong>Throughput cost</strong> — every write becomes an event. Bursty workloads can flood Kafka. Plan partition counts accordingly.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — Debezium architecture</h2></div>
+    <div class="prose">
+      <p>Debezium is the dominant open-source CDC tool. Architecture:</p>
+      <ol>
+        <li><strong>Connector</strong> — DB-specific. PostgresConnector, MySQLConnector, MongoConnector, etc. Knows how to subscribe to that DB's log.</li>
+        <li><strong>Kafka Connect runtime</strong> — manages the connector, handles offset tracking ("we've consumed up to WAL position 12345"), restarts on failure.</li>
+        <li><strong>Source DB</strong> — needs to be configured: Postgres needs <code>wal_level=logical</code>, MySQL needs row-based binlog. Postgres also needs replication slots so WAL doesn't get garbage-collected before Debezium reads it.</li>
+        <li><strong>Kafka topics</strong> — one per source table by convention. <code>orders</code> table → <code>dbserver.public.orders</code> topic.</li>
+      </ol>
+      <p>Failure model: if Debezium dies, it resumes from the last-committed offset on restart. At-least-once delivery to Kafka — consumers must be idempotent (use the change's primary key + LSN as dedupe key).</p>
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"For event-driven downstream sync, we use Debezium to tail the Postgres WAL into Kafka topics. Consumers (search indexer, cache invalidator, analytics) react to changes without app-side instrumentation. Atomicity is guaranteed by the DB — we never have a 'commit succeeded but event lost' state."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Debezium</div><h4>Open-source CDC</h4><p>Postgres, MySQL, Mongo, Oracle, SQL Server, Cassandra. The dominant open-source choice.</p></div>
+      <div class="rw-card"><div class="rw-name">AWS DMS</div><h4>Managed CDC + migration</h4><p>Stream changes between heterogeneous DBs (e.g. Oracle → Aurora). Handles schema mapping.</p></div>
+      <div class="rw-card"><div class="rw-name">Striim / Fivetran</div><h4>Commercial CDC platforms</h4><p>SaaS. Connects 100+ source/sink combinations. Heavy users in analytics ETL.</p></div>
+      <div class="rw-card"><div class="rw-name">Postgres logical replication</div><h4>Built-in CDC primitives</h4><p>Can publish changes natively; many tools build on it (Debezium, pg_logical, etc.).</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>E-commerce uses CDC to sync orders to search/analytics/notification systems. News feed CDCs the posts table to feed-fanout workers. Payment gateway CDCs the ledger to webhook delivery. Distributed logging IS a CDC pattern at scale.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-rate-limiter",
+  "title": "Rate Limiter",
+  "problemNumber": "30",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "30 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 200,
+    "s": 65,
+    "l": 50
+  },
+  "category": "Infrastructure",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>Design a distributed rate limiter. Per-user, per-API, across 100 app servers. 100K QPS. Sliding-window (not fixed-window).</p>\n      <p><strong>Time budget:</strong> 30 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n      \n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Fixed-window has boundary burst (2× at window edge). Sliding-window smooths this.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Centralized Redis with atomic INCR + TTL beats in-memory per-server counters.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Token bucket for request-rate; leaky bucket for outflow rate. Different properties.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Sliding-window (log or counter) not fixed-window — discusses boundary burst problem</li>\n      <li><span class=\"rubric-points\">+2</span> Centralized Redis INCR per key (user+endpoint); atomic + TTL-based window</li>\n      <li><span class=\"rubric-points\">+1</span> Token bucket for flexibility: sustained rate + burst allowance</li>\n      <li><span class=\"rubric-points\">+1</span> Multi-tier: global → tenant → endpoint → user; deny if ANY exceeded</li>\n      <li><span class=\"rubric-points\">+1</span> Fail-open on Redis outage (don't block all traffic) or circuit-breaker to local fallback</li>\n      <li><span class=\"rubric-points\">+1</span> Returns 429 with Retry-After header + rate-limit metadata (X-RateLimit-Remaining)</li>\n      <li><span class=\"rubric-points\">+1</span> Discusses cost: ~10 Redis calls/sec/user; plans for millions of active users</li>\n      <li><span class=\"rubric-points\">+1</span> Per-user priorities: premium users higher limits; internal bots separate bucket</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Fixed-window counter (2x burst at boundary)</li>\n        <li>Per-server in-memory counter (bypassed by rotating through servers)</li>\n        <li>No fail-open on Redis down (entire service blocks)</li>\n        <li>Synchronous slow Redis in request path (should be async-capable)</li>\n        <li>Single global limiter with no tenant/user granularity</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 1
+}

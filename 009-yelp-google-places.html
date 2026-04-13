@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Yelp / Google Places — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+
+  :root {
+    --accent-h:       0;
+    --accent-s:       78%;
+    --accent-l:       52%;
+    --accent:         hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+    --accent-light:   hsl(var(--accent-h), 80%, 95%);
+    --accent-mid:     hsl(var(--accent-h), 70%, 88%);
+    --accent-text:    hsl(var(--accent-h), var(--accent-s), 30%);
+    --accent-border:  hsl(var(--accent-h), 60%, 80%);
+    --hl-yellow:      #fff0a0;
+    --hl-yellow-dark: #a07a00;
+    --hl-accent:      hsl(var(--accent-h), 90%, 90%);
+    --hl-accent-dark: hsl(var(--accent-h), 70%, 28%);
+    --bg:             #ffffff;
+    --bg-subtle:      #f7f7f5;
+    --bg-raised:      #f0eeeb;
+    --bg-code:        #f4f3f0;
+    --border:         #e4e2de;
+    --border-strong:  #ccc9c4;
+    --text-primary:   #111110;
+    --text-secondary: #4a4845;
+    --text-muted:     #878480;
+    --text-code:      #2d2c2b;
+    --font-serif:     'Instrument Serif', Georgia, serif;
+    --font-sans:      'Geist', system-ui, sans-serif;
+    --font-mono:      'JetBrains Mono', 'Fira Code', monospace;
+    --radius-sm:      4px;
+    --radius-md:      8px;
+    --radius-lg:      12px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; font-size: 15px; }
+  body { font-family: var(--font-sans); background: var(--bg); color: var(--text-primary); line-height: 1.65; -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--hl-yellow); color: var(--text-primary); }
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg-subtle); }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+  .layout { display: grid; grid-template-columns: 228px 1fr; grid-template-rows: 52px 1fr; min-height: 100vh; }
+  .topbar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding: 0 1.5rem; height: 52px; border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.92); backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 100; }
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+  .back-link { display: flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); text-decoration: none; padding: 4px 8px; border-radius: var(--radius-sm); transition: all 0.15s; letter-spacing: 0.02em; }
+  .back-link:hover { color: var(--text-primary); background: var(--bg-subtle); }
+  .topbar-sep { width: 1px; height: 16px; background: var(--border); }
+  .topbar-problem { font-family: var(--font-sans); font-size: 15px; font-weight: 500; color: var(--text-primary); }
+  .topbar-right { display: flex; align-items: center; gap: 8px; }
+  .badge { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; padding: 3px 9px; border-radius: 20px; font-weight: 500; text-transform: uppercase; }
+  .badge-accent { background: var(--accent-light); color: var(--accent-text); border: 1px solid var(--accent-border); }
+  .badge-muted { background: var(--bg-subtle); color: var(--text-muted); border: 1px solid var(--border); }
+  .sidebar { position: sticky; top: 52px; height: calc(100vh - 52px); overflow-y: auto; border-right: 1px solid var(--border); padding: 1.25rem 0; background: var(--bg-subtle); }
+  .sidebar-group-label { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); padding: 0 1rem 6px; margin-top: 1.25rem; }
+  .sidebar-group-label:first-child { margin-top: 0; }
+  .sidebar a { display: flex; align-items: center; gap: 9px; padding: 5px 1rem; font-size: 14.5px; font-family: var(--font-sans); font-weight: 400; color: var(--text-secondary); text-decoration: none; border-left: 2px solid transparent; transition: all 0.12s; line-height: 1.4; }
+  .sidebar a:hover { color: var(--text-primary); background: var(--bg-raised); }
+  .sidebar a.active { color: var(--accent-text); border-left-color: var(--accent); background: var(--accent-light); font-weight: 500; }
+  .sidebar-n { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-muted); min-width: 16px; flex-shrink: 0; }
+  .sidebar a.active .sidebar-n { color: var(--accent); }
+  .main { padding: 2.5rem 3rem 4rem; max-width: 840px; }
+  .hero { padding-bottom: 2rem; margin-bottom: 2rem; border-bottom: 1px solid var(--border); }
+  .hero-kicker { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; display: flex; align-items: center; gap: 7px; }
+  .hero-kicker::before { content: ''; display: inline-block; width: 18px; height: 1.5px; background: var(--accent); border-radius: 1px; }
+  .hero-title { font-family: var(--font-serif); font-size: clamp(2rem, 3.5vw, 2.8rem); font-weight: 400; line-height: 1.15; letter-spacing: -0.01em; color: var(--text-primary); margin-bottom: 12px; }
+  .hero-title em { font-style: italic; color: var(--accent-text); }
+  .hero-desc { font-size: 14.5px; color: var(--text-secondary); max-width: 600px; line-height: 1.75; font-weight: 300; margin-bottom: 1.25rem; }
+  .hero-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag { font-family: var(--font-mono); font-size: 12px; padding: 3px 10px; border-radius: 20px; border: 1px solid var(--border); color: var(--text-secondary); background: var(--bg-subtle); letter-spacing: 0.02em; }
+  .tag.accent { background: var(--accent-light); color: var(--accent-text); border-color: var(--accent-border); font-weight: 500; }
+  .section { margin-bottom: 3rem; scroll-margin-top: 72px; }
+  .section-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 1.25rem; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .section-n { font-family: var(--font-mono); font-size: 11px; color: var(--accent); opacity: 0.7; min-width: 22px; letter-spacing: 0.04em; }
+  .section-title { font-family: var(--font-sans); font-size: 15px; font-weight: 600; color: var(--text-primary); letter-spacing: -0.01em; }
+  .hl { background: var(--hl-yellow); color: var(--text-primary); padding: 1px 4px; border-radius: 3px; font-weight: 500; }
+  .hl-accent { background: var(--hl-accent); color: var(--hl-accent-dark); padding: 1px 4px; border-radius: 3px; font-weight: 500; }
+  .hl-red { background: #fce8e6; color: #8b1a12; padding: 1px 4px; border-radius: 3px; font-weight: 500; }
+  .hl-green { background: #e4f5ec; color: #1a5c38; padding: 1px 4px; border-radius: 3px; font-weight: 500; }
+  .prose { font-size: 16px; color: var(--text-secondary); font-weight: 300; line-height: 1.75; }
+  .prose p { margin-bottom: 0.85em; }
+  .prose p:last-child { margin-bottom: 0; }
+  .prose strong { color: var(--text-primary); font-weight: 600; }
+  .prose code { font-family: var(--font-mono); font-size: 13.5px; background: var(--bg-code); border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; color: var(--text-code); }
+  .callout { border-left: 3px solid var(--accent); background: var(--accent-light); border-radius: 0 var(--radius-md) var(--radius-md) 0; padding: 10px 14px; margin: 1rem 0; }
+  .callout-label { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-text); margin-bottom: 4px; font-weight: 500; }
+  .callout p { font-size: 15.5px; color: var(--text-secondary); font-weight: 300; line-height: 1.65; }
+  .callout-warn { border-left-color: #c0392b; background: #fce8e6; }
+  .callout-warn .callout-label { color: #8b1a12; }
+  .callout-good { border-left-color: #1a7a4a; background: #e4f5ec; }
+  .callout-good .callout-label { color: #1a5c38; }
+  .req-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .req-box { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.1rem; background: var(--bg); }
+  .req-box-head { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .req-box-head.func { color: var(--accent-text); }
+  .req-box-head.nonfunc { color: var(--text-muted); }
+  .req-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.5; flex-shrink: 0; }
+  .req-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .req-list li { font-size: 15px; color: var(--text-secondary); font-weight: 300; display: flex; align-items: flex-start; gap: 7px; line-height: 1.5; }
+  .req-list li::before { content: ''; width: 4px; height: 4px; border-radius: 50%; background: var(--accent); margin-top: 6px; flex-shrink: 0; opacity: 0.5; }
+  .table-wrap { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 1rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  thead th { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); padding: 8px 14px; text-align: left; background: var(--bg-subtle); border-bottom: 1px solid var(--border); font-weight: 400; }
+  tbody td { padding: 9px 14px; border-bottom: 1px solid var(--border); color: var(--text-secondary); font-weight: 300; vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--bg-subtle); }
+  td.t-metric { color: var(--text-primary); font-weight: 500; font-size: 14.5px; }
+  td.t-value { font-family: var(--font-mono); font-size: 13.5px; color: var(--accent-text); font-weight: 500; }
+  td.t-calc { font-family: var(--font-mono); font-size: 13px; color: var(--text-muted); }
+  .endpoint { border: 1px solid var(--border); border-radius: var(--radius-lg); margin-bottom: 8px; overflow: hidden; }
+  .endpoint-head { display: flex; align-items: center; gap: 10px; padding: 9px 14px; background: var(--bg-subtle); border-bottom: 1px solid var(--border); }
+  .method { font-family: var(--font-mono); font-size: 12px; font-weight: 500; padding: 2px 7px; border-radius: 4px; letter-spacing: 0.04em; min-width: 46px; text-align: center; }
+  .method.get    { background: #dcfce7; color: #166534; }
+  .method.post   { background: #dbeafe; color: #1e40af; }
+  .method.put    { background: #fef9c3; color: #854d0e; }
+  .method.delete { background: #fee2e2; color: #991b1b; }
+  .ep-path { font-family: var(--font-mono); font-size: 14.5px; color: var(--text-primary); }
+  .ep-desc { font-size: 13.5px; color: var(--text-muted); margin-left: auto; font-style: italic; }
+  .endpoint-body { padding: 10px 14px; }
+  .code { background: var(--bg-code); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; font-family: var(--font-mono); font-size: 13.5px; color: var(--text-code); overflow-x: auto; line-height: 1.8; margin: 6px 0; }
+  .c-comment { color: var(--text-muted); font-style: italic; }
+  .c-key { color: var(--accent-text); font-weight: 500; }
+  .c-str { color: #1a6b3a; }
+  .c-num { color: #92601a; }
+  .c-kw { color: #6b21a8; }
+  .diagram-wrap { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 1rem; background: var(--bg); }
+  .diagram-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; background: var(--bg-subtle); border-bottom: 1px solid var(--border); }
+  .diagram-label { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+  .diagram-type { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.04em; }
+  .diagram-body { padding: 1.5rem; }
+  .arch-svg { width: 100%; height: auto; display: block; }
+  .anim-wrap { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 1rem; }
+  .anim-head { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--bg-subtle); border-bottom: 1px solid var(--border); }
+  .anim-title { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin-right: auto; }
+  .btn { padding: 4px 12px; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.04em; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--bg); color: var(--text-secondary); cursor: pointer; transition: all 0.12s; }
+  .btn:hover { background: var(--bg-raised); color: var(--text-primary); }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn.primary:hover { opacity: 0.88; }
+  .anim-body { padding: 1.5rem; min-height: 200px; }
+  .anim-desc { margin-top: 1rem; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); min-height: 18px; text-align: center; letter-spacing: 0.02em; }
+  .geo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-width: 380px; margin: 0 auto; }
+  .geo-cell { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 8px; text-align: center; transition: all 0.35s; background: var(--bg-subtle); }
+  .geo-cell .cell-code { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+  .geo-cell .cell-label { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); }
+  .geo-cell.home { border-color: var(--accent); background: var(--accent-light); }
+  .geo-cell.home .cell-code { color: var(--accent-text); font-weight: 500; }
+  .geo-cell.home .cell-label { color: var(--accent-text); font-weight: 500; }
+  .geo-cell.neighbor { border-color: var(--accent-border); background: hsl(0, 80%, 97%); }
+  .geo-cell.neighbor .cell-code { color: var(--accent-text); }
+  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1rem; }
+  .card { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.1rem; background: var(--bg); transition: border-color 0.15s; }
+  .card:hover { border-color: var(--border-strong); }
+  .card-head { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
+  .card-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .card-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+  .card p, .card li { font-size: 15px; color: var(--text-secondary); font-weight: 300; line-height: 1.65; }
+  .card ul { padding-left: 1rem; }
+  .card li { margin-bottom: 3px; }
+  .tradeoff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .tradeoff { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.1rem; }
+  .tradeoff.chosen { border-color: var(--accent-border); background: var(--accent-light); }
+  .tradeoff-kicker { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 5px; }
+  .tradeoff.chosen .tradeoff-kicker { color: var(--accent-text); }
+  .tradeoff-name { font-size: 15.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+  .tradeoff p { font-size: 15px; color: var(--text-secondary); font-weight: 300; line-height: 1.65; }
+  .verdict { display: inline-block; margin-top: 8px; font-family: var(--font-mono); font-size: 11px; padding: 2px 8px; border-radius: 3px; letter-spacing: 0.03em; }
+  .verdict-yes   { background: #dcfce7; color: #166534; }
+  .verdict-maybe { background: #fef9c3; color: #854d0e; }
+  .verdict-no    { background: #fee2e2; color: #991b1b; }
+  .failure { display: grid; grid-template-columns: 36px 1fr; gap: 0 12px; margin-bottom: 1.5rem; align-items: start; }
+  .failure-icon { width: 36px; height: 36px; border-radius: var(--radius-md); background: #fee2e2; border: 1px solid #fca5a5; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .failure-title { font-size: 15.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 3px; }
+  .failure-desc { font-size: 15px; color: var(--text-secondary); font-weight: 300; line-height: 1.65; margin-bottom: 6px; }
+  .mitigation { font-family: var(--font-mono); font-size: 12px; color: #166534; background: #dcfce7; border: 1px solid #86efac; padding: 3px 9px; border-radius: 4px; display: inline-block; }
+  .tips { display: flex; flex-direction: column; gap: 8px; }
+  .tip { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg); transition: border-color 0.12s; }
+  .tip:hover { border-color: var(--accent-border); }
+  .tip-n { font-family: var(--font-mono); font-size: 11px; color: var(--accent); min-width: 18px; padding-top: 1px; font-weight: 500; }
+  .tip-text { font-size: 15px; color: var(--text-secondary); font-weight: 300; line-height: 1.65; }
+  .tip-text strong { color: var(--text-primary); font-weight: 600; }
+  .similar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 8px; }
+  .similar-card { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 10px 12px; text-decoration: none; transition: all 0.15s; display: block; background: var(--bg); }
+  .similar-card:hover { border-color: var(--accent-border); background: var(--accent-light); transform: translateY(-1px); }
+  .similar-name { font-size: 14.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 3px; }
+  .similar-reason { font-size: 13px; color: var(--text-muted); font-weight: 300; line-height: 1.5; }
+  .timeline { position: relative; padding-left: 1.75rem; }
+  .timeline::before { content: ''; position: absolute; left: 5px; top: 10px; bottom: 10px; width: 1px; background: linear-gradient(to bottom, var(--accent), var(--border)); }
+  .timeline-step { position: relative; margin-bottom: 1.75rem; }
+  .timeline-step:last-child { margin-bottom: 0; }
+  .timeline-step::before { content: ''; position: absolute; left: -1.45rem; top: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); box-shadow: 0 0 0 1.5px var(--accent); }
+  .timeline-phase { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin-bottom: 3px; }
+  .timeline-title { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+  .timeline-desc { font-size: 15px; color: var(--text-secondary); font-weight: 300; line-height: 1.65; }
+  .mermaid { display: flex; justify-content: center; }
+  .mermaid svg { max-width: 100%; }
+  @media (max-width: 820px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .main { padding: 1.5rem 1.1rem 3rem; }
+    .req-grid, .tradeoff-grid, .card-grid { grid-template-columns: 1fr; }
+  }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .hero                { animation: fadeUp 0.4s ease both; }
+  .section:nth-child(1){ animation: fadeUp 0.4s 0.04s ease both; }
+  .section:nth-child(2){ animation: fadeUp 0.4s 0.08s ease both; }
+  .section:nth-child(3){ animation: fadeUp 0.4s 0.12s ease both; }
+  .section:nth-child(4){ animation: fadeUp 0.4s 0.16s ease both; }
+  .section:nth-child(5){ animation: fadeUp 0.4s 0.20s ease both; }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="topbar">
+  <div class="topbar-left">
+    <a href="../index.html" class="back-link">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 2L4 6l4 4"/></svg>
+      All Problems
+    </a>
+    <div class="topbar-sep"></div>
+    <span class="topbar-problem">Yelp / Google Places</span>
+  </div>
+  <div class="topbar-right">
+    <span class="badge badge-accent">System Design</span>
+    <span class="badge badge-muted">Intermediate</span>
+  </div>
+</nav>
+
+<aside class="sidebar">
+  <div class="sidebar-group-label">On this page</div>
+  <a href="#problem" class="active"><span class="sidebar-n">01</span>Problem Statement</a>
+  <a href="#requirements">         <span class="sidebar-n">02</span>Requirements</a>
+  <a href="#scale">                <span class="sidebar-n">03</span>Scale Estimation</a>
+  <a href="#api">                  <span class="sidebar-n">04</span>API Design</a>
+  <a href="#architecture">         <span class="sidebar-n">05</span>Architecture</a>
+  <a href="#deep-dive">            <span class="sidebar-n">06</span>Deep Dive</a>
+  <a href="#tradeoffs">            <span class="sidebar-n">07</span>Tradeoffs</a>
+  <a href="#failures">             <span class="sidebar-n">08</span>Failure Scenarios</a>
+  <a href="#interview-tips">       <span class="sidebar-n">09</span>Interview Tips</a>
+  <a href="#similar">              <span class="sidebar-n">10</span>Similar Problems</a>
+  <a href="#evolution">            <span class="sidebar-n">11</span>Evolution</a>
+  <div class="sidebar-group-label">Related</div>
+  <a href="../uber/index.html">           <span class="sidebar-n">→</span>Uber</a>
+  <a href="../url-shortener/index.html">  <span class="sidebar-n">→</span>URL Shortener</a>
+  <a href="../twitter-feed/index.html">   <span class="sidebar-n">→</span>Twitter Feed</a>
+</aside>
+
+<main class="main">
+
+  <!-- HERO -->
+  <div class="hero" id="problem">
+    <div class="hero-kicker">System Design Reference</div>
+    <h1 class="hero-title">Design <em>Yelp / Google Places</em></h1>
+    <p class="hero-desc">
+      A local business discovery platform where users search for nearby restaurants, shops, and services by location, category, and filters. The core challenge is answering "what is near me?" across 100 million listings in under 100ms — a fundamentally two-dimensional indexing problem that standard B-tree databases cannot solve out of the box.
+    </p>
+    <div class="hero-tags">
+      <span class="tag accent">⚡ Core: Geospatial Indexing</span>
+      <span class="tag">50M DAU</span>
+      <span class="tag">100M Businesses</span>
+      <span class="tag">Read-heavy</span>
+      <span class="tag">Proximity Search</span>
+      <span class="tag">High Availability</span>
+    </div>
+  </div>
+
+  <!-- 02 REQUIREMENTS -->
+  <section class="section" id="requirements">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Requirements</h2></div>
+    <div class="req-grid">
+      <div class="req-box">
+        <div class="req-box-head func"><span class="req-dot"></span>Functional</div>
+        <ul class="req-list">
+          <li>Search businesses by <span class="hl-accent">location + keyword + filters</span> — radius, category, rating, price, open now</li>
+          <li>View business detail — name, address, hours, rating, photos, reviews</li>
+          <li>Write a review with star rating and optional photo upload</li>
+          <li>Add or update a business listing</li>
+          <li>Upload photos attached to a business or review</li>
+        </ul>
+      </div>
+      <div class="req-box">
+        <div class="req-box-head nonfunc"><span class="req-dot"></span>Non-Functional</div>
+        <ul class="req-list">
+          <li>Search results under <span class="hl">100ms p99</span> latency</li>
+          <li>Business detail page under <span class="hl">50ms p99</span> — highly cacheable</li>
+          <li><span class="hl">99.99% availability</span> on read paths</li>
+          <li>Eventual consistency acceptable — ratings can lag seconds</li>
+          <li>Photos served via CDN — never from origin servers</li>
+        </ul>
+      </div>
+    </div>
+    <div class="callout">
+      <div class="callout-label">Key Insight</div>
+      <p>Yelp is a <span class="hl">discovery and reference tool</span>, not a transactional system. People search far more than they write reviews. This means reads are the critical path — every architecture decision should optimise read latency first, and tolerate eventual consistency on the write path.</p>
+    </div>
+  </section>
+
+  <!-- 03 SCALE -->
+  <section class="section" id="scale">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Scale Estimation</h2></div>
+    <p class="prose" style="margin-bottom:0.75rem"><strong>Search &amp; business data</strong></p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Metric</th><th>Calculation</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td class="t-metric">Daily Active Users</td><td>Industry estimate</td><td class="t-value">50M</td></tr>
+          <tr><td class="t-metric">Searches / user / day</td><td>~5 per session</td><td class="t-value">250M/day</td></tr>
+          <tr><td class="t-metric">Search RPS (avg)</td><td class="t-calc">250M ÷ 86,400</td><td class="t-value">~2,900</td></tr>
+          <tr><td class="t-metric">Search RPS (peak 3×)</td><td class="t-calc">2,900 × 3</td><td class="t-value">~8,700</td></tr>
+          <tr><td class="t-metric">Business data total</td><td class="t-calc">100M × 2KB per listing</td><td class="t-value">~200GB</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="prose" style="margin-bottom:0.75rem; margin-top:1rem"><strong>Reviews &amp; photos</strong></p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Metric</th><th>Calculation</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td class="t-metric">Reviews written / day</td><td class="t-calc">50M DAU × 0.1 review/user</td><td class="t-value">5M/day</td></tr>
+          <tr><td class="t-metric">Review write RPS</td><td class="t-calc">5M ÷ 86,400</td><td class="t-value">~58 RPS</td></tr>
+          <tr><td class="t-metric">Review storage / year</td><td class="t-calc">5M × 500B × 365</td><td class="t-value">~900GB/yr</td></tr>
+          <tr><td class="t-metric">Photos uploaded / day</td><td class="t-calc">5M reviews × 2 photos avg</td><td class="t-value">10M/day</td></tr>
+          <tr><td class="t-metric">Photo storage / year</td><td class="t-calc">10M × 500KB × 365</td><td class="t-value">~1.8PB/yr</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout">
+      <div class="callout-label">Three Numbers That Drive Everything</div>
+      <p><span class="hl">200GB</span> of business data fits entirely in Redis — cache aggressively. Review writes at <span class="hl">58 RPS</span> are trivial — don't over-engineer the write path. Photos at <span class="hl">1.8PB/year</span> must go to object storage — they can never touch your API servers.</p>
+    </div>
+  </section>
+
+  <!-- 04 API -->
+  <section class="section" id="api">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">API Design</h2></div>
+
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/v1/search</span><span class="ep-desc">Proximity + filter search</span></div>
+      <div class="endpoint-body">
+        <div class="code">
+<span class="c-comment">// Query params</span>
+?q=<span class="c-str">"sushi"</span> &amp;lat=<span class="c-num">37.7749</span> &amp;lng=<span class="c-num">-122.4194</span> &amp;radius=<span class="c-num">5</span>
+&amp;category=<span class="c-str">"japanese"</span> &amp;rating=<span class="c-num">4.0</span> &amp;price=<span class="c-num">2</span> &amp;open_now=<span class="c-kw">true</span>
+&amp;sort_by=<span class="c-str">"relevance"</span> &amp;page=<span class="c-num">1</span> &amp;limit=<span class="c-num">20</span>
+
+<span class="c-comment">// Response 200 — IDs + thumbnail only, full detail on second tap</span>
+{ <span class="c-key">"results"</span>: [{ <span class="c-key">"business_id"</span>: <span class="c-str">"abc123"</span>, <span class="c-key">"name"</span>: <span class="c-str">"Nobu SF"</span>,
+    <span class="c-key">"rating"</span>: <span class="c-num">4.6</span>, <span class="c-key">"distance_miles"</span>: <span class="c-num">0.8</span>, <span class="c-key">"is_open"</span>: <span class="c-kw">true</span>,
+    <span class="c-key">"thumbnail_url"</span>: <span class="c-str">"https://cdn.yelp.com/photos/abc123/thumb.jpg"</span> }],
+  <span class="c-key">"total"</span>: <span class="c-num">847</span>, <span class="c-key">"page"</span>: <span class="c-num">1</span> }</div>
+      </div>
+    </div>
+
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/v1/businesses/:id</span><span class="ep-desc">Full business detail page</span></div>
+      <div class="endpoint-body">
+        <div class="code">
+<span class="c-comment">// Response 200 — full hours, photos, contact info included</span>
+{ <span class="c-key">"business_id"</span>: <span class="c-str">"abc123"</span>, <span class="c-key">"rating"</span>: <span class="c-num">4.6</span>, <span class="c-key">"review_count"</span>: <span class="c-num">2340</span>,
+  <span class="c-key">"hours"</span>: { <span class="c-key">"monday"</span>: { <span class="c-key">"open"</span>: <span class="c-str">"12:00"</span>, <span class="c-key">"close"</span>: <span class="c-str">"22:00"</span> }, ... },
+  <span class="c-key">"timezone"</span>: <span class="c-str">"America/Los_Angeles"</span>,
+  <span class="c-key">"photos"</span>: [<span class="c-str">"https://cdn.yelp.com/photos/abc123/1.jpg"</span>] }</div>
+      </div>
+    </div>
+
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/v1/businesses/:id/reviews</span><span class="ep-desc">Write a review</span></div>
+      <div class="endpoint-body">
+        <div class="code">
+<span class="c-comment">// Request — photo_ids reference pre-uploaded S3 objects</span>
+{ <span class="c-key">"rating"</span>: <span class="c-num">5</span>, <span class="c-key">"text"</span>: <span class="c-str">"Best omakase in the city..."</span>, <span class="c-key">"photo_ids"</span>: [<span class="c-str">"ph001"</span>] }
+<span class="c-comment">// Response 201 Created</span>
+{ <span class="c-key">"review_id"</span>: <span class="c-str">"rev789"</span>, <span class="c-key">"created_at"</span>: <span class="c-str">"2026-03-24T19:45:00Z"</span> }</div>
+      </div>
+    </div>
+
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/v1/photos/upload-url</span><span class="ep-desc">Get pre-signed S3 upload URL</span></div>
+      <div class="endpoint-body">
+        <div class="code">
+<span class="c-comment">// Client uploads DIRECTLY to S3 — photo bytes never touch API servers</span>
+{ <span class="c-key">"photo_id"</span>: <span class="c-str">"ph001"</span>,
+  <span class="c-key">"upload_url"</span>: <span class="c-str">"https://s3.amazonaws.com/yelp/ph001?X-Amz-Sig=..."</span>,
+  <span class="c-key">"expires_in"</span>: <span class="c-num">300</span> }</div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <div class="callout-label">Seven Endpoints, Full Product</div>
+      <p>GET /search · GET /businesses/:id · POST /businesses · PUT /businesses/:id · GET /businesses/:id/reviews · POST /businesses/:id/reviews · POST /photos/upload-url. The search response returns <span class="hl">business IDs and thumbnails only</span> — full detail fetched on second tap, keeping the search response payload small.</p>
+    </div>
+  </section>
+
+  <!-- 05 ARCHITECTURE -->
+  <section class="section" id="architecture">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">High-Level Architecture</h2></div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Architecture — High Level</span>
+        <span class="diagram-type">SVG Diagram</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 760 560" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0,8 3,0 6" fill="#9ca3af"/>
+            </marker>
+          </defs>
+          <!-- Client -->
+          <g onclick="hlNode(this)" style="cursor:pointer">
+            <rect x="310" y="12" width="140" height="56" rx="8" fill="#f7f7f5" stroke="#e4e2de" stroke-width="1"/>
+            <text x="380" y="34" text-anchor="middle" fill="#878480" font-size="9.5" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">CLIENT</text>
+            <text x="380" y="52" text-anchor="middle" fill="#111110" font-size="12.5" font-family="Geist,sans-serif" font-weight="600">Browser / Mobile</text>
+          </g>
+          <line x1="380" y1="68" x2="380" y2="100" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+          <!-- Load Balancer -->
+          <g onclick="hlNode(this)" style="cursor:pointer">
+            <rect x="310" y="102" width="140" height="56" rx="8" fill="#f7f7f5" stroke="#e4e2de" stroke-width="1"/>
+            <text x="380" y="124" text-anchor="middle" fill="#878480" font-size="9.5" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">INFRA</text>
+            <text x="380" y="142" text-anchor="middle" fill="#111110" font-size="12.5" font-family="Geist,sans-serif" font-weight="600">Load Balancer</text>
+          </g>
+          <!-- LB -> services -->
+          <line x1="345" y1="158" x2="188" y2="198" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+          <line x1="380" y1="158" x2="380" y2="198" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+          <line x1="415" y1="158" x2="572" y2="198" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+          <!-- Search Service -->
+          <g onclick="hlNode(this)" style="cursor:pointer">
+            <rect x="94" y="200" width="188" height="56" rx="8" fill="#fff0f0" stroke="#fca5a5" stroke-width="1.2"/>
+            <text x="188" y="222" text-anchor="middle" fill="#878480" font-size="9.5" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">COMPUTE</text>
+            <text x="188" y="240" text-anchor="middle" fill="#111110" font-size="12.5" font-family="Geist,sans-serif" font-weight="600">Search Service</text>
+          </g>
+          <text x="188" y="268" text-anchor="middle" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace">Geohash · Filter · Rank</text>
+          <!-- Business Service -->
+          <g onclick="hlNode(this)" style="cursor:pointer">
+            <rect x="305" y="200" width="150" height="56" rx="8" fill="#fff0f0" stroke="#fca5a5" stroke-width="1.2"/>
+            <text x="380" y="222" text-anchor="middle" fill="#878480" font-size="9.5" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">COMPUTE</text>
+            <text x="380" y="240" text-anchor="middle" fill="#111110" font-size="12.5" font-family="Geist,sans-serif" font-weight="600">Business Service</text>
+          </g>
+          <text x="380" y="268" text-anchor="middle" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace">CRUD · Hours · Pre-sign</text>
+          <!-- Review Service -->
+          <g onclick="hlNode(this)" style="cursor:pointer">
+            <rect x="478" y="200" width="188" height="56" rx="8" fill="#fff0f0" stroke="#fca5a5" stroke-width="1.2"/>
+            <text x="572" y="222" text-anchor="middle" fill="#878480" font-size="9.5" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">COMPUTE</text>
+            <text x="572" y="240" text-anchor="middle" fill="#111110" font-size="12.5" font-family="Geist,sans-serif" font-weight="600">Review Service</text>
+          </g>
+          <text x="572" y="268" text-anchor="middle" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace">Write Reviews · Publish Events</text>
+          <!-- Search -> Redis dashed -->
+          <line x1="140" y1="256" x2="90" y2="338" stroke="#d1d5db" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+          <!-- Search -> Business DB -->
+          <line x1="210" y1="256" x2="280" y2="338" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+          <!-- Business -> Redis dashed -->
+          <line x1="330" y1="256" x2="156" y2="338" stroke="#d1d5db" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+          <!-- Business -> Business DB -->
+          <line x1="380" y1="256" x2="380" y2="338" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+          <!-- Business -> S3 dashed -->
+          <line x1="420" y1="256" x2="544" y2="338" stroke="#d1d5db" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+          <!-- Review -> Kafka -->
+          <line x1="572" y1="256" x2="672" y2="338" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+          <!-- Redis -->
+          <g onclick="hlNode(this)" style="cursor:pointer">
+            <rect x="16" y="340" width="126" height="56" rx="8" fill="#f7f7f5" stroke="#e4e2de" stroke-width="1"/>
+            <text x="79" y="362" text-anchor="middle" fill="#878480" font-size="9.5" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">CACHE</text>
+            <text x="79" y="380" text-anchor="middle" fill="#111110" font-size="12.5" font-family="Geist,sans-serif" font-weight="600">Redis</text>
+          </g>
+          <text x="79" y="408" text-anchor="middle" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace">Search · Business docs</text>
+          <!-- Business DB -->
+          <g onclick="hlNode(this)" style="cursor:pointer">
+            <rect x="210" y="340" width="160" height="56" rx="8" fill="#f7f7f5" stroke="#e4e2de" stroke-width="1"/>
+            <text x="290" y="362" text-anchor="middle" fill="#878480" font-size="9.5" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">STORAGE</text>
+            <text x="290" y="380" text-anchor="middle" fill="#111110" font-size="12.5" font-family="Geist,sans-serif" font-weight="600">Business DB</text>
+          </g>
+          <text x="290" y="408" text-anchor="middle" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace">PostgreSQL + Geohash idx</text>
+          <!-- S3 -->
+          <g onclick="hlNode(this)" style="cursor:pointer">
+            <rect x="480" y="340" width="126" height="56" rx="8" fill="#f7f7f5" stroke="#e4e2de" stroke-width="1"/>
+            <text x="543" y="362" text-anchor="middle" fill="#878480" font-size="9.5" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">STORAGE</text>
+            <text x="543" y="380" text-anchor="middle" fill="#111110" font-size="12.5" font-family="Geist,sans-serif" font-weight="600">S3 + CDN</text>
+          </g>
+          <text x="543" y="408" text-anchor="middle" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace">Photos · Pre-signed URL</text>
+          <!-- Kafka -->
+          <g onclick="hlNode(this)" style="cursor:pointer">
+            <rect x="624" y="340" width="120" height="56" rx="8" fill="#f7f7f5" stroke="#e4e2de" stroke-width="1"/>
+            <text x="684" y="362" text-anchor="middle" fill="#878480" font-size="9.5" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">QUEUE</text>
+            <text x="684" y="380" text-anchor="middle" fill="#111110" font-size="12.5" font-family="Geist,sans-serif" font-weight="600">Kafka</text>
+          </g>
+          <text x="684" y="408" text-anchor="middle" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace">review.created events</text>
+          <!-- Kafka -> Rating Aggregator -->
+          <line x1="650" y1="396" x2="570" y2="460" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+          <!-- Kafka -> Review DB -->
+          <line x1="700" y1="396" x2="715" y2="460" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+          <!-- Rating Aggregator -->
+          <g onclick="hlNode(this)" style="cursor:pointer">
+            <rect x="462" y="462" width="172" height="56" rx="8" fill="#f7f7f5" stroke="#e4e2de" stroke-width="1"/>
+            <text x="548" y="484" text-anchor="middle" fill="#878480" font-size="9.5" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">CONSUMER</text>
+            <text x="548" y="502" text-anchor="middle" fill="#111110" font-size="12.5" font-family="Geist,sans-serif" font-weight="600">Rating Aggregator</text>
+          </g>
+          <text x="548" y="530" text-anchor="middle" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace">Incremental sum/count update</text>
+          <!-- Review DB -->
+          <g onclick="hlNode(this)" style="cursor:pointer">
+            <rect x="648" y="462" width="106" height="56" rx="8" fill="#f7f7f5" stroke="#e4e2de" stroke-width="1"/>
+            <text x="701" y="484" text-anchor="middle" fill="#878480" font-size="9.5" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">STORAGE</text>
+            <text x="701" y="502" text-anchor="middle" fill="#111110" font-size="12.5" font-family="Geist,sans-serif" font-weight="600">Review DB</text>
+          </g>
+          <text x="701" y="530" text-anchor="middle" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace">PostgreSQL</text>
+          <!-- Rating Aggregator -> Business DB curved back -->
+          <path d="M462 490 Q 380 545 290 460 L 290 396" fill="none" stroke="#d1d5db" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+          <!-- Legend -->
+          <line x1="16" y1="552" x2="44" y2="552" stroke="#d1d5db" stroke-width="1"/>
+          <text x="50" y="555" fill="#9ca3af" font-size="9" font-family="JetBrains Mono,monospace">Synchronous</text>
+          <line x1="150" y1="552" x2="178" y2="552" stroke="#d1d5db" stroke-width="1" stroke-dasharray="4,3"/>
+          <text x="184" y="555" fill="#9ca3af" font-size="9" font-family="JetBrains Mono,monospace">Async / cache</text>
+        </svg>
+      </div>
+    </div>
+
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-head"><span class="card-dot"></span><span class="card-title">Search Service</span></div>
+        <p>The heart of Yelp. Converts lat/lng → geohash, queries the 9-cell neighbor grid, applies filters in memory, ranks the candidate set by relevance, and returns results. Reads primarily from <span class="hl-accent">Redis</span> — the DB is hit only on a cold cache miss.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-dot"></span><span class="card-title">Business Service</span></div>
+        <p>Handles all CRUD for business listings. Also issues pre-signed S3 URLs for photo uploads — meaning <span class="hl">photo bytes never pass through this service</span>. It issues the ticket; S3 and CDN do all the heavy lifting from there.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-dot"></span><span class="card-title">Kafka + Rating Aggregator</span></div>
+        <p>Review writes publish an event to Kafka immediately. The aggregator consumes it and atomically increments <code>total_rating_sum</code> and <code>review_count</code> on the business row. <span class="hl">O(1) update</span> regardless of how many reviews exist.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-dot"></span><span class="card-title">Redis Cache (Two Namespaces)</span></div>
+        <p><code>search:&lt;geohash&gt;:&lt;filters&gt;</code> → business ID list (TTL 5 min). <code>business:&lt;id&gt;</code> → full document (TTL 1 hr). Together these absorb the <span class="hl-accent">vast majority of all reads</span> without touching PostgreSQL.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06 DEEP DIVE -->
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Deep Dive — <em style="font-family:var(--font-serif);font-weight:400">Geohashing &amp; the 9-Cell Query</em></h2></div>
+
+    <div class="callout">
+      <div class="callout-label">Why This Is The Hard Part</div>
+      <p>A B-tree index is one-dimensional. Latitude and longitude together describe a two-dimensional point. You can't efficiently satisfy both constraints simultaneously with a standard index — so you need to <span class="hl">collapse 2D space into 1D</span> while preserving geographic proximity. That's exactly what geohashing does.</p>
+    </div>
+
+    <!-- Geohash Animation -->
+    <div class="anim-wrap">
+      <div class="anim-head">
+        <span class="anim-title">9-cell neighbor query — step through</span>
+        <button class="btn primary" onclick="runGeoAnim()">&#9654; Run</button>
+        <button class="btn"         onclick="resetGeoAnim()">&#8635; Reset</button>
+      </div>
+      <div class="anim-body">
+        <div class="geo-grid" id="geoGrid">
+          <div class="geo-cell" id="gc0"><div class="cell-code">9q8yx</div><div class="cell-label">NW neighbor</div></div>
+          <div class="geo-cell" id="gc1"><div class="cell-code">9q8yy</div><div class="cell-label">N neighbor</div></div>
+          <div class="geo-cell" id="gc2"><div class="cell-code">9q8yz</div><div class="cell-label">NE neighbor</div></div>
+          <div class="geo-cell" id="gc3"><div class="cell-code">9q8yw</div><div class="cell-label">W neighbor</div></div>
+          <div class="geo-cell" id="gc4"><div class="cell-code">9q8y0</div><div class="cell-label">YOU ARE HERE</div></div>
+          <div class="geo-cell" id="gc5"><div class="cell-code">9q8y1</div><div class="cell-label">E neighbor</div></div>
+          <div class="geo-cell" id="gc6"><div class="cell-code">9q8yv</div><div class="cell-label">SW neighbor</div></div>
+          <div class="geo-cell" id="gc7"><div class="cell-code">9q8yu</div><div class="cell-label">S neighbor</div></div>
+          <div class="geo-cell" id="gc8"><div class="cell-code">9q8yt</div><div class="cell-label">SE neighbor</div></div>
+        </div>
+        <div class="anim-desc" id="geoDesc">Press Run to walk through the geohash query</div>
+      </div>
+    </div>
+
+    <!-- Mermaid sequence -->
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Sequence — Full Search Request Lifecycle</span>
+        <span class="diagram-type">Mermaid.js</span>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+sequenceDiagram
+    participant C  as Client
+    participant LB as Load Balancer
+    participant SS as Search Service
+    participant RC as Redis Cache
+    participant DB as Business DB
+
+    C->>LB: GET /v1/search?q=sushi&lat=37.77&lng=-122.41
+    LB->>SS: Route to search service instance
+    SS->>SS: lat/lng → geohash 9q8y0
+    SS->>SS: Compute 8 neighbor cells
+    SS->>RC: GET search:9q8y0:sushi:rating4+
+    alt Cache Hit
+        RC-->>SS: [business_id list] (under 1ms)
+    else Cache Miss
+        SS->>DB: SELECT WHERE geohash IN (9 cells)
+        DB-->>SS: ~500-2000 candidate businesses
+        SS->>SS: Filter by category, rating, price
+        SS->>SS: Compute exact distance, discard out-of-radius
+        SS->>SS: Rank by relevance + distance score
+        SS->>RC: SET search:9q8y0:sushi:rating4+ TTL=300
+    end
+    SS->>RC: MGET business:abc123, business:def456 ...
+    RC-->>SS: Full business documents (TTL 1hr)
+    SS-->>C: 200 OK — top 20 results
+        </div>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>
+        Geohashing gives every point on Earth a <span class="hl">short alphanumeric string</span> where geographic proximity maps to shared string prefixes. Two businesses on the same city block might both start with <code>9q8y</code>. A restaurant in New York starts with <code>dr5r</code> — a completely different prefix. This makes proximity search a simple prefix lookup, which a B-tree index handles perfectly.
+      </p>
+      <p>
+        The <span class="hl-accent">9-cell neighbor query</span> exists to fix the one weakness of this approach: if you're standing right on a cell boundary, the nearest business may be just across the line in the adjacent cell. By always querying your home cell plus all 8 surrounding neighbors, you guarantee no business within your radius is ever missed — regardless of where within the cell you happen to be standing.
+      </p>
+      <p>
+        After the geohash query returns a candidate set of 500–2000 businesses, two more steps run in memory: <strong>exact distance filtering</strong> (compute true haversine distance, discard anything outside the user's actual radius) and <strong>ranking</strong> (score by a weighted blend of distance, star rating, review count, and keyword relevance). Both steps are cheap because they run on a small candidate set, not across 100M rows.
+      </p>
+      <p>
+        The <span class="hl-red">"open now" filter breaks caching</span> because its answer changes every minute at business closing times. The fix: cache the broader result set without the open-now constraint, then apply it in application code using the hours schedule already embedded in each cached business document. This is fast, cheap, and requires no cache invalidation logic.
+      </p>
+    </div>
+  </section>
+
+  <!-- 07 TRADEOFFS -->
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Key Design Decisions &amp; Tradeoffs</h2></div>
+
+    <div class="tradeoff-grid">
+      <div class="tradeoff chosen">
+        <div class="tradeoff-kicker">Option A — Chosen</div>
+        <div class="tradeoff-name">Geohashing</div>
+        <p>Converts 2D coordinates into a prefixable string. Works with any standard B-tree index. Simple to implement, trivially cacheable. The 9-neighbor query handles boundary edge cases with a minor overhead of 9 indexed lookups instead of 1.</p>
+        <span class="verdict verdict-yes">&#10003; Simple · cacheable · battle-tested</span>
+      </div>
+      <div class="tradeoff">
+        <div class="tradeoff-kicker">Option B</div>
+        <div class="tradeoff-name">PostGIS / R-Tree Spatial Index</div>
+        <p>Native 2D spatial indexing in PostgreSQL. Handles true radius queries and arbitrary polygon areas with no boundary workaround needed. Tradeoff: operationally heavier, harder to cache against, exposes more query complexity than Yelp's use case requires.</p>
+        <span class="verdict verdict-maybe">~ Only if you need polygon-area search</span>
+      </div>
+    </div>
+
+    <div class="tradeoff-grid">
+      <div class="tradeoff chosen">
+        <div class="tradeoff-kicker">Option A — Chosen</div>
+        <div class="tradeoff-name">Cache on Geohash Cell</div>
+        <p>Cache key includes the geohash prefix, not raw lat/lng. Every user within the same city block shares a cache entry. Hit rate goes from <span class="hl-red">~0%</span> on raw coordinates to something meaningful. "Open now" is filtered in the application layer after retrieval.</p>
+        <span class="verdict verdict-yes">&#10003; High hit rate · low DB pressure</span>
+      </div>
+      <div class="tradeoff">
+        <div class="tradeoff-kicker">Option B</div>
+        <div class="tradeoff-name">Always Query Live</div>
+        <p>Guaranteed freshness, zero cache infrastructure. At 8,700 peak RPS hitting PostgreSQL directly, you need significantly more DB capacity and replicas. Fine at small scale — painful once you hit millions of DAU and the same 200GB is queried repeatedly.</p>
+        <span class="verdict verdict-maybe">~ Fine below 1M DAU</span>
+      </div>
+    </div>
+
+    <div class="tradeoff-grid">
+      <div class="tradeoff chosen">
+        <div class="tradeoff-kicker">Option A — Chosen</div>
+        <div class="tradeoff-name">Incremental Rating Aggregation</div>
+        <p>Store <code>total_rating_sum</code> and <code>review_count</code> on the business row. On each review write, atomically increment both. <span class="hl">O(1) update</span> regardless of how many reviews exist. No batch job, no recomputation, no meaningful lag.</p>
+        <span class="verdict verdict-yes">&#10003; Start here — simple and correct</span>
+      </div>
+      <div class="tradeoff">
+        <div class="tradeoff-kicker">Option B</div>
+        <div class="tradeoff-name">Flink Streaming Aggregation</div>
+        <p>Windowed aggregations, weighted recency scoring, and fraud detection built into the pipeline. Powerful for complex models. Tradeoff: you now operate Kafka + Flink + consumer logic — significant complexity for a workload that is only 58 writes/second.</p>
+        <span class="verdict verdict-maybe">~ Add for weighted or fraud-aware ratings</span>
+      </div>
+    </div>
+
+    <div class="tradeoff-grid">
+      <div class="tradeoff chosen">
+        <div class="tradeoff-kicker">Option A — Chosen</div>
+        <div class="tradeoff-name">PostgreSQL for Business Data</div>
+        <p>ACID guarantees, geohash index support, and complex multi-column filter queries in a single statement. At 200GB of business data, this fits comfortably on a few well-provisioned nodes with read replicas absorbing the read load.</p>
+        <span class="verdict verdict-yes">&#10003; SQL required for multi-filter queries</span>
+      </div>
+      <div class="tradeoff">
+        <div class="tradeoff-kicker">Option B</div>
+        <div class="tradeoff-name">Cassandra / DynamoDB</div>
+        <p>Massive write throughput and linear horizontal scaling. But: no native geospatial support, no multi-column filter queries, no joins. The write volume — 58 RPS — doesn't justify any of this complexity. Let the actual numbers drive the decision.</p>
+        <span class="verdict verdict-no">&#10007; Wrong fit for this workload</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 08 FAILURES -->
+  <section class="section" id="failures">
+    <div class="section-head"><span class="section-n">08</span><h2 class="section-title">What Can Go Wrong</h2></div>
+
+    <div class="failure">
+      <div class="failure-icon">&#128293;</div>
+      <div>
+        <div class="failure-title">Cache Stampede on Viral Business</div>
+        <p class="failure-desc">A restaurant gets featured on a popular food show. Millions of requests arrive for the same business page simultaneously. The Redis entry expires. <span class="hl">Every request misses and hits PostgreSQL at once</span> before the cache repopulates. Latency spikes, potentially cascading.</p>
+        <span class="mitigation">&#8594; Fix: Mutex lock on cache miss + TTL jitter (&#177;10%) to stagger expirations across the fleet</span>
+      </div>
+    </div>
+
+    <div class="failure">
+      <div class="failure-icon">&#128205;</div>
+      <div>
+        <div class="failure-title">Geohash Cell Hotspot</div>
+        <p class="failure-desc">Times Square, the Las Vegas Strip — extremely dense urban areas where thousands of businesses share the same geohash cell. Your 9-cell query returns <span class="hl">50,000 businesses</span> instead of 500. The in-memory filter step that was cheap at normal density becomes expensive.</p>
+        <span class="mitigation">&#8594; Fix: Adaptive precision — 7-char geohash (smaller cells) in dense areas, 5-char in sparse rural areas</span>
+      </div>
+    </div>
+
+    <div class="failure">
+      <div class="failure-icon">&#9889;</div>
+      <div>
+        <div class="failure-title">Review Written, Aggregation Lost</div>
+        <p class="failure-desc">User submits review → written to reviews table → Kafka event published → rating aggregator crashes before processing. Now the review exists but the <span class="hl-red">business rating is permanently stale</span>. A naive restart could double-count the review.</p>
+        <span class="mitigation">&#8594; Fix: Commit Kafka offset only after successful DB write + idempotent writes using review_id deduplication table</span>
+      </div>
+    </div>
+
+    <div class="failure">
+      <div class="failure-icon">&#128552;</div>
+      <div>
+        <div class="failure-title">"Open Now" Serving Closed Businesses</div>
+        <p class="failure-desc">A business closes at 9 PM. Cached search results from 8:58 PM still include it as open until the 5-minute TTL expires. Users navigate to a <span class="hl-red">closed restaurant</span> — broken trust, especially for late-night searches when this filter matters most.</p>
+        <span class="mitigation">&#8594; Fix: Cache without open_now constraint, filter in application layer using hours schedule in the cached business document</span>
+      </div>
+    </div>
+
+    <div class="failure">
+      <div class="failure-icon">&#128247;</div>
+      <div>
+        <div class="failure-title">Pre-Signed URL Abuse</div>
+        <p class="failure-desc">You issue a 5-minute pre-signed S3 URL. Nothing stops a client from uploading a malicious file type — an executable disguised as a JPEG — or sharing the URL externally before it expires.</p>
+        <span class="mitigation">&#8594; Fix: Short expiry (5 min) + server-side validation after upload (MIME check, virus scan, resize) + only serve the processed version via CDN, never the raw upload</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 09 INTERVIEW TIPS -->
+  <section class="section" id="interview-tips">
+    <div class="section-head"><span class="section-n">09</span><h2 class="section-title">Interview Tips</h2></div>
+    <div class="tips">
+      <div class="tip">
+        <span class="tip-n">01</span>
+        <p class="tip-text"><strong>Lead with the geospatial problem immediately.</strong> Most candidates say "index on lat/lng." Get ahead of this yourself: say <span class="hl">"a naive lat/lng index fails because B-trees are one-dimensional — we need geohashing to collapse 2D space into a prefixable 1D key."</span> Interviewers are waiting for you to recognise this. Don't wait to be prompted.</p>
+      </div>
+      <div class="tip">
+        <span class="tip-n">02</span>
+        <p class="tip-text"><strong>Know the geohash precision table.</strong> Interviewers love asking "what precision would you use?" A <span class="hl-accent">6-character geohash</span> covers roughly a city block — that is the right answer for most proximity search problems. 5-char for wider area searches, 7-char for dense urban environments.</p>
+      </div>
+      <div class="tip">
+        <span class="tip-n">03</span>
+        <p class="tip-text"><strong>The "open now" question is almost guaranteed.</strong> Have the answer ready before they ask: <span class="hl">cache without the constraint, filter in application layer</span> using the hours schedule embedded in the cached business document. "Just use a short TTL" is the wrong answer — it still serves stale results at closing time boundaries.</p>
+      </div>
+      <div class="tip">
+        <span class="tip-n">04</span>
+        <p class="tip-text"><strong>Separate retrieval from ranking explicitly.</strong> State this out loud: <span class="hl-accent">geohash query</span> gets you a candidate set of ~500 businesses in under 10ms. <span class="hl-accent">Ranking</span> runs after on that small set and is cheap. Two distinct phases, two distinct optimisations. Most candidates conflate these and confuse themselves.</p>
+      </div>
+      <div class="tip">
+        <span class="tip-n">05</span>
+        <p class="tip-text"><strong>Know the pre-signed URL pattern cold.</strong> If asked about photo uploads: <span class="hl">"We never route photo bytes through our API servers. We issue a pre-signed S3 URL, the client uploads directly to S3, we validate server-side after upload."</span> This shows you think about bandwidth and infrastructure costs, not just correctness.</p>
+      </div>
+      <div class="tip">
+        <span class="tip-n">06</span>
+        <p class="tip-text"><strong>Don't over-engineer the write path.</strong> Reviews write at <span class="hl">58 RPS</span>. Candidates often reach for Cassandra for "user-generated content at scale." The right answer is PostgreSQL — 58 RPS is trivial for it. <strong>Let the actual numbers drive the decision, not the intuition that reviews always equals high write volume.</strong></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 SIMILAR -->
+  <section class="section" id="similar">
+    <div class="section-head"><span class="section-n">10</span><h2 class="section-title">Similar Problems</h2></div>
+    <p class="prose" style="margin-bottom:1rem">These problems share the proximity search or read-heavy discovery pattern. <span class="hl">Master geohashing here and you're halfway done with all of them.</span></p>
+    <div class="similar-grid">
+      <a href="../uber/index.html" class="similar-card">
+        <div class="similar-name">Uber / Ride Sharing</div>
+        <div class="similar-reason">Same geospatial indexing — but the targets move in real time</div>
+      </a>
+      <a href="../twitter-feed/index.html" class="similar-card">
+        <div class="similar-name">Twitter Feed</div>
+        <div class="similar-reason">Read-heavy, caching strategy, fan-out patterns</div>
+      </a>
+      <a href="../url-shortener/index.html" class="similar-card">
+        <div class="similar-name">URL Shortener</div>
+        <div class="similar-reason">Hash-based key generation, Redis caching, read-heavy design</div>
+      </a>
+      <a href="../notification-system/index.html" class="similar-card">
+        <div class="similar-name">Notification System</div>
+        <div class="similar-reason">Kafka event pipeline, async consumer pattern</div>
+      </a>
+    </div>
+  </section>
+
+  <!-- 11 EVOLUTION -->
+  <section class="section" id="evolution">
+    <div class="section-head"><span class="section-n">11</span><h2 class="section-title">How the Design Evolves</h2></div>
+    <div class="timeline">
+      <div class="timeline-step">
+        <div class="timeline-phase">Phase 1 — 0 to 10K users</div>
+        <div class="timeline-title">Monolith + PostgreSQL with PostGIS</div>
+        <p class="timeline-desc">Single server, single database with PostGIS for geospatial queries. <span class="hl">No geohashing needed yet</span> — PostGIS handles the load cleanly. No cache, no queue, no CDN. Ship the product fast and validate it works.</p>
+      </div>
+      <div class="timeline-step">
+        <div class="timeline-phase">Phase 2 — 10K to 1M users</div>
+        <div class="timeline-title">Add Redis + Geohash Index + CDN</div>
+        <p class="timeline-desc">Switch to geohash-based indexing for cacheability. Add <span class="hl-accent">Redis</span> in front of search and business reads. Move photos to S3 immediately — this is non-negotiable at any meaningful scale. Add a read replica. <span class="hl">Most Yelp competitors live here their whole lives.</span></p>
+      </div>
+      <div class="timeline-step">
+        <div class="timeline-phase">Phase 3 — 1M to 50M users</div>
+        <div class="timeline-title">Microservices + Kafka + Horizontal Scale</div>
+        <p class="timeline-desc">Split search, business, and review into separate stateless services. Introduce Kafka for the review write path — enables the incremental aggregator pattern and opens the door to downstream analytics consumers. Shard the Business DB by geohash region to distribute load geographically.</p>
+      </div>
+      <div class="timeline-step">
+        <div class="timeline-phase">Phase 4 — 50M+ users</div>
+        <div class="timeline-title">Multi-Region + Elasticsearch + Flink</div>
+        <p class="timeline-desc">Multi-region active-active for latency. Add <span class="hl-accent">Elasticsearch</span> as a dedicated search index — richer keyword matching, faceted filtering, BM25 relevance scoring that PostgreSQL can't match. Flink for real-time weighted ratings and <span class="hl-red">review fraud detection</span> at scale. Global CDN footprint for photo delivery.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+</div>
+
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'default',
+  themeVariables: {
+    background:         '#ffffff',
+    primaryColor:       '#fff0f0',
+    primaryBorderColor: '#fca5a5',
+    primaryTextColor:   '#111110',
+    lineColor:          '#9ca3af',
+    secondaryColor:     '#f7f7f5',
+    tertiaryColor:      '#f0eeeb',
+    fontFamily:         'JetBrains Mono, monospace',
+    fontSize:           '12px',
+  },
+  sequence: { actorMargin: 55, messageMargin: 28, mirrorActors: false }
+});
+
+const sidebarLinks = document.querySelectorAll('.sidebar a[href^="#"]');
+const sectionEls   = [...sidebarLinks].map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+const sectionObserver = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (!e.isIntersecting) return;
+    sidebarLinks.forEach(l => l.classList.remove('active'));
+    const match = document.querySelector('.sidebar a[href="#' + e.target.id + '"]');
+    if (match) match.classList.add('active');
+  });
+}, { threshold: 0.35, rootMargin: '-52px 0px 0px 0px' });
+sectionEls.forEach(s => sectionObserver.observe(s));
+
+function hlNode(g) {
+  document.querySelectorAll('[onclick="hlNode(this)"] rect').forEach(r => { r.style.stroke = ''; r.style.fill = ''; });
+  const rect = g.querySelector('rect');
+  rect.style.stroke = 'var(--accent)';
+  rect.style.fill   = 'var(--accent-light)';
+}
+
+const GEO_STEPS = [
+  { cells: [4],                   desc: 'Step 1 — Convert lat/lng to geohash: 9q8y0 (your home cell)' },
+  { cells: [4,0],                 desc: 'Step 2 — Add NW neighbor: 9q8yx' },
+  { cells: [4,0,1],               desc: 'Step 3 — Add N neighbor: 9q8yy' },
+  { cells: [4,0,1,2],             desc: 'Step 4 — Add NE neighbor: 9q8yz' },
+  { cells: [4,0,1,2,3],           desc: 'Step 5 — Add W neighbor: 9q8yw' },
+  { cells: [4,0,1,2,3,5],         desc: 'Step 6 — Add E neighbor: 9q8y1' },
+  { cells: [4,0,1,2,3,5,6],       desc: 'Step 7 — Add SW neighbor: 9q8yv' },
+  { cells: [4,0,1,2,3,5,6,7],     desc: 'Step 8 — Add S neighbor: 9q8yu' },
+  { cells: [4,0,1,2,3,5,6,7,8],   desc: 'Step 9 — All 9 cells queried. No boundary edge case possible.' },
+];
+
+let geoTimer = null;
+
+function runGeoAnim() {
+  resetGeoAnim();
+  let step = 0;
+  function tick() {
+    if (step >= GEO_STEPS.length) return;
+    const s = GEO_STEPS[step];
+    s.cells.forEach(idx => {
+      const cell = document.getElementById('gc' + idx);
+      if (idx === 4) cell.classList.add('home');
+      else cell.classList.add('neighbor');
+    });
+    document.getElementById('geoDesc').textContent = s.desc;
+    step++;
+    if (step < GEO_STEPS.length) geoTimer = setTimeout(tick, 620);
+  }
+  tick();
+}
+
+function resetGeoAnim() {
+  clearTimeout(geoTimer);
+  for (let i = 0; i < 9; i++) {
+    const cell = document.getElementById('gc' + i);
+    if (cell) cell.classList.remove('home', 'neighbor');
+  }
+  document.getElementById('geoDesc').textContent = 'Press Run to walk through the geohash query';
+}
+</script>
+</body>
+</html>

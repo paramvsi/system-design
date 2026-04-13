@@ -1,0 +1,4 @@
+payment-gateway.html: similar-card unresolved "#"
+payment-gateway.html: similar-card unresolved "#"
+pubg-system-design.html: similar-card unresolved "#"
+pubg-system-design.html: similar-card unresolved "#"

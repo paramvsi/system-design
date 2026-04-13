@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-ticketmaster",
+  "title": "Ticketmaster — Event Ticketing",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 280,
+    "s": 60,
+    "l": 50
+  },
+  "category": "Marketplace & Booking",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>Design Ticketmaster. Concert tickets go on sale at 10am; 500K users try to grab 40K seats simultaneously. No double-bookings. Fair queue.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n      \n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Waiting room (FIFO queue) before the seat-picker even loads. Users enter in batches.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Seat hold pattern: soft hold with TTL (5 min) while user picks + pays. Explicit release on timeout.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Pessimistic lock on seat row at commit time — NOT optimistic. 100K users on same seat = 99,999 retry-storm.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Waiting room FIFO queue as frontline; admits N users/sec to the seat picker</li>\n      <li><span class=\"rubric-points\">+2</span> Seat hold with explicit TTL (5 min); automatic release on timeout; atomic swap on purchase</li>\n      <li><span class=\"rubric-points\">+2</span> Pessimistic lock on seat rows (not optimistic) — avoids thundering-herd retries on popular seats</li>\n      <li><span class=\"rubric-points\">+1</span> Inventory cache (Redis) for 'seats remaining' reads; authoritative lock in DB for writes</li>\n      <li><span class=\"rubric-points\">+1</span> Anti-bot: captcha, rate-limit per IP/account, proof-of-work or challenge on suspicious</li>\n      <li><span class=\"rubric-points\">+1</span> Payment saga: hold seat → auth payment → confirm purchase → release hold on fail</li>\n      <li><span class=\"rubric-points\">+1</span> Pre-allocation: seats assigned to ticketing groups (resellers/presale) before public sale</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Optimistic concurrency on popular seats (retry storms — 99K failures per seat)</li>\n        <li>Cache seat availability aggressively (users all see 'available' for same seat)</li>\n        <li>One big DB transaction from 'pick seat' through 'type card info' (locks for minutes)</li>\n        <li>No waiting room — 500K users hit seat-picker at t=0</li>\n        <li>No bot protection</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 1
+}

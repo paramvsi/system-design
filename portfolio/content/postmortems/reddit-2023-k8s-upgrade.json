@@ -1,0 +1,64 @@
+{
+  "slug": "reddit-2023-k8s-upgrade",
+  "title": "\"Pi Day\"",
+  "problemNumber": "03",
+  "difficulty": null,
+  "heroDescription": "A planned Kubernetes control-plane upgrade introduced an incompatibility with a custom Calico (CNI) fork Reddit had been maintaining for years. Routing broke across pods. Reddit.com went fully dark for 5 hours — the longest outage in Reddit's history to date.",
+  "tags": [
+    "Kubernetes",
+    "CNI fork",
+    "5h outage",
+    "Tech debt"
+  ],
+  "accent": {
+    "h": 18,
+    "s": 85,
+    "l": 50
+  },
+  "category": "Deploy / operator error",
+  "blurb": "A planned Kubernetes control-plane upgrade introduced an incompatibility with a custom Calico (CNI) fork Reddit had been maintaining for years. Routing broke across pods. Reddit.com went fully dark for 5 hours — the long",
+  "sections": [
+    {
+      "id": "tldr",
+      "label": "TL;DR",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">TL;DR</h2></div>\n    <div class=\"prose\">\n      <p>Reddit upgraded production Kubernetes from 1.23 to 1.24 on Pi Day. The upgrade changed how node labels were set; Reddit's custom Calico fork relied on the old labeling convention. New pods failed to receive correct IP routes. Existing pods kept working but could not be replaced or scaled. The team rolled back — but rolling back K8s in-place is a multi-hour procedure; in the meantime most service replicas aged out and Reddit.com went dark.</p>\n    </div>"
+    },
+    {
+      "id": "timeline",
+      "label": "Timeline",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Timeline</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>19:25 UTC</strong> — K8s upgrade 1.23 → 1.24 begins on primary cluster.</li>\n        <li><strong>19:35 UTC</strong> — Upgrade completes. Existing pods still running; everything looks fine.</li>\n        <li><strong>19:45 UTC</strong> — First signs of trouble: new pods failing readiness checks. Pod-to-pod traffic failing. Sporadic page load failures.</li>\n        <li><strong>20:00 UTC</strong> — Reddit.com becoming inconsistent. Some users seeing errors, some not, depending on which pods they route to.</li>\n        <li><strong>20:20 UTC</strong> — Scope of problem clear: CNI routing broken; all new pods unusable. Decision to roll back.</li>\n        <li><strong>20:30–00:30 UTC</strong> — Rolling back K8s control plane. Rolling back node pool. Calico config restored to pre-upgrade state. Pods recovering gradually.</li>\n        <li><strong>00:30 UTC Mar 15</strong> — Reddit fully operational. Total ~5-hour outage.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "rootcause",
+      "label": "Root cause",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Root cause</h2></div>\n    <div class=\"prose\">\n      <p>Reddit had forked Calico (a K8s CNI plugin) years prior to add custom behavior. The fork was never upstreamed. Over time, the team made small fixes to keep it working against newer K8s; by K8s 1.24 the drift between upstream Calico and Reddit's fork was sufficient that the new K8s behavior broke the fork.</p>\n      <p>Specifically: K8s 1.24 changed how node labels set on kubelet startup. Reddit's Calico fork read labels at init-time with the old convention. New nodes came up with labels the fork couldn't understand. Routing rules never got programmed.</p>\n      <p>The upgrade had been tested in staging — but staging's Calico version had been accidentally updated to a cleaner state than production's, so the bug didn't reproduce.</p>\n    </div>"
+    },
+    {
+      "id": "impact",
+      "label": "Blast radius",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Blast radius</h2></div>\n    <div class=\"prose\">\n      <p>Reddit.com fully inaccessible for 5 hours. ~50M daily active users affected. During downtime, Reddit's competitor subreddits on Discord / Twitter filled with memes about the outage. Ad revenue impact ~$1M+. Increased pressure on Reddit's reliability narrative going into their IPO year.</p>\n    </div>"
+    },
+    {
+      "id": "lessons",
+      "label": "Lessons",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Lessons</h2></div>\n    <div class=\"prose\">\n      <ol>\n        <li><strong>Long-lived forks of critical infrastructure are unpaid tech debt.</strong> Every fork that doesn't upstream becomes harder to upgrade each release. Either upstream, or adopt a supported config option, or accept the fork as a maintenance cost.</li>\n        <li><strong>Staging must match production, version-by-version.</strong> The bug was in production's stale Calico. Staging was cleaner. This is the classic \"works on staging\" failure mode.</li>\n        <li><strong>K8s upgrades are a risk surface.</strong> Draining + upgrading the control plane itself affects all workloads. Run canary clusters first; never upgrade prod and staging simultaneously.</li>\n        <li><strong>Plan rollback before the upgrade.</strong> Rolling back K8s is harder than rolling forward. Having a practiced, fast rollback path is necessary.</li>\n      </ol>\n    </div>"
+    },
+    {
+      "id": "concepts-used",
+      "label": "Concepts in play",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Concepts in play</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><a href=\"/concepts/kubernetes\">Kubernetes</a> — upgrade risk surface.</li>\n        <li><a href=\"/concepts/deployment-strategies-blue-green-canary\">Canary + rollback</a> — staged rollouts for infrastructure changes.</li>\n        <li><a href=\"/concepts/feature-flags-rollouts\">Feature flags</a> — an abstraction that sometimes even applies to infra upgrades.</li>\n        <li><a href=\"/concepts/immutable-infrastructure\">Immutable infrastructure</a> — forks resist upgrades.</li>\n        <li><a href=\"/concepts/testing-in-production\">Testing in production</a> — staging must match prod.</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

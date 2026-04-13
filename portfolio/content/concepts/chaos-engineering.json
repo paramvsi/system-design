@@ -1,0 +1,65 @@
+{
+  "slug": "chaos-engineering",
+  "title": "Chaos Engineering",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 5,
+    "s": 78,
+    "l": 50
+  },
+  "category": "Reliability",
+  "blurb": "You think your system handles a database failover. The runbook says it does. The diagram says it does. But you've never actually tested it. The first time it happens for real — at 3am, with no warning — you discover the ",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>You think your system handles a database failover. The runbook says it does. The diagram says it does. But you've never actually tested it. The first time it happens for real — at 3am, with no warning — you discover the standby has stale data, the connection pool doesn't reconnect, and the load balancer takes 90s to notice. Every distributed system carries this kind of <span class=\"hl-red\">silent fragility</span>.</p>\n      <p><strong>Chaos engineering</strong> is the practice of deliberately injecting failures in production (or production-like environments) to find these gaps <em>before</em> they find you. Pioneered by Netflix as Chaos Monkey; now mainstream at every serious production org.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The principle",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The principle</h2></div>\n    <div class=\"prose\">\n      <p>You cannot prove a system is resilient by reasoning about it. You can only prove it by breaking it. Once a week, randomly kill a server. Once a month, simulate a region outage. Did the system survive? If yes, your resilience is real. If no, you fix the gap during business hours instead of at 3am.</p>\n      <p>Counter-intuitively, the safer way to operate is to <em>continuously</em> create small failures so the system is always being exercised against them. Failures that happen weekly are well-understood; failures that happen yearly are catastrophes.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "The four-step loop",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">The four-step loop</h2></div>\n    <div class=\"prose\">\n      <ol>\n        <li><strong>Hypothesize</strong> a steady state. \"Latency P99 stays under 200ms; error rate stays under 0.1%.\"</li>\n        <li><strong>Inject failure</strong>. Kill a node. Block network to a region. Inject 500ms latency on a service-to-service call. Simulate disk-full.</li>\n        <li><strong>Observe</strong>. Did the steady-state hold? Did <a href=\"/concepts/circuit-breaker\">circuit breakers</a> trip? Did the <a href=\"/concepts/graceful-degradation\">fallback</a> engage?</li>\n        <li><strong>Fix any gap</strong>. The system <em>should</em> have absorbed this. If it didn't, that's a bug — file it, fix it, rerun the experiment to verify.</li>\n      </ol>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Netflix's Simian Army (and successors)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Netflix's Simian Army (and successors)</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Tool</th><th>What it does</th><th>What it teaches</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Chaos Monkey</td><td>Randomly terminates instances during business hours</td><td>\"Can my service survive a single node failure?\"</td></tr>\n        <tr><td class=\"algo-name\">Chaos Gorilla</td><td>Simulates an availability-zone outage</td><td>\"Does my service auto-failover to other AZs?\"</td></tr>\n        <tr><td class=\"algo-name\">Chaos Kong</td><td>Simulates a full region outage</td><td>\"Does my multi-region failover plan actually work?\"</td></tr>\n        <tr><td class=\"algo-name\">Latency Monkey</td><td>Adds artificial latency to service calls</td><td>\"Are my timeouts tight enough? Are circuit breakers wired?\"</td></tr>\n        <tr><td class=\"algo-name\">Conformity Monkey</td><td>Detects instances not matching standards (no health endpoint, etc.)</td><td>\"Is my fleet uniform enough to recover automatically?\"</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — running chaos in production safely",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — running chaos in production safely</h2></div>\n    <div class=\"prose\">\n      <p>\"Inject failures in production\" sounds reckless. Done right, it's the safest possible choice. Rules:</p>\n      <ul>\n        <li><strong>Start small.</strong> Begin with one instance in a non-critical service. Tiny blast radius.</li>\n        <li><strong>Define abort conditions.</strong> \"If error rate exceeds 1%, stop the experiment.\" Automated, not manual.</li>\n        <li><strong>Run during business hours.</strong> Engineers awake, ready to react. Not 3am.</li>\n        <li><strong>Communicate.</strong> Slack the on-call team before each experiment. No surprises.</li>\n        <li><strong>Build a game-day cadence.</strong> Once a quarter, planned multi-team exercises that simulate large-scale failures (region down, dependency dead). Whole org practices the response.</li>\n        <li><strong>Increase blast radius gradually.</strong> Single instance → single rack → single AZ → region. Each promotion only after the previous tier is reliable.</li>\n      </ul>\n      <p>Cost: experiments that uncover bugs are cheap relative to the outages they prevent. Netflix attributes much of its industry-leading uptime to this practice. The chaos team is funded by saved-incident dollars.</p>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">Interview answer</div>\n        <p>\"We run continuous chaos: random instance termination weekly, AZ-failover drills monthly, region failover quarterly. Each finds 1-2 production bugs we wouldn't have caught otherwise. Our uptime is high because the alternative — discovering these failures during a real outage — is unacceptable.\"</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Netflix Chaos Monkey</div><h4>Where it started</h4><p>Open-sourced 2012. Killed instances during business hours. Forced every Netflix service to handle node failure as a normal event.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Gremlin / LitmusChaos</div><h4>Managed chaos platforms</h4><p>SaaS for chaos engineering. Inject latency, packet loss, CPU pressure, disk pressure. Used by teams that don't want to build their own.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">AWS Fault Injection Simulator</div><h4>Cloud-native chaos</h4><p>Native AWS service for orchestrating failure scenarios. Stop EC2, throttle network, fail over RDS. Audit-friendly.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Google DiRT</div><h4>Disaster Recovery Testing</h4><p>Annual multi-day exercises. Take down entire datacenters in a controlled way. Catches systemic dependencies.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>News feed runs Chaos Monkey on the recommendation tier. YouTube/Netflix exercise CDN failovers via planned chaos. Payment gateway tests provider failover with simulated outages. E-commerce game-days the checkout flow before peak shopping seasons.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

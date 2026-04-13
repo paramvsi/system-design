@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-stock-exchange",
+  "title": "Stock Exchange — Matching Engine",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 30,
+    "s": 70,
+    "l": 50
+  },
+  "category": "Financial & Trading",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>Design a stock exchange. Price-time priority order matching, 100K trades/sec/symbol peak, &lt; 1ms p99 latency, strong consistency.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n      \n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>In-memory matching per symbol. One process per symbol. Serialized with a journal.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Pre-trade risk holds funds before matching. Trade settler writes double-entry ledger post-fill.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Single-threaded matching &gt; parallel. Determinism + replayable state &gt; throughput.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Per-symbol single-threaded matching engine with in-memory order book (price-time priority)</li>\n      <li><span class=\"rubric-points\">+2</span> Every mutation journaled (append-only log) before apply; deterministic replay on restart</li>\n      <li><span class=\"rubric-points\">+1</span> Pre-trade risk: balance-hold on order submit; rejected if insufficient</li>\n      <li><span class=\"rubric-points\">+1</span> Trade settler writes double-entry ledger (buyer/seller funds + instrument); idempotent by trade_id</li>\n      <li><span class=\"rubric-points\">+1</span> Market-data fanout via WS/multicast to subscribers; delta updates; &lt; 10ms latency target</li>\n      <li><span class=\"rubric-points\">+1</span> Hot vs cold order book: hot levels around mid-price; deep tail rarely touched</li>\n      <li><span class=\"rubric-points\">+1</span> Circuit breakers on extreme price moves; halt symbol on anomaly</li>\n      <li><span class=\"rubric-points\">+1</span> Clock-drift + jitter: deterministic sequence numbers from matching engine; not wall-clock</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Matching in a DB transaction (too slow for 100K/sec)</li>\n        <li>Parallel matching across symbols with no serialization (order crossings)</li>\n        <li>No journaling / replay (state lost on crash)</li>\n        <li>Single-machine matching for entire exchange (no per-symbol isolation)</li>\n        <li>Skipping pre-trade risk (allows negative-balance order)</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 1
+}

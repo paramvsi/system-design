@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Batch vs Stream Processing — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 50; --accent-s: 80%; --accent-l: 45%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>"Compute total revenue per day per product." Two answers exist:</p>
+      <ul>
+        <li><strong>Batch</strong>: at midnight, scan all of yesterday's orders, aggregate, write to dashboard. Latency: hours. Throughput: huge. Reproducible, cheap, easy.</li>
+        <li><strong>Stream</strong>: every order event flows through a continuous pipeline that updates the running total in real time. Latency: seconds. Throughput: also huge. Complex, more failure modes, but live.</li>
+      </ul>
+      <p>Same answer, very different architectures. Choose batch and you can't show "live revenue" to the dashboard. Choose stream and you pay 10× the operational complexity for analytics that don't need real-time. Most modern systems do both — Lambda / Kappa architectures formalize the split.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Spectrum of latency vs complexity</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Approach</th><th>Latency</th><th>Re-run on bug</th><th>Tools</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Batch (daily)</td><td>Hours-day</td><td>Trivial — re-run job on yesterday's data</td><td>Hadoop, Spark batch, dbt, BigQuery</td></tr>
+        <tr><td class="algo-name">Micro-batch (5 min)</td><td>Minutes</td><td>Re-run the affected windows</td><td>Spark Structured Streaming</td></tr>
+        <tr><td class="algo-name">Stream (event-time)</td><td>Seconds</td><td>Replay events from log; rebuild state</td><td>Flink, Kafka Streams, Beam</td></tr>
+        <tr><td class="algo-name">Synchronous (per-request)</td><td>Milliseconds</td><td>N/A — query computes on demand</td><td>OLTP DBs, materialized views</td></tr>
+      </tbody>
+    </table>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Latency vs Complexity Spectrum</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 720 240" xmlns="http://www.w3.org/2000/svg">
+          <g font-family="Geist, system-ui, sans-serif" font-size="11">
+            <!-- Latency axis -->
+            <line x1="80" y1="180" x2="700" y2="180" stroke="#ccc9c4" stroke-width="1.5"/>
+            <text x="80" y="200" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">1 ms</text>
+            <text x="240" y="200" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">1 s</text>
+            <text x="400" y="200" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">1 min</text>
+            <text x="560" y="200" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">1 hr</text>
+            <text x="700" y="200" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace" text-anchor="end">1 day</text>
+            <text x="390" y="222" text-anchor="middle" font-size="10" fill="#878480">end-to-end latency (log scale) →</text>
+
+            <!-- Tier dots -->
+            <g>
+              <circle cx="120" cy="80" r="26" fill="hsl(50,80%,90%)" stroke="hsl(50,75%,55%)" stroke-width="1.5"/>
+              <text x="120" y="78" text-anchor="middle" font-weight="500" font-size="10">Sync</text>
+              <text x="120" y="92" text-anchor="middle" font-size="9" fill="#878480">per-request</text>
+              <text x="120" y="135" text-anchor="middle" font-size="10">OLTP DB · materialized views</text>
+
+              <circle cx="280" cy="80" r="26" fill="hsl(50,80%,80%)" stroke="hsl(50,75%,45%)" stroke-width="1.5"/>
+              <text x="280" y="78" text-anchor="middle" font-weight="500" font-size="10">Stream</text>
+              <text x="280" y="92" text-anchor="middle" font-size="9" fill="#878480">event-time</text>
+              <text x="280" y="135" text-anchor="middle" font-size="10">Flink · Kafka Streams · Beam</text>
+
+              <circle cx="450" cy="80" r="26" fill="hsl(50,80%,72%)" stroke="hsl(50,75%,38%)" stroke-width="1.5"/>
+              <text x="450" y="78" text-anchor="middle" font-weight="500" font-size="10">Micro-batch</text>
+              <text x="450" y="92" text-anchor="middle" font-size="9" fill="#878480">5 min</text>
+              <text x="450" y="135" text-anchor="middle" font-size="10">Spark Structured Streaming</text>
+
+              <circle cx="630" cy="80" r="26" fill="hsl(50,80%,62%)" stroke="hsl(50,75%,30%)" stroke-width="1.5"/>
+              <text x="630" y="78" text-anchor="middle" font-weight="500" font-size="10">Batch</text>
+              <text x="630" y="92" text-anchor="middle" font-size="9" fill="#878480">nightly</text>
+              <text x="630" y="135" text-anchor="middle" font-size="10">Spark · Hadoop · dbt · BigQuery</text>
+            </g>
+            <!-- Anchor lines to axis -->
+            <line x1="120" y1="106" x2="120" y2="180" stroke="#ccc9c4" stroke-dasharray="3 2"/>
+            <line x1="280" y1="106" x2="280" y2="180" stroke="#ccc9c4" stroke-dasharray="3 2"/>
+            <line x1="450" y1="106" x2="450" y2="180" stroke="#ccc9c4" stroke-dasharray="3 2"/>
+            <line x1="630" y1="106" x2="630" y2="180" stroke="#ccc9c4" stroke-dasharray="3 2"/>
+
+            <!-- Complexity gradient -->
+            <text x="20" y="50" font-size="10" fill="#878480">low complexity ← → high complexity</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Why streaming is hard</h2></div>
+    <div class="prose">
+      <p>Batch is easy because the input is fixed: yesterday's data sits in a file, you process it, write output, done. Streaming has a moving input.</p>
+      <p>Headaches that don't exist in batch:</p>
+      <ul>
+        <li><strong>Late events.</strong> An event from 10 minutes ago arrives now. Did your "last 5 minutes" aggregate already finalize? Watermarks + windowing fix this — Flink and Beam build their model around it.</li>
+        <li><strong>Exactly-once.</strong> A pipeline restart should not double-count. Requires checkpointing of stream state + idempotent or transactional sinks (see <a href="/concepts/delivery-guarantees">delivery guarantees</a>).</li>
+        <li><strong>State.</strong> "Total revenue per product per minute" needs running sums. State must persist across restarts. Stream frameworks bake in keyed state stores backed by RocksDB.</li>
+        <li><strong>Backfilling.</strong> A bug fix means re-processing the last 7 days. In batch this is one job. In streaming, you need to replay from Kafka offsets — possible if you kept retention long enough.</li>
+      </ul>
+    
+      <div class="code-caption" data-code-snippet="1">Reservoir sampling (uniform sample from stream)</div>
+      <pre><code class="lang-python">import random
+
+def reservoir_sample(stream, k):
+    """Uniform sample of k items from unknown-length stream."""
+    sample = []
+    for i, item in enumerate(stream):
+        if i &lt; k:
+            sample.append(item)
+        else:
+            # Each new item has k / (i+1) probability of replacing
+            j = random.randint(0, i)
+            if j &lt; k:
+                sample[j] = item
+    return sample
+
+# Property: after processing N items, each of the N had equal k/N probability
+# of being in the final sample. O(1) memory, O(N) time.</code></pre>
+  </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Lambda vs Kappa architectures</h2></div>
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">Lambda architecture</div>
+        <h4>Run both batch + stream layers</h4>
+        <p>Batch layer = source of truth, recomputes from scratch nightly. Speed layer = streaming for live numbers. Serving layer merges both. <span class="hl-red">Costs:</span> two pipelines doing similar logic, kept in sync.</p>
+      </div>
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">Kappa architecture</div>
+        <h4>Stream is the only layer</h4>
+        <p>Everything is a stream from Kafka. To "rebuild," replay the log from offset zero into a fresh consumer. One codebase, one pipeline. <span class="hl-green">Wins</span> when stream tools mature enough that you don't need batch's reprocessing simplicity.</p>
+      </div>
+    </div>
+    <div class="prose">
+      <p>Modern systems lean Kappa. Flink + Kafka can replay months of events in hours, recomputing whatever you want. Batch lives on for cost-efficiency on truly massive backfills (years of data) and for analyst-facing SQL where latency doesn't matter.</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — Flink's stateful streaming</h2></div>
+    <div class="prose">
+      <p>Flink is the modern streaming gold standard. Its model:</p>
+      <ul>
+        <li><strong>Operators</strong> (map, filter, window, join) connected in a DAG.</li>
+        <li><strong>Keyed state</strong>: each operator can hold per-key state in an embedded RocksDB. "Sum revenue per product_id" maintains a counter per product key, persisting locally.</li>
+        <li><strong>Checkpoints</strong>: periodically (every few seconds), Flink snapshots all operator state + Kafka offsets in a coordinated barrier. On failure, rewinds to last checkpoint, replays Kafka from that offset, exactly-once semantics achieved.</li>
+        <li><strong>Watermarks</strong>: Flink tracks "we've seen all events up to time T." Windows close based on watermarks, not wall clock — handles late events correctly.</li>
+        <li><strong>Savepoints</strong>: manually-triggered snapshots. Use to upgrade Flink jobs without losing state.</li>
+      </ul>
+      <p>This combination — per-key state + checkpointing + watermarks + replay — gives streaming the same correctness guarantees that batch always had. Fraud detection, real-time dashboards, anomaly alerts at Uber, Netflix, Pinterest all run on Flink.</p>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Apache Spark</div><h4>Batch + micro-batch</h4><p>The dominant batch engine. Structured Streaming module adds micro-batch streaming with similar API.</p></div>
+      <div class="rw-card"><div class="rw-name">Apache Flink</div><h4>True streaming</h4><p>Event-time semantics, stateful processing, exactly-once. Used at Uber, Netflix, Alibaba for real-time analytics.</p></div>
+      <div class="rw-card"><div class="rw-name">Kafka Streams</div><h4>Library, not framework</h4><p>JVM library that turns Kafka into a streaming platform. Lighter than Flink; fewer features.</p></div>
+      <div class="rw-card"><div class="rw-name">dbt + Snowflake / BigQuery</div><h4>Modern batch analytics</h4><p>SQL-based batch transformations on cloud warehouses. Where most "analytics" actually lives — complement to streaming, not competitor.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Recommendation algorithm uses batch (nightly model retraining) + stream (live click events). Leaderboard streams scores in real time. Count active users uses streaming with HyperLogLog. Distributed logging is fundamentally a stream; analytics atop is batch.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

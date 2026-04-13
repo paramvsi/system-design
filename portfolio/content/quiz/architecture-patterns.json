@@ -1,0 +1,50 @@
+{
+  "slug": "architecture-patterns",
+  "cluster": "Architecture Patterns",
+  "blurb": "Monolith, microservices, event-driven, saga, CQRS.",
+  "accent": { "h": 250, "s": 55, "l": 50 },
+  "questions": [
+    {
+      "q": "Saga pattern vs 2-phase commit. Saga's key advantage?",
+      "choices": ["Faster", "No blocking locks across services — each service commits locally; compensate on failure", "Simpler code", "Lower memory"],
+      "correct": 1,
+      "explanation": "2PC holds locks across all participants until the coordinator decides. Fragile + slow across services. Saga: each step commits independently; failures trigger compensating actions. Eventual consistency tradeoff."
+    },
+    {
+      "q": "Event sourcing stores state as…",
+      "choices": ["Current snapshot", "Append-only log of events; derive state by replay", "Normalized tables", "Blob storage"],
+      "correct": 1,
+      "explanation": "Events are facts; state is derived. Replay to any point in time. Great audit trail. Downside: replay time grows → snapshots every N events. Popular for finance, ordering, gaming systems."
+    },
+    {
+      "q": "CQRS = Command-Query Responsibility Segregation. What does it separate?",
+      "choices": ["DB tables", "Write model (commands) and read model (queries) — often different stores", "Services", "APIs"],
+      "correct": 1,
+      "explanation": "Writes go to one model (OLTP, normalized). Reads go to a different model (denormalized, search index, materialized views). Updated via events. Scales reads + writes independently at cost of eventual consistency."
+    },
+    {
+      "q": "You have a monolith. Revenue is growing. When is the RIGHT time to split into microservices?",
+      "choices": ["Immediately at launch", "When team coordination + deploy friction exceed the cost of microservice infrastructure", "At 100K users", "Never"],
+      "correct": 1,
+      "explanation": "Microservices solve org-scaling problems (autonomous teams, independent deploys). Premature split = complexity without benefit. Extract when a bounded context has a clear, independent team."
+    },
+    {
+      "q": "Hexagonal / Ports-and-Adapters architecture. Main goal?",
+      "choices": ["Performance", "Isolate domain logic from external concerns (DB, HTTP) so it's swappable/testable", "Microservices", "Caching"],
+      "correct": 1,
+      "explanation": "Domain at the center; adapters for HTTP/DB/queue/etc wire in. Lets you test domain without I/O. Swap a Postgres adapter for in-memory in tests. The testability gain > the overhead."
+    },
+    {
+      "q": "Multi-tenancy: which provides the STRONGEST isolation at highest cost?",
+      "choices": ["Shared schema + tenant_id column", "Schema per tenant", "Database per tenant", "Cluster per tenant"],
+      "correct": 3,
+      "explanation": "Full cluster per tenant = blast radius = one tenant; max resource isolation; highest ops cost. Shared schema = cheapest, weakest isolation. Most SaaS trade off in the middle (schema or DB per tenant)."
+    },
+    {
+      "q": "BFF (Backend for Frontend) pattern. Who consumes it?",
+      "choices": ["Other backends", "A specific client type — one BFF per (web, iOS, Android) shape", "Internal admins", "Nobody"],
+      "correct": 1,
+      "explanation": "Each client has different needs (mobile: minimal payloads; web: richer). BFF layer tailors the API surface per client. Wraps N microservices into one client-optimized API."
+    }
+  ]
+}

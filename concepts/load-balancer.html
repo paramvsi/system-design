@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Load Balancer — System Design Concept</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+
+    :root {
+      --accent-h: 190; --accent-s: 70%; --accent-l: 42%;
+      --accent: hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light: hsl(var(--accent-h), 80%, 94%);
+      --accent-mid: hsl(var(--accent-h), 70%, 88%);
+      --accent-text: hsl(var(--accent-h), var(--accent-s), 32%);
+      --accent-border: hsl(var(--accent-h), 60%, 80%);
+      --hl-yellow:#fff0a0; --hl-yellow-dark:#a07a00;
+      --hl-accent: hsl(var(--accent-h), 90%, 88%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 30%);
+      --bg:#fff; --bg-subtle:#f7f7f5; --bg-raised:#f0eeeb; --bg-code:#f4f3f0;
+      --border:#e4e2de; --border-strong:#ccc9c4;
+      --text-primary:#111110; --text-secondary:#4a4845; --text-muted:#878480; --text-code:#2d2c2b;
+      --font-serif:'Instrument Serif',Georgia,serif;
+      --font-sans:'Geist',system-ui,sans-serif;
+      --font-mono:'JetBrains Mono','Fira Code',monospace;
+      --radius-sm:4px; --radius-md:8px; --radius-lg:12px;
+    }
+    .hero-desc { font-size: 14.5px; color: var(--text-secondary); max-width: 640px; line-height: 1.75; font-weight: 300; margin-bottom: 1.25rem; }
+    .hero-tags { display:flex; flex-wrap:wrap; gap:6px; }
+    .tag { font-family:var(--font-mono); font-size: 12px; padding:3px 10px; border-radius:20px; border:1px solid var(--border); color:var(--text-secondary); background:var(--bg-subtle); letter-spacing:0.02em; }
+    .tag.accent { background:var(--accent-light); color:var(--accent-text); border-color:var(--accent-border); font-weight:500; }
+    .section { margin-bottom: 3rem; scroll-margin-top: 72px; }
+    .section-head { display:flex; align-items:baseline; gap:10px; margin-bottom:1.25rem; padding-bottom:8px; border-bottom:1px solid var(--border); }
+    .section-n { font-family:var(--font-mono); font-size: 11px; color:var(--accent); opacity:.7; min-width:22px; letter-spacing:0.04em; }
+    .section-title { font-family:var(--font-sans); font-size:15px; font-weight:600; color:var(--text-primary); letter-spacing:-0.01em; }
+    .hl { background:var(--hl-yellow); color:var(--text-primary); padding:1px 4px; border-radius:3px; font-weight:500; }
+    .hl-accent { background:var(--hl-accent); color:var(--hl-accent-dark); padding:1px 4px; border-radius:3px; font-weight:500; }
+    .hl-red { background:#fce8e6; color:#8b1a12; padding:1px 4px; border-radius:3px; font-weight:500; }
+    .hl-green { background:#e4f5ec; color:#1a5c38; padding:1px 4px; border-radius:3px; font-weight:500; }
+    .prose { font-size: 16px; color:var(--text-secondary); font-weight:300; line-height:1.75; }
+    .prose p { margin-bottom:0.85em; } .prose p:last-child { margin-bottom:0; }
+    .prose strong { color:var(--text-primary); font-weight:600; }
+    .prose code { font-family:var(--font-mono); font-size: 13.5px; background:var(--bg-code); border:1px solid var(--border); border-radius:3px; padding:1px 5px; color:var(--text-code); }
+    .callout { border-left:3px solid var(--accent); padding:14px 18px; background:var(--accent-light); border-radius:0 var(--radius-md) var(--radius-md) 0; margin-bottom:16px; }
+    .callout-label { font-family:var(--font-mono); font-size: 11px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent-text); margin-bottom:4px; }
+    .callout p { font-size: 16px; color:var(--accent-text); margin-bottom:0; }
+    .callout.callout-warn { border-left-color:hsl(38,92%,50%); background:hsl(38,80%,94%); }
+    .callout.callout-warn .callout-label { color:hsl(38,70%,28%); }
+    .callout.callout-warn p { color:hsl(38,70%,28%); }
+    .callout.callout-good { border-left-color:hsl(145,55%,42%); background:hsl(145,60%,94%); }
+    .callout.callout-good .callout-label { color:hsl(145,55%,26%); }
+    .callout.callout-good p { color:hsl(145,55%,26%); }
+    .tradeoff-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+    .tradeoff-option { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 20px; }
+    .tradeoff-option.chosen { border-color:var(--accent-border); background:var(--accent-light); }
+    .tradeoff-label { font-family:var(--font-mono); font-size: 11px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; margin-bottom:6px; color:var(--text-muted); }
+    .tradeoff-option.chosen .tradeoff-label { color:var(--accent-text); }
+    .tradeoff-option h4 { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:6px; }
+    .tradeoff-option p { font-size: 15px; color:var(--text-secondary); margin-bottom:0; line-height:1.6; }
+    .scale-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:20px; }
+    .scale-card { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px; text-align:center; }
+    .scale-card .number { font-family:var(--font-mono); font-size:22px; font-weight:500; color:var(--accent-text); margin-bottom:2px; }
+    .scale-card .label { font-size: 13.5px; color:var(--text-muted); }
+    .algo-table { width:100%; border-collapse:collapse; font-size: 15px; border:1px solid var(--border); border-radius:var(--radius-md); overflow:hidden; margin-bottom:16px; }
+    .algo-table th { font-family:var(--font-mono); font-size: 11px; letter-spacing:0.06em; text-transform:uppercase; text-align:left; padding:10px 14px; background:var(--bg-subtle); color:var(--text-muted); border-bottom:1px solid var(--border); font-weight:500; }
+    .algo-table td { padding:10px 14px; border-bottom:1px solid var(--border); color:var(--text-secondary); vertical-align:top; }
+    .algo-table tr:last-child td { border-bottom:none; }
+    .algo-table .algo-name { font-family:var(--font-mono); font-size: 13.5px; color:var(--text-primary); font-weight:500; white-space:nowrap; }
+    .diagram-wrap { border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; margin-bottom:1rem; background:var(--bg); }
+    .diagram-head { display:flex; align-items:center; justify-content:space-between; padding:8px 14px; background:var(--bg-subtle); border-bottom:1px solid var(--border); }
+    .diagram-label { font-family:var(--font-mono); font-size: 11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted); }
+    .diagram-type { font-family:var(--font-mono); font-size: 11px; color:var(--accent); letter-spacing:0.04em; }
+    .diagram-body { padding:1.5rem; }
+    .arch-svg { width:100%; height:auto; display:block; }
+    .mermaid { display:flex; justify-content:center; }
+    .mermaid svg { max-width:100%; }
+    .real-world-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+    .rw-card { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 18px; }
+    .rw-card .rw-name { font-family:var(--font-mono); font-size: 12px; color:var(--accent); letter-spacing:0.04em; margin-bottom:4px; font-weight:500; }
+    .rw-card h4 { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:6px; }
+    .rw-card p { font-size: 15px; color:var(--text-secondary); line-height:1.55; margin:0; }
+  </style>
+</head>
+<body>
+
+<main>
+
+  <!-- 01 PROBLEM -->
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">The problem it solves</h2></div>
+    <div class="prose">
+      <p>A single server can serve maybe <span class="hl">a few thousand requests per second</span> before CPU, memory, or connection limits pin it. The moment your traffic crosses that ceiling, you have two options: buy a much bigger server (vertical scaling — expensive, has a hard ceiling, single point of failure) or put <span class="hl-accent">many cheap servers behind something that spreads traffic across them</span>. That "something" is a load balancer.</p>
+      <p>Without a load balancer, horizontal scaling is impossible. Clients would need to know every backend server by IP, pick one, and retry when it's down. The load balancer hides the fleet behind one stable address and deals with failure, capacity, and routing on the client's behalf.</p>
+      <div class="callout">
+        <div class="callout-label">What it actually does</div>
+        <p>Terminates client connections, picks a healthy backend, forwards the request, and returns the response. Bonus: it pulls dead servers out of rotation within seconds and handles TLS termination so backends can speak plain HTTP internally.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 INTUITION -->
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Intuition</h2></div>
+    <div class="prose">
+      <p>Picture a grocery store on Sunday afternoon. Twelve checkout lanes are open. You don't walk in and pick lane 7 because you memorised it — you look for the <strong>shortest queue</strong>, or a greeter directs you to the next free cashier. If a cash register breaks, the greeter stops sending you there. If the store gets busier, they open more lanes.</p>
+      <p>The greeter is a load balancer. The cashiers are your backend servers. The shoppers are your requests. The whole point: <span class="hl">the shoppers don't need to know which cashiers exist</span> — they just enter the store and get served.</p>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Traffic Spreading</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="lb-arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0,8 3,0 6" fill="#9ca3af"/>
+            </marker>
+          </defs>
+          <g font-family="Geist, system-ui, sans-serif" font-size="12">
+            <!-- Clients -->
+            <rect x="20" y="40" width="90" height="36" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="65" y="62" text-anchor="middle" fill="#111110">Client A</text>
+            <rect x="20" y="100" width="90" height="36" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="65" y="122" text-anchor="middle" fill="#111110">Client B</text>
+            <rect x="20" y="160" width="90" height="36" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="65" y="182" text-anchor="middle" fill="#111110">Client C</text>
+            <rect x="20" y="220" width="90" height="36" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="65" y="242" text-anchor="middle" fill="#111110">Client D</text>
+
+            <!-- LB -->
+            <rect x="270" y="120" width="160" height="60" rx="10" fill="hsl(190,80%,94%)" stroke="hsl(190,60%,80%)" stroke-width="1.5"/>
+            <text x="350" y="148" text-anchor="middle" font-weight="500" fill="hsl(190,70%,28%)">Load Balancer</text>
+            <text x="350" y="166" text-anchor="middle" font-size="10" font-family="JetBrains Mono, monospace" fill="#878480">one stable address</text>
+
+            <!-- Lines client → LB -->
+            <line x1="110" y1="58"  x2="270" y2="140" stroke="#ccc9c4" stroke-width="1.5" marker-end="url(#lb-arr)"/>
+            <line x1="110" y1="118" x2="270" y2="148" stroke="#ccc9c4" stroke-width="1.5" marker-end="url(#lb-arr)"/>
+            <line x1="110" y1="178" x2="270" y2="156" stroke="#ccc9c4" stroke-width="1.5" marker-end="url(#lb-arr)"/>
+            <line x1="110" y1="238" x2="270" y2="166" stroke="#ccc9c4" stroke-width="1.5" marker-end="url(#lb-arr)"/>
+
+            <!-- Backends -->
+            <rect x="570" y="30"  width="130" height="44" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="635" y="56" text-anchor="middle">Server 1</text>
+            <rect x="570" y="90"  width="130" height="44" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="635" y="116" text-anchor="middle">Server 2</text>
+            <rect x="570" y="150" width="130" height="44" rx="6" fill="#fff" stroke="#ccc9c4"/>
+            <text x="635" y="176" text-anchor="middle">Server 3</text>
+            <rect x="570" y="210" width="130" height="44" rx="6" fill="#fafafa" stroke="#e4e2de" stroke-dasharray="4 3"/>
+            <text x="635" y="232" text-anchor="middle" fill="#878480">Server 4 · down</text>
+            <text x="635" y="246" text-anchor="middle" font-size="9" fill="#878480">(drained)</text>
+
+            <!-- LB → backends -->
+            <line x1="430" y1="140" x2="570" y2="52"  stroke="hsl(190,60%,60%)" stroke-width="1.5" marker-end="url(#lb-arr)"/>
+            <line x1="430" y1="150" x2="570" y2="112" stroke="hsl(190,60%,60%)" stroke-width="1.5" marker-end="url(#lb-arr)"/>
+            <line x1="430" y1="160" x2="570" y2="172" stroke="hsl(190,60%,60%)" stroke-width="1.5" marker-end="url(#lb-arr)"/>
+            <!-- dashed X-ed out route -->
+            <line x1="430" y1="170" x2="570" y2="232" stroke="#e4e2de" stroke-width="1.5" stroke-dasharray="4 4"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 HOW IT WORKS -->
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">How it works</h2></div>
+    <div class="prose">
+      <p>A request arrives at the load balancer's IP. The LB does four things:</p>
+      <ol>
+        <li><strong>Accepts the connection</strong> (TCP SYN/ACK) and optionally terminates TLS so it can read HTTP headers.</li>
+        <li><strong>Picks a backend</strong> using a chosen algorithm (see §4) — round robin, least connections, IP hash, etc.</li>
+        <li><strong>Opens or reuses a connection</strong> to that backend and forwards bytes. The client has no idea which backend answered.</li>
+        <li><strong>Watches health continuously</strong>: every <code>healthCheckInterval</code> (often 2–5s), the LB pings each backend on a known path like <code>/health</code>. Three failed checks in a row → the backend is yanked out of rotation. The next time a check succeeds, it's put back.</li>
+      </ol>
+      <p>There's a subtle detail here: <span class="hl">health checks decide fleet membership, not the request router</span>. The router only picks from backends the health checker has marked healthy. This decoupling is why a load balancer can remove a crashing server in 5 seconds without the router needing to know anything about crashes.</p>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Request Lifecycle</span>
+        <span class="diagram-type">Mermaid.js</span>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant LB as Load Balancer
+    participant HC as Health Checker
+    participant S1 as Server 1
+    participant S2 as Server 2
+
+    Note over HC,S2: Every 3s — running in background
+    HC->>S1: GET /health
+    S1-->>HC: 200 OK
+    HC->>S2: GET /health
+    S2-->>HC: timeout
+    Note over HC: S2 marked unhealthy after 3 fails
+
+    C->>LB: POST /api/order
+    Note over LB: Pick from {S1} only
+    LB->>S1: Forward request
+    S1-->>LB: 201 Created
+    LB-->>C: 201 Created
+
+    Note over HC,S2: S2 comes back up
+    HC->>S2: GET /health
+    S2-->>HC: 200 OK
+    Note over HC: S2 re-added to pool
+        </div>
+      </div>
+    </div>
+
+    <div class="scale-grid">
+      <div class="scale-card"><div class="number">~100μs</div><div class="label">LB overhead per request</div></div>
+      <div class="scale-card"><div class="number">2–5s</div><div class="label">health check interval</div></div>
+      <div class="scale-card"><div class="number">3×</div><div class="label">failures before removal</div></div>
+      <div class="scale-card"><div class="number">30–60s</div><div class="label">drain time (in-flight requests)</div></div>
+    </div>
+  </section>
+
+  <!-- 04 VARIANTS -->
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Variants — Layer 4 vs Layer 7, and the algorithm menu</h2></div>
+    <div class="prose">
+      <p>The single biggest decision is <strong>what layer you operate at</strong>. Everything else flows from it.</p>
+    </div>
+
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">Layer 4 · Transport</div>
+        <h4>Forwards TCP/UDP packets</h4>
+        <p>The LB sees the 4-tuple (src IP, src port, dst IP, dst port) and picks a backend once per connection. It doesn't read the HTTP request — it just shovels bytes. <strong>Pros:</strong> very fast, handles any protocol, fewer moving parts. <strong>Cons:</strong> can't route by URL path, can't decrypt TLS, can't add a trailing <code>/</code>.</p>
+      </div>
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">Layer 7 · Application</div>
+        <h4>Understands HTTP (the usual choice)</h4>
+        <p>The LB parses the request line and headers, so it can route <code>/api/*</code> to one service and <code>/images/*</code> to another, do sticky sessions by cookie, add auth headers, terminate TLS, compress responses. <strong>Pros:</strong> content-aware routing is a superpower. <strong>Cons:</strong> higher CPU cost; you're on the critical path for every byte.</p>
+      </div>
+    </div>
+
+    <div class="prose"><p>Once you've picked a layer, you pick an algorithm for distributing load across backends:</p></div>
+
+    <table class="algo-table">
+      <thead>
+        <tr><th>Algorithm</th><th>How it picks</th><th>Best for</th><th>Watch out for</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="algo-name">Round Robin</td>
+          <td>Rotates: 1 → 2 → 3 → 1 → …</td>
+          <td>Stateless services, uniform request cost</td>
+          <td>Ignores that request #42 was a 10-second report — the slow backend gets the next request too</td>
+        </tr>
+        <tr>
+          <td class="algo-name">Least Connections</td>
+          <td>Sends to the backend with fewest open connections right now</td>
+          <td>Long-lived connections (WebSockets, DB proxies), variable request cost</td>
+          <td>"Connection count ≠ work" — a backend idle on 5 long polls looks busier than one grinding CPU on 2</td>
+        </tr>
+        <tr>
+          <td class="algo-name">IP Hash</td>
+          <td><code>hash(client_ip) % N</code> picks the backend</td>
+          <td>Poor-man's sticky sessions without cookies</td>
+          <td>Rebalances wildly when N changes (use <a href="/concepts/consistent-hashing">consistent hashing</a>)</td>
+        </tr>
+        <tr>
+          <td class="algo-name">Weighted RR</td>
+          <td>Bigger servers get more turns — e.g., 4:2:1</td>
+          <td>Mixed fleet (some old boxes, some new)</td>
+          <td>Manual weights drift out of date as hardware ages</td>
+        </tr>
+        <tr>
+          <td class="algo-name">Power of Two Choices (P2C)</td>
+          <td>Pick 2 random backends, send to the one with fewer active requests</td>
+          <td>Most modern systems — near-optimal with almost no state</td>
+          <td>Nothing obvious. This is what Envoy and AWS ALB default to.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout callout-good">
+      <div class="callout-label">Default to this</div>
+      <p>For most HTTP APIs: <strong>L7 load balancing + Power-of-Two-Choices</strong>. It handles variable request cost gracefully, routes by path, and doesn't need the tuning of RR or least-conn.</p>
+    </div>
+  </section>
+
+  <!-- 05 TRADEOFFS -->
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Tradeoffs — when NOT to reach for a load balancer</h2></div>
+    <div class="prose">
+      <p>Load balancers buy you scale and availability, but they cost:</p>
+      <ul>
+        <li><strong>Latency</strong> — an extra network hop (~0.1–1ms inside a region, worse across AZs).</li>
+        <li><strong>Cost</strong> — an AWS ALB at 1M requests/hour runs roughly $20/day per LB. Not free.</li>
+        <li><strong>A new failure mode</strong> — the LB itself. Mitigate with multiple LB instances, DNS round-robin between them, and anycast IPs.</li>
+        <li><strong>Stickiness headaches</strong> — if your backends hold session state in memory, the LB has to route the same user to the same server (cookie-based sticky sessions). This defeats the point of a fleet. <span class="hl-red">Fix the stickiness at the backend layer</span> — make services stateless and put session state in Redis.</li>
+      </ul>
+      <p>You can skip a load balancer when:</p>
+      <ul>
+        <li>Traffic is low enough that one server handles it with room to spare and you don't need HA.</li>
+        <li>The clients are inside your VPC and you can use <strong>client-side load balancing</strong> — the client itself has the backend list (via service discovery) and picks one. This is how gRPC load balancing and Netflix's Ribbon work. No dedicated LB in the path.</li>
+        <li>DNS round-robin is enough (e.g., read-only static content, accept slow failover).</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 06 DEEP DIVE -->
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Deep dive — Why Power of Two Choices wins</h2></div>
+    <div class="prose">
+      <p>Imagine 1000 requests arriving at 100 backends. With <strong>random</strong> placement, the most-loaded backend ends up with about <code>log N / log log N</code> ≈ <span class="hl">5–6 requests</span> when the average is 10. That 50–60% overload on the hot backend is the tail latency you see.</p>
+      <p>With <strong>round robin</strong>, load is perfectly balanced <em>if</em> every request costs the same. They don't. One slow query on server 3 makes round robin keep sending it more work.</p>
+      <p>With <strong>least connections</strong>, the LB tracks the exact load of every backend. That's O(N) state per decision, and requires constant updates — expensive at scale.</p>
+      <p><strong>Power of Two Choices</strong> (Mitzenmacher, 1996): pick any two backends at random, send the request to the less-loaded of the two. With almost no state, the max load drops from <code>log N / log log N</code> to <span class="hl-accent"><code>log log N / log 2</code></span> — for N=100, that's ~3.3, nearly half of random. The math is surprising and it's called the "power of two" exactly because two choices already captures most of the gain; going to three barely helps.</p>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Max Load vs Strategy</span>
+        <span class="diagram-type">Mermaid.js</span>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+flowchart LR
+    A[Random<br/>max ≈ log N / log log N] --> B[Power of Two<br/>max ≈ log log N]
+    B --> C[Perfect Round Robin<br/>max = ceiling of avg]
+    style A fill:#fce8e6,stroke:#b03a2e
+    style B fill:#e4f5ec,stroke:#1a5c38
+    style C fill:#e4f5ec,stroke:#1a5c38
+        </div>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>Real systems go one step further — <strong>P2C + EWMA</strong> (exponentially-weighted moving average of response time). Instead of "connection count," each backend tracks its recent latency. The LB picks two random backends and routes to the one with lower EWMA. This is what Envoy's <code>LEAST_REQUEST</code> with <code>v2_least_request_lb_config.choice_count=2</code> actually does.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"Default to L7 load balancing with Power of Two Choices. It's within a few percent of optimal, requires no per-backend state, and degrades gracefully when the fleet is heterogeneous."</p>
+      </div>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Max Load — 1000 Requests over 100 Backends</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 720 240" xmlns="http://www.w3.org/2000/svg">
+          <g font-family="Geist, system-ui, sans-serif" font-size="11">
+            <text x="360" y="22" text-anchor="middle" font-weight="500">Average load = 10 / backend · How high does the max go?</text>
+            <!-- Bars -->
+            <g>
+              <text x="100" y="60" text-anchor="middle" font-weight="500">Random</text>
+              <rect x="60"  y="80" width="80" height="120" fill="#f0eeeb" stroke="#ccc9c4" rx="4"/>
+              <rect x="60"  y="113" width="80" height="87" fill="hsl(0,70%,55%)" rx="2"/>
+              <text x="100" y="218" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="hsl(0,70%,40%)" font-weight="500">~6.2</text>
+              <text x="100" y="233" text-anchor="middle" font-size="9" fill="#878480">log N / log log N</text>
+
+              <text x="240" y="60" text-anchor="middle" font-weight="500">Round Robin</text>
+              <rect x="200" y="80" width="80" height="120" fill="#f0eeeb" stroke="#ccc9c4" rx="4"/>
+              <rect x="200" y="186" width="80" height="14" fill="hsl(45,80%,55%)" rx="2"/>
+              <text x="240" y="218" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="hsl(45,80%,30%)" font-weight="500">10.0</text>
+              <text x="240" y="233" text-anchor="middle" font-size="9" fill="#878480">perfect if uniform cost</text>
+
+              <text x="380" y="60" text-anchor="middle" font-weight="500">P2C</text>
+              <rect x="340" y="80" width="80" height="120" fill="#f0eeeb" stroke="#ccc9c4" rx="4"/>
+              <rect x="340" y="156" width="80" height="44" fill="hsl(145,55%,42%)" rx="2"/>
+              <text x="380" y="218" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="hsl(145,55%,28%)" font-weight="500">~3.3</text>
+              <text x="380" y="233" text-anchor="middle" font-size="9" fill="#878480">log log N / log 2</text>
+
+              <text x="520" y="60" text-anchor="middle" font-weight="500">Least Conn</text>
+              <rect x="480" y="80" width="80" height="120" fill="#f0eeeb" stroke="#ccc9c4" rx="4"/>
+              <rect x="480" y="158" width="80" height="42" fill="hsl(190,70%,42%)" rx="2"/>
+              <text x="520" y="218" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="hsl(190,70%,28%)" font-weight="500">~3.5</text>
+              <text x="520" y="233" text-anchor="middle" font-size="9" fill="#878480">O(N) state per pick</text>
+
+              <text x="660" y="60" text-anchor="middle" font-weight="500">P2C+EWMA</text>
+              <rect x="620" y="80" width="80" height="120" fill="#f0eeeb" stroke="#ccc9c4" rx="4"/>
+              <rect x="620" y="170" width="80" height="30" fill="hsl(145,55%,42%)" rx="2"/>
+              <text x="660" y="218" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="hsl(145,55%,28%)" font-weight="500">~2.4</text>
+              <text x="660" y="233" text-anchor="middle" font-size="9" fill="#878480">Envoy default</text>
+            </g>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- 07 REAL WORLD -->
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Real-world systems</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card">
+        <div class="rw-name">AWS ALB</div>
+        <h4>Managed L7 load balancer</h4>
+        <p>Default choice inside AWS. Round robin + least outstanding requests. Terminates TLS, integrates with Cognito for auth, and handles path/host-based routing to multiple target groups.</p>
+      </div>
+      <div class="rw-card">
+        <div class="rw-name">AWS NLB</div>
+        <h4>Managed L4 load balancer</h4>
+        <p>For TCP/UDP (gaming, VoIP, non-HTTP). Handles millions of RPS with single-digit millisecond overhead. Preserves client IP via proxy protocol.</p>
+      </div>
+      <div class="rw-card">
+        <div class="rw-name">HAProxy</div>
+        <h4>Open-source, battle-tested</h4>
+        <p>Runs the vast majority of the world's non-cloud L4/L7 load balancing. Config-file driven, single binary, microsecond latency.</p>
+      </div>
+      <div class="rw-card">
+        <div class="rw-name">Nginx</div>
+        <h4>Reverse proxy + load balancer</h4>
+        <p>Dual-purpose: serves static content AND load-balances to upstreams. Common in front of application servers as an L7 LB.</p>
+      </div>
+      <div class="rw-card">
+        <div class="rw-name">Envoy</div>
+        <h4>Modern service-mesh data plane</h4>
+        <p>What Istio, Consul Connect, and Lyft (who built it) use. First-class P2C support, gRPC-native, xDS API for dynamic config. The best-of-breed L7 LB in 2025.</p>
+      </div>
+      <div class="rw-card">
+        <div class="rw-name">Cloudflare</div>
+        <h4>Global L7 at the edge</h4>
+        <p>Load-balancing across your origin servers, usually with DNS steering + health checks. Anycast means the LB runs in ~300 PoPs simultaneously.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 08 USED IN (rendered by React from _concept-problem-links.json) -->
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">08</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>The sidebar shows every problem page in this portfolio where a load balancer sits in the architecture. Nearly every high-traffic system uses one — the exceptions are single-tenant admin tools and batch pipelines.</p></div>
+  </section>
+
+</main>
+
+</body>
+</html>

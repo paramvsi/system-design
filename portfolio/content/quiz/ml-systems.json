@@ -1,0 +1,50 @@
+{
+  "slug": "ml-systems",
+  "cluster": "ML Systems",
+  "blurb": "Feature stores, model serving, training pipelines, LLMs.",
+  "accent": { "h": 300, "s": 55, "l": 52 },
+  "questions": [
+    {
+      "q": "Training/serving skew is caused by…",
+      "choices": ["Different GPU types", "Features computed differently at training vs serving time (e.g., different timezone logic)", "Dataset too small", "Learning rate"],
+      "correct": 1,
+      "explanation": "Feature logic drift: offline pipeline in Spark, online serving in Go — subtle differences (rounding, nulls) = different inputs to the SAME model → degraded predictions. Shared feature store fixes this."
+    },
+    {
+      "q": "Online model serving: what's the typical latency budget for fraud scoring on a payment?",
+      "choices": ["5 minutes", "< 100 ms end-to-end", "1 second", "1 ms"],
+      "correct": 1,
+      "explanation": "Payment auth blocks on the fraud call. <100ms is standard: ~5ms rules → 30ms feature fetch → 10ms model → 5ms decision + headroom. Miss the budget = transaction UX tanks."
+    },
+    {
+      "q": "Which model type is best for tabular features with strict latency budget?",
+      "choices": ["Deep neural net", "Gradient-boosted decision trees (GBDT: XGBoost/LightGBM)", "Transformer", "Linear regression"],
+      "correct": 1,
+      "explanation": "GBDT wins at tabular data: fast inference (tree walks), interpretable (SHAP), handles mixed types, competitive accuracy. Neural nets shine on unstructured (text, image)."
+    },
+    {
+      "q": "LLM serving: what does KV-cache do for a chat session?",
+      "choices": ["Caches requests", "Stores attention key/value tensors for prior tokens — skip re-computing them on each new token", "Compresses output", "Warms the model"],
+      "correct": 1,
+      "explanation": "Autoregressive generation: each new token's attention depends on all prior tokens. Without KV-cache: O(N²) recomputation per token. With KV-cache: O(N). 10–100× speedup for long contexts."
+    },
+    {
+      "q": "Shadow mode / shadow deployment — what is it for?",
+      "choices": ["Cost saving", "Run new model alongside production, compare outputs, but serve old — safe evaluation", "Load testing", "Dark launch"],
+      "correct": 1,
+      "explanation": "New model runs on real traffic but its predictions don't affect users. Compare to prod model on real data. Catches accuracy regressions before canary. No user risk."
+    },
+    {
+      "q": "Embedding-based semantic search: which data structure for fast nearest-neighbor retrieval over millions of vectors?",
+      "choices": ["Hash table", "HNSW / IVF (approximate nearest neighbor index)", "Sorted list", "B-tree"],
+      "correct": 1,
+      "explanation": "Exact k-NN is O(N·d). HNSW (hierarchical navigable small world) gives 95%+ recall at millisecond latency on millions of vectors. Pinecone, Weaviate, FAISS all use ANN variants."
+    },
+    {
+      "q": "Feature pipeline: online vs offline store. Why both?",
+      "choices": ["Cost", "Offline (batch) for training; online (low-latency) for serving — keep computed features consistent across both", "Redundancy", "Legal"],
+      "correct": 1,
+      "explanation": "Offline: Spark jobs computing historical features for training. Online: Redis/Bigtable for sub-10ms reads during serving. Same feature logic → same feature values. Prevents skew."
+    }
+  ]
+}

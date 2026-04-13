@@ -1,0 +1,77 @@
+{
+  "slug": "gossip-protocols",
+  "title": "Gossip Protocols",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 140,
+    "s": 55,
+    "l": 42
+  },
+  "category": "Distributed Systems",
+  "blurb": "1000 nodes in a Cassandra cluster. Each needs to know about the others — who's alive, what ranges they own, their load. Centralized approach (one server polls all 1000) creates a SPOF and a bottleneck. Broadcasting (each",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>1000 nodes in a Cassandra cluster. Each needs to know about the others — who's alive, what ranges they own, their load. Centralized approach (one server polls all 1000) creates a <span class=\"hl-red\">SPOF and a bottleneck</span>. Broadcasting (each node tells all 999 others) creates N² messages — <span class=\"hl-red\">1M pings per cycle</span>. Neither scales.</p>\n      <p>Gossip protocols (based on epidemic spreading) are the middle way: each node randomly picks a few peers each second, exchanges state, and in logarithmic time the whole cluster learns everything. It's what Cassandra, DynamoDB internal, Consul, Redis Cluster, and Hashicorp Serf all use for membership and failure detection.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "How gossip spreads",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">How gossip spreads</h2></div>\n    <div class=\"prose\">\n      <p>Every second, each node picks <strong>K random peers</strong> (typically K=1–3) and exchanges its full view of the cluster. If node A knows \"B is down,\" and A tells C, then C tells D next tick, by tick 3 everyone knows in a 1000-node cluster.</p>\n      <p>The math: with K=1, rumor propagation time is O(log N). 1000 nodes → 10 ticks → ~10 seconds. Small K, cluster-wide consistency in seconds, without any central coordinator.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "What gossip carries",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">What gossip carries</h2></div>\n    <div class=\"prose\">\n      <p>Each node maintains a <strong>membership list</strong>: every node's ID, status (alive / suspect / dead), heartbeat timestamp, and metadata (token range, load, version). Gossip exchanges swap these lists — whoever has the fresher entry (higher heartbeat or newer version) wins.</p>\n      <p>Three typical payload types:</p>\n      <ul>\n        <li><strong>Membership</strong> — who's in the cluster. Nodes join by gossiping their existence; peers propagate.</li>\n        <li><strong>Failure detection</strong> — heartbeats. Each node bumps its own heartbeat counter; peers gossip the latest heartbeat they've seen. Old heartbeat → suspect → dead.</li>\n        <li><strong>State</strong> — application-level data (token ranges, schema version, load averages).</li>\n      </ul>\n    </div>\n\n    <div class=\"diagram-wrap\">\n      <div class=\"diagram-head\"><span class=\"diagram-label\">Gossip Propagation</span><span class=\"diagram-type\">Mermaid</span></div>\n      <div class=\"diagram-body\">\n        <div class=\"mermaid\">\nsequenceDiagram\n    participant A\n    participant B\n    participant C\n    participant D\n\n    Note over A: A knows: B↑ C↑ D↑\n    Note over B: B knows: A↑ C↑ D↑\n    Note over C: C crashes\n\n    Note over A,D: Tick 1 — random gossip\n    A-&gt;&gt;B: heartbeats\n    B--&gt;&gt;A: heartbeats\n    Note over D: D tried gossip to C, timeout → mark C suspect\n    D-&gt;&gt;A: C=suspect\n    A--&gt;&gt;D: heartbeats\n\n    Note over A,D: Tick 2\n    A-&gt;&gt;B: C=suspect (propagated)\n    B--&gt;&gt;A: ack\n    D-&gt;&gt;B: heartbeats, C=suspect\n    B--&gt;&gt;D: ack\n    Note over A,D: After K ticks: entire cluster knows C is down\n        </div>\n      </div>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Push vs pull vs push-pull",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Push vs pull vs push-pull</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Style</th><th>Initiator sends</th><th>Peer replies</th><th>Use when</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Push</td><td>My state</td><td>Nothing</td><td>Many updates to spread; new info originates at one node</td></tr>\n        <tr><td class=\"algo-name\">Pull</td><td>\"Tell me yours\"</td><td>Their state</td><td>Few updates; nodes just want to stay fresh</td></tr>\n        <tr><td class=\"algo-name\">Push-pull</td><td>My state</td><td>Their state (diff)</td><td>Default for most protocols; fastest convergence</td></tr>\n      </tbody>\n    </table>\n    <div class=\"prose\">\n      <p>Most production gossip protocols (Serf, Cassandra, Consul) use push-pull. It halves the convergence time compared to push-only.</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — SWIM, the failure detector",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — SWIM, the failure detector</h2></div>\n    <div class=\"prose\">\n      <p>SWIM (Scalable Weakly-consistent Infection-style Membership, Das et al., 2002) is the most common failure-detection gossip variant. Used in Serf, Memberlist (Consul, Nomad), and many others.</p>\n      <p>Each tick, every node picks one random peer and sends a <strong>ping</strong>. If no response within timeout, node sends <strong>indirect pings</strong> through K random other peers (\"hey, can you ping this guy for me?\"). If indirect pings also fail, mark suspect. After more ticks without hearing from it, mark dead.</p>\n      <p>The indirect-ping trick is the key insight: a direct ping might fail because of network flap <em>between me and target</em>. But if three other random nodes also can't reach it, it's probably actually dead. This gives much lower false-positive rates than \"one missed ping = dead.\"</p>\n      <p><strong>Propagation.</strong> Membership changes (joined, suspect, dead) ride as piggyback payload on regular ping-ack exchanges. No separate broadcast. Epidemic-style spread means all nodes learn in O(log N) ticks.</p>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "What gossip can't do",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">What gossip can't do</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>Strong consistency.</strong> Gossip is eventually consistent — use <a href=\"/concepts/consensus-paxos-raft\">Raft/Paxos</a> when you need \"exactly one leader\" or \"majority-agreed value.\"</li>\n        <li><strong>Low-latency writes.</strong> New info spreads in seconds, not microseconds. Don't gossip per-request data.</li>\n        <li><strong>Bandwidth-sensitive.</strong> Each tick exchanges full membership state. At 10k nodes the membership list itself is MBs. Hybrid designs (SWIM + delta-only gossip) manage this.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Cassandra</div><h4>Gossip for everything</h4><p>Token ownership, schema version, node health — all gossip. New node joins by contacting one existing node; within a minute the whole cluster knows.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Consul / Serf</div><h4>SWIM-based</h4><p>HashiCorp's Serf (and Consul) use SWIM for cluster membership. Open-source reference implementation.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Redis Cluster</div><h4>Gossip for cluster state</h4><p>Every Redis node gossips with a few peers on a separate port (node port + 10000). Slot ownership, master-replica pairs, failover.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">DynamoDB / S3 internals</div><h4>Gossip underneath</h4><p>The original Dynamo paper described gossip for membership. Modern DynamoDB uses it internally for partition metadata.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "08",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">08</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Count active users uses gossip-like approximation algorithms (HyperLogLog unions). Distributed logging uses gossip for log-ingest membership.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [
+    {
+      "sectionId": "how-it-works",
+      "source": "sequenceDiagram\n    participant A\n    participant B\n    participant C\n    participant D\n\n    Note over A: A knows: B↑ C↑ D↑\n    Note over B: B knows: A↑ C↑ D↑\n    Note over C: C crashes\n\n    Note over A,D: Tick 1 — random gossip\n    A->>B: heartbeats\n    B-->>A: heartbeats\n    Note over D: D tried gossip to C, timeout → mark C suspect\n    D->>A: C=suspect\n    A-->>D: heartbeats\n\n    Note over A,D: Tick 2\n    A->>B: C=suspect (propagated)\n    B-->>A: ack\n    D->>B: heartbeats, C=suspect\n    B-->>D: ack\n    Note over A,D: After K ticks: entire cluster knows C is down",
+      "index": 0
+    }
+  ],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

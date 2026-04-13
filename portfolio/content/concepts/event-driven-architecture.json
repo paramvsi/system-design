@@ -1,0 +1,65 @@
+{
+  "slug": "event-driven-architecture",
+  "title": "Event-Driven Architecture",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 305,
+    "s": 60,
+    "l": 48
+  },
+  "category": "Architecture Patterns",
+  "blurb": "Order placed. Now: charge card, decrement inventory, send confirmation email, notify warehouse, update analytics, trigger fraud check, alert support if VIP. Six things must happen.",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>Order placed. Now: charge card, decrement inventory, send confirmation email, notify warehouse, update analytics, trigger fraud check, alert support if VIP. Six things must happen.</p>\n      <p>The naive \"request-response\" approach: the order service synchronously calls all six. Tightly coupled. Slow (sum of all six latencies). One fails → everything fails. Adding a seventh thing requires deploying the order service.</p>\n      <p><strong>Event-driven architecture (EDA)</strong>: the order service publishes one event (\"OrderPlaced\") and walks away. The six interested services subscribe, each reacts independently. Loose coupling. Async. New consumers added without touching the producer. Modern systems run on this pattern.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "EDA vs request-response",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">EDA vs request-response</h2></div>\n    <div class=\"tradeoff-grid\">\n      <div class=\"tradeoff-option\">\n        <div class=\"tradeoff-label\">Request-response</div>\n        <h4>Producer commands consumer</h4>\n        <p>\"OrderService.placeOrder() calls PaymentService.charge() calls EmailService.send()\". Producer knows about every consumer. Sequential. Each call must succeed or the chain fails.</p>\n      </div>\n      <div class=\"tradeoff-option chosen\">\n        <div class=\"tradeoff-label\">Event-driven</div>\n        <h4>Producer announces; consumers react</h4>\n        <p>\"OrderPlaced event published to a topic\". Anyone subscribes. Producer doesn't know who's listening. Async by default. Each consumer fails independently.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "The three EDA flavors",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">The three EDA flavors</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Pattern</th><th>What it adds</th><th>Use when</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Notification events</td><td>\"X happened\" — payload is minimal, consumers query back for details</td><td>Many consumers; payload is large or sensitive</td></tr>\n        <tr><td class=\"algo-name\">Event-carried state transfer</td><td>Event carries a snapshot of changed state — consumers don't need to query back</td><td>Consumers need the data; want to reduce coupling further</td></tr>\n        <tr><td class=\"algo-name\"><a href=\"/concepts/event-sourcing-cqrs\">Event sourcing</a></td><td>Events ARE the state — current state derived by replay</td><td>Auditability, time-travel, financial systems</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "variants",
+      "label": "Choreography vs orchestration",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Choreography vs orchestration</h2></div>\n    <div class=\"prose\">\n      <p>How does a multi-step business process unfold? Two styles:</p>\n      <p><strong>Choreography</strong> — each service listens to events and decides what to do. No central conductor. Order placed → Payment Service fires Charge → emits PaymentSucceeded → Inventory Service decrements → emits InventoryReserved → Shipping Service creates label.</p>\n      <p>Pros: services don't depend on each other knowing them. Easy to add a new step (just subscribe). Resilient — no single conductor to fail.</p>\n      <p>Cons: business flow is implicit, scattered across services. \"Where's the order in this flow?\" is hard to answer. Debugging requires distributed tracing.</p>\n      <p><strong>Orchestration</strong> — a workflow service explicitly drives the steps. \"Order Saga\" calls Payment, then Inventory, then Shipping. Knows the sequence. Handles compensations.</p>\n      <p>Pros: business logic visible in one place. Easy to debug (\"show me Order 42's saga state\"). Compensation logic clear.</p>\n      <p>Cons: orchestrator becomes a complex service. Single point of coordination.</p>\n      <div class=\"callout\">\n        <div class=\"callout-label\">Rule of thumb</div>\n        <p>Choreography for ≤ 3 steps. Orchestration for &gt; 5 steps or any with complex compensations. Tools like Temporal, AWS Step Functions, Camunda make orchestration tractable.</p>\n      </div>\n    \n      <div class=\"code-caption\" data-code-snippet=\"1\">Transactional outbox pattern</div>\n      <pre><code class=\"lang-sql\">-- Dual-write problem: write to DB + emit Kafka event atomically.\n-- Solution: outbox table in same transaction as business write.\n\nCREATE TABLE outbox (\n  id            BIGSERIAL PRIMARY KEY,\n  aggregate_id  BIGINT NOT NULL,\n  event_type    TEXT NOT NULL,\n  payload       JSONB NOT NULL,\n  created_at    TIMESTAMPTZ DEFAULT now(),\n  published     BOOLEAN DEFAULT false\n);\n\n-- Application writes both in one transaction:\nBEGIN;\n  INSERT INTO orders (...) VALUES (...);\n  INSERT INTO outbox (aggregate_id, event_type, payload)\n  VALUES ($orderId, 'OrderCreated', $payloadJson);\nCOMMIT;\n\n-- Separate CDC process (Debezium) or polling worker reads new rows\n-- from outbox, publishes to Kafka, marks published=true.</code></pre>\n  </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — when EDA hurts",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — when EDA hurts</h2></div>\n    <div class=\"prose\">\n      <p>EDA is sold as universally good. It isn't. Real downsides:</p>\n      <p><strong>Eventual consistency everywhere.</strong> Order placed at T=0; warehouse sees it at T+200ms. Customer immediately calls support: \"where's my order?\" Support service hasn't received the event yet. Real friction.</p>\n      <p><strong>Debugging gets harder.</strong> A single user action generates events across 8 services. Tracing the causal chain requires distributed tracing (OpenTelemetry) and event correlation IDs. Painful without good tooling.</p>\n      <p><strong>Schema evolution becomes a coordination problem.</strong> Add a field to OrderPlaced → 12 consumers may break. Need schema registry (Avro, Protobuf), strict backwards-compatibility rules.</p>\n      <p><strong>Duplicate / out-of-order delivery.</strong> Most brokers are at-least-once. Consumers must be <a href=\"/concepts/idempotency\">idempotent</a>. Out-of-order events break naive state machines.</p>\n      <p><strong>Hidden coupling reappears.</strong> \"Producer doesn't know consumers\" sounds great until two consumers each subtly depend on the producer's event timing or ordering. The coupling moves from APIs to event semantics — equally hard to change.</p>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">When EDA wins</div>\n        <p>You have ≥3 independent consumers of the same business event AND you control none of them OR they evolve at different rates. If you have 1 consumer, EDA is overkill — just call them.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Uber Cadence / Temporal</div><h4>Orchestration platform</h4><p>Workflow-as-code. Used by Uber, Snap, Stripe for complex multi-step flows where saga + retries + compensations need to be explicit.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Shopify Pub/Sub</div><h4>Event backbone</h4><p>Order placed → ~50 internal consumers + external webhooks. Pure choreography. Built on Kafka.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">AWS EventBridge</div><h4>Managed event bus</h4><p>Cross-service event routing with content-based filtering. SaaS apps publish events; AWS services + your code subscribe.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Stripe webhooks</div><h4>External EDA</h4><p>Stripe events the world by webhook. Customers' systems react. Effectively turns Stripe into an event publisher to a global event-driven ecosystem.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>News feed uses events for fan-out (PostCreated → fan-out workers). E-commerce checkout is an orchestrated saga. Notification system is fundamentally a downstream consumer of events from every other service. Distributed job scheduler dispatches work via events.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 4
+}

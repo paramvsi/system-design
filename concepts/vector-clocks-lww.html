@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Vector Clocks & LWW — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 290; --accent-s: 55%; --accent-l: 48%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Two users edit the same document at (roughly) the same moment. Their clients both commit locally. Now the server has two versions. <span class="hl">Which one wins?</span></p>
+      <p>"The one with the later timestamp" sounds fine — until you realize clocks drift, NTP skews by 100ms, and two events with "different timestamps" might actually have been simultaneous. Worse: two events with the "same timestamp" might have a causal relationship you need to preserve.</p>
+      <p>Vector clocks and Last-Write-Wins are the two opposite answers. Each is right somewhere.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Wall-clock time is a trap</h2></div>
+    <div class="prose">
+      <p>Three ways wall clocks betray you in distributed systems:</p>
+      <ol>
+        <li><strong>Drift.</strong> Server A's clock runs 50ms fast. Server B's is 30ms slow. They can disagree about event order by 80ms even when NTP is working.</li>
+        <li><strong>Jumps.</strong> A server's clock can leap backward (NTP correction). An event timestamped at 12:00:00.500 can be "followed" by one at 12:00:00.400.</li>
+        <li><strong>Leap seconds.</strong> On leap-second days, one second is repeated. Duplicates of "same timestamp" pile up.</li>
+      </ol>
+      <p>These make timestamps unreliable for ordering. Logical clocks (vector clocks, Lamport timestamps) don't depend on wall time — they track <em>causality</em>.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Vector clocks</h2></div>
+    <div class="prose">
+      <p>Each node keeps a vector — one counter per node in the system. <code>[A:0, B:0, C:0]</code> initially.</p>
+      <ul>
+        <li><strong>Local event.</strong> Node A does something → increments its own counter: <code>[A:1, B:0, C:0]</code>.</li>
+        <li><strong>Send a message.</strong> Include your current vector.</li>
+        <li><strong>Receive a message.</strong> Take element-wise max of your vector and theirs, then increment your own counter.</li>
+      </ul>
+      <p>Given two vectors V1 and V2, you can determine their causal relationship:</p>
+      <ul>
+        <li>V1 ≤ V2 (every element V1[i] ≤ V2[i]) AND V1 ≠ V2 → V1 happened-before V2.</li>
+        <li>Neither V1 ≤ V2 nor V2 ≤ V1 → the events are <strong>concurrent</strong> (conflict!). Neither caused the other.</li>
+      </ul>
+      <p>This lets the system detect conflicts reliably. It doesn't resolve them — that's the application's job.</p>
+    
+      <div class="code-caption" data-code-snippet="1">Vector clock merge (causality tracking)</div>
+      <pre><code class="lang-python">def merge(a, b):
+    """Pointwise max: a[node] = max(a[node], b[node])"""
+    out = dict(a)
+    for node, ts in b.items():
+        out[node] = max(out.get(node, 0), ts)
+    return out
+
+def happens_before(a, b):
+    """True if a ⇒ b (a causally precedes b)"""
+    strict = False
+    for node in a.keys() | b.keys():
+        av, bv = a.get(node, 0), b.get(node, 0)
+        if av &gt; bv: return False
+        if av &lt; bv: strict = True
+    return strict
+
+def concurrent(a, b):
+    return not happens_before(a, b) and not happens_before(b, a)
+
+# Example: A=[A1,B0], B=[A0,B1] → concurrent (neither precedes).
+# On read, server returns both versions; app resolves.</code></pre>
+  </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Vector Clocks — Concurrent Edits Detected</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="vc-arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#9ca3af"/></marker>
+          </defs>
+          <g font-family="Geist, system-ui, sans-serif" font-size="11">
+            <!-- Time axis -->
+            <text x="20" y="50" font-weight="500" fill="#878480">A</text>
+            <line x1="40" y1="50" x2="700" y2="50" stroke="#ccc9c4" stroke-width="1.5"/>
+            <text x="20" y="140" font-weight="500" fill="#878480">B</text>
+            <line x1="40" y1="140" x2="700" y2="140" stroke="#ccc9c4" stroke-width="1.5"/>
+            <text x="20" y="230" font-weight="500" fill="#878480">C</text>
+            <line x1="40" y1="230" x2="700" y2="230" stroke="#ccc9c4" stroke-width="1.5"/>
+
+            <!-- Events on A -->
+            <circle cx="100" cy="50" r="6" fill="hsl(290,55%,48%)"/>
+            <text x="100" y="35" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10">[1,0,0]</text>
+            <circle cx="280" cy="50" r="6" fill="hsl(290,55%,48%)"/>
+            <text x="280" y="35" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10">[2,0,0]</text>
+
+            <!-- Events on B -->
+            <circle cx="180" cy="140" r="6" fill="hsl(290,55%,48%)"/>
+            <text x="180" y="160" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10">[1,1,0]</text>
+            <circle cx="450" cy="140" r="6" fill="hsl(0,70%,55%)"/>
+            <text x="450" y="160" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="hsl(0,70%,40%)">[2,2,0]</text>
+
+            <!-- Events on C -->
+            <circle cx="450" cy="230" r="6" fill="hsl(0,70%,55%)"/>
+            <text x="450" y="252" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="hsl(0,70%,40%)">[1,0,1]</text>
+
+            <!-- Causal arrows: A→B, A→B (second), then concurrent edits -->
+            <line x1="100" y1="56" x2="180" y2="134" stroke="#9ca3af" stroke-width="1.2" marker-end="url(#vc-arr)"/>
+            <line x1="280" y1="56" x2="450" y2="134" stroke="#9ca3af" stroke-width="1.2" marker-end="url(#vc-arr)"/>
+            <line x1="100" y1="56" x2="450" y2="224" stroke="#9ca3af" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#vc-arr)"/>
+
+            <!-- Conflict marker -->
+            <text x="540" y="200" font-size="11" fill="hsl(0,70%,40%)" font-weight="500">B's [2,2,0] vs C's [1,0,1]</text>
+            <text x="540" y="216" font-size="11" fill="hsl(0,70%,40%)" font-weight="500">neither ≤ the other → CONCURRENT</text>
+
+            <text x="100" y="275" font-family="JetBrains Mono, monospace" font-size="10" fill="#878480">A,B share a causal chain · C's edit is independent</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">LWW — the simple compromise</h2></div>
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">Vector clocks</div>
+        <h4>Detects conflicts precisely</h4>
+        <p>You know when two writes conflict. You can preserve both, present them to users ("pick a version"), or merge them intelligently. <span class="hl-red">Costs:</span> vectors grow with the number of writers. Pruning is its own problem.</p>
+      </div>
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">Last-Write-Wins (LWW)</div>
+        <h4>Pick by timestamp, ignore conflicts</h4>
+        <p>Each write has a timestamp; latest wins on read. <span class="hl-green">Simple.</span> Works when conflicts are rare OR when losing one side is acceptable. <span class="hl-red">Costs:</span> silently discards concurrent writes. A user's edit can vanish.</p>
+      </div>
+    </div>
+    <div class="callout callout-warn">
+      <div class="callout-label">When LWW is fine</div>
+      <p>User settings (last change wins). Session state (last interaction wins). Timestamps as heuristics.</p>
+    </div>
+    <div class="callout callout-warn">
+      <div class="callout-label">When LWW is catastrophic</div>
+      <p>Shopping cart (two adds = one item lost). Collaborative editing (two concurrent edits = one lost). Counters (two +1 = +1). Any aggregating operation.</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — CRDTs, the modern answer</h2></div>
+    <div class="prose">
+      <p>Conflict-free Replicated Data Types (CRDTs) give you LWW's simplicity with vector-clock-level correctness — for specific data types.</p>
+      <p><strong>G-Counter</strong> (grow-only counter): each node has a private counter; the "real" value is the sum of all. Concurrent increments from A and B both count. No conflict possible.</p>
+      <p><strong>PN-Counter</strong> (positive-negative counter): two G-Counters, one for increments, one for decrements. Real value = inc − dec.</p>
+      <p><strong>OR-Set</strong> (observed-remove set): each add gets a unique token; remove deletes the tokens you've observed. Concurrent add + remove leaves the item present (the add's token wasn't in the remove's observed set).</p>
+      <p><strong>RGA / LSEQ</strong> (sequence types, like text documents): concurrent inserts produce deterministic orderings so two clients converge to the same string without coordination.</p>
+      <p>Google Docs' Operational Transformation is a cousin of CRDTs. Figma uses CRDTs directly. Redis has CRDT data types (Redis Enterprise Active-Active). If your workload fits a CRDT, you get <span class="hl-green">conflict-free merges without vector clocks or LWW</span> — the best of both.</p>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">DynamoDB / Cassandra</div><h4>LWW by default</h4><p>Write timestamps set by client (or coordinator). Latest wins. Users have been burned — lost writes — and now use client-side version vectors for critical data.</p></div>
+      <div class="rw-card"><div class="rw-name">Riak</div><h4>Vector clocks surfaced to the app</h4><p>Reads return all concurrent siblings; application picks a winner or merges. More correct but higher complexity.</p></div>
+      <div class="rw-card"><div class="rw-name">Figma / Linear / Notion</div><h4>CRDTs</h4><p>Multi-user collaborative editing without a central lock. Each user's operations merge deterministically into the shared state.</p></div>
+      <div class="rw-card"><div class="rw-name">Redis Active-Active</div><h4>CRDT-backed global replication</h4><p>Counters, sets, hashes, sorted sets all have CRDT implementations. Writes merge without conflict across regions.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Google Docs uses Operational Transformation (CRDT-adjacent). Google Drive uses vector clocks to merge folder changes across offline devices. Distributed logging uses LWW for log rotation metadata.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

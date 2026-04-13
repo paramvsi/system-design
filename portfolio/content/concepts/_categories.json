@@ -1,0 +1,142 @@
+{
+  "Foundations": [
+    "interview-framework",
+    "back-of-envelope-estimation",
+    "latency-numbers",
+    "availability-nines",
+    "slos-slis-slas",
+    "time-sync-clocks",
+    "concurrency-models",
+    "shared-nothing-architecture",
+    "multi-tenancy"
+  ],
+  "Networking & Delivery": [
+    "dns",
+    "cdn",
+    "tcp-vs-udp",
+    "http-1-vs-2-vs-3",
+    "tls-https",
+    "proxy-vs-reverse-proxy",
+    "websockets-sse-polling",
+    "api-protocols-rest-graphql-grpc",
+    "service-mesh",
+    "webhooks",
+    "api-versioning",
+    "edge-computing",
+    "compression-encoding"
+  ],
+  "Scaling": [
+    "horizontal-vs-vertical-scaling",
+    "load-balancer",
+    "stateless-services",
+    "autoscaling",
+    "api-gateway"
+  ],
+  "Databases": [
+    "sql-vs-nosql",
+    "acid-vs-base",
+    "cap-theorem",
+    "pacelc-theorem",
+    "replication",
+    "sharding",
+    "indexing",
+    "normalization-vs-denormalization",
+    "database-types",
+    "transactions-distributed",
+    "write-ahead-log-wal",
+    "connection-pooling",
+    "database-federation",
+    "cdc-change-data-capture",
+    "data-lake-vs-warehouse"
+  ],
+  "Caching": [
+    "cache-strategies",
+    "cache-eviction",
+    "cdn-vs-application-cache",
+    "cache-stampede"
+  ],
+  "Messaging & Async": [
+    "message-queue-vs-pubsub",
+    "delivery-guarantees",
+    "event-sourcing-cqrs",
+    "kafka-internals",
+    "batch-vs-stream-processing"
+  ],
+  "Distributed Systems": [
+    "consensus-paxos-raft",
+    "distributed-locking",
+    "leader-election",
+    "consistent-hashing",
+    "vector-clocks-lww",
+    "gossip-protocols",
+    "quorum",
+    "heartbeat-failure-detection",
+    "service-discovery",
+    "two-generals-byzantine-problems",
+    "read-repair-anti-entropy",
+    "tunable-consistency-per-query",
+    "clock-skew-tolerance-design"
+  ],
+  "Reliability": [
+    "circuit-breaker",
+    "retry-backoff-jitter",
+    "bulkhead-isolation",
+    "rate-limiting-algorithms",
+    "idempotency",
+    "graceful-degradation",
+    "backpressure-flow-control",
+    "feature-flags-rollouts",
+    "chaos-engineering",
+    "request-hedging",
+    "deployment-strategies-blue-green-canary"
+  ],
+  "Observability & Security": [
+    "observability-triad",
+    "auth-oauth-jwt",
+    "ddos-protection",
+    "secret-management",
+    "zero-trust-networking",
+    "tokenization-pci",
+    "field-level-encryption",
+    "gdpr-right-to-be-forgotten"
+  ],
+  "Data Structures": [
+    "bloom-filter",
+    "geospatial-indexes",
+    "merkle-trees",
+    "hyperloglog-sketches",
+    "memory-mapped-files",
+    "erasure-coding",
+    "url-encoding-base62"
+  ],
+  "Machine Learning Systems": [
+    "feature-store",
+    "model-serving-online-vs-batch",
+    "vector-databases",
+    "embedding-generation-pipelines",
+    "online-learning-vs-offline-training",
+    "ab-testing-platform",
+    "llm-serving-infrastructure"
+  ],
+  "Architecture Patterns": [
+    "microservices-vs-monolith",
+    "domain-driven-design",
+    "event-driven-architecture",
+    "hexagonal-clean-architecture",
+    "bff-backend-for-frontend"
+  ],
+  "Operations": [
+    "disaster-recovery-rto-rpo",
+    "multi-region-active-active-vs-active-passive",
+    "database-migration-zero-downtime"
+  ],
+  "Frontend & Mobile": [
+    "service-workers-pwa-offline",
+    "mobile-offline-first-sync",
+    "image-video-pipeline",
+    "push-notification-protocols"
+  ],
+  "Interview Tactics": [
+    "interview-tactics-playbook"
+  ]
+}

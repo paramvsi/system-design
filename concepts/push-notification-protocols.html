@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Push Notification Protocols — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 25; --accent-s: 80%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Sending a push notification to 10 million users sounds simple — until you confront that you're not actually delivering the notification. Apple is. Google is. The browser vendor is. Your server hands the message to <strong>APNs</strong> (Apple), <strong>FCM</strong> (Google), or <strong>Web Push</strong> (browser); they deliver to the device. Each has different rate limits, different payload sizes, different delivery semantics, different error modes. Get this wrong and you'll send 1M push notifications and have 100k actually delivered.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The three platforms</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Platform</th><th>Owner</th><th>Token type</th><th>Max payload</th><th>Rate limits</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">APNs (iOS)</td><td>Apple</td><td>Device token (per app install)</td><td>4 KB</td><td>Per-connection; ~1000s/sec on HTTP/2 streams</td></tr>
+        <tr><td class="algo-name">FCM (Android, but also iOS pass-through)</td><td>Google</td><td>FCM token</td><td>4 KB</td><td>Per-project; high but throttles on errors</td></tr>
+        <tr><td class="algo-name">Web Push</td><td>Browser vendors (VAPID standard)</td><td>Browser-managed subscription</td><td>4 KB</td><td>Per-endpoint</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">The end-to-end flow</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>App registers for push.</strong> User taps "allow notifications." OS / browser generates a token.</li>
+        <li><strong>App sends token to your server.</strong> You store it indexed by user_id.</li>
+        <li><strong>Trigger</strong>: something happens that should notify the user (new message, order shipped, etc.).</li>
+        <li><strong>Your server constructs the payload</strong>, looks up the user's tokens, sends to APNs / FCM / Web Push.</li>
+        <li><strong>The platform delivers</strong> to the device. May queue if device offline (APNs ~1 day, FCM ~28 days TTL).</li>
+        <li><strong>Device receives + displays</strong>. User taps → opens your app to the relevant screen.</li>
+        <li><strong>Tokens expire / become invalid</strong>. Platform tells you in the response. You must clean up dead tokens or risk being throttled.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Deep dive — at scale, you need a fan-out tier</h2></div>
+    <div class="prose">
+      <p>"User created post → notify their 10M followers" doesn't fit one HTTP call. Production architecture:</p>
+      <ul>
+        <li><strong>Topic-based fan-out</strong>. APNs/FCM both support "topics" (FCM) or "broadcast channels" (APNs Critical Alerts) — the platform handles fan-out for you. Cheaper but less flexible.</li>
+        <li><strong>Server-side fan-out via queues</strong>. For per-recipient personalization (different content per user), shard the recipient list into batches, push batches to a queue, workers pop + send.</li>
+        <li><strong>Token validity batching</strong>. Group sends by token validity windows. Dead tokens fail fast; cull aggressively. Sending to dead tokens uses your quota.</li>
+        <li><strong>HTTP/2 connection pooling</strong>. APNs uses HTTP/2 — one persistent connection per worker can stream thousands of notifications/sec. Reusing connections is critical.</li>
+        <li><strong>Per-platform workers</strong>. Separate worker pools for APNs, FCM, Web Push — different rate limits, different error handling, different retry policies.</li>
+        <li><strong>Idempotency keys</strong>. <code>collapse_id</code> (APNs) / <code>collapse_key</code> (FCM) coalesce duplicates so resent messages don't double-notify.</li>
+      </ul>
+
+      <div class="diagram-wrap">
+        <div class="diagram-head">
+          <span class="diagram-label">Notification Fan-Out Architecture</span>
+          <span class="diagram-type">Mermaid</span>
+        </div>
+        <div class="diagram-body">
+          <div class="mermaid">
+flowchart LR
+    T[Trigger event] --> R[Recipient resolver]
+    R -->|millions of user_ids| K[Kafka topic]
+    K --> A[APNs workers<br/>HTTP/2 pool]
+    K --> F[FCM workers<br/>HTTP/2 pool]
+    K --> W[Web Push workers]
+    A --> AC[(APNs)]
+    F --> FC[(FCM)]
+    W --> WC[(Browser endpoint)]
+    AC --> iOS[iPhone]
+    FC --> Android[Android]
+    WC --> Browser[Browser]
+          </div>
+        </div>
+      </div>
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"Notifications fan out via Kafka. Per-platform worker pools (APNs, FCM, Web Push) drain the queue and push over persistent HTTP/2 connections. Token-invalid responses go back to a cleanup pipeline. Use collapse keys for idempotency. At 10M-recipient scale, the bottleneck is HTTP/2 connection throughput — saturate connections, not individual streams."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Common pitfalls</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Treating push as guaranteed delivery.</strong> It's not. Phone offline, OS killed your app, user disabled notifications — the notification just doesn't arrive. Don't use push as the primary delivery channel for anything mandatory.</li>
+        <li><strong>Token cleanup neglect.</strong> Send to dead tokens for months → APNs throttles you. Process error responses + remove invalid tokens promptly.</li>
+        <li><strong>Cross-platform code paths.</strong> APNs and FCM payload shapes are different. Build a per-platform serializer; don't try to make one schema work everywhere.</li>
+        <li><strong>Notification spam.</strong> User opens app once → 50 queued notifications. Coalesce server-side; respect "Do Not Disturb"; let users manage frequency.</li>
+        <li><strong>Localization.</strong> User's preferred language might not match server default. Store language preference + render localized messages.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Apple Push Notification service (APNs)</div><h4>iOS reference</h4><p>HTTP/2 protocol. Token + payload + topic + priority. Strict 4 KB payload; expansion via "notification service extension" downloads more data on device.</p></div>
+      <div class="rw-card"><div class="rw-name">Firebase Cloud Messaging (FCM)</div><h4>Cross-platform</h4><p>Originally Android-only; now serves iOS too (via APNs under the hood). Topic-based fan-out built in. SDK simplifies token mgmt.</p></div>
+      <div class="rw-card"><div class="rw-name">Web Push Protocol</div><h4>Browser standard</h4><p>VAPID-signed messages. Each browser vendor provides a push endpoint per subscription. Works in service workers; even when browser is closed.</p></div>
+      <div class="rw-card"><div class="rw-name">OneSignal / Pusher / Airship</div><h4>Push-as-a-service</h4><p>Wraps APNs + FCM + Web Push behind one API. Handles fan-out, segmentation, A/B testing. Used by teams that don't want to build the infra.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Notification system is fundamentally about doing this well at scale. WhatsApp uses native push for offline message delivery. News feed uses push for engagement re-activation.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

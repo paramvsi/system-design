@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Shared-Nothing Architecture — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 195; --accent-s: 65%; --accent-l: 45%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>The single most important architectural principle for scalable systems: <span class="hl">no resource is shared across nodes</span>. No shared memory, no shared disk, no shared lock manager, no shared cache. Each node owns its slice of data and serves its slice of requests. Adding capacity = adding more nodes. Removing capacity = killing nodes. That's it. No coordination overhead grows with cluster size.</p>
+      <p>Stonebraker named the pattern in 1986; every webscale system you can name is shared-nothing under the hood — DynamoDB, Cassandra, BigTable, Snowflake, Kafka. The opposite (shared-disk databases like Oracle RAC) hits coordination ceilings dramatically faster.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The three architectures</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Pattern</th><th>What's shared</th><th>Scaling ceiling</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Shared-everything</td><td>Memory + disk + CPU</td><td>1 machine</td><td>Single-server Postgres</td></tr>
+        <tr><td class="algo-name">Shared-disk</td><td>Disk; CPU + memory per node</td><td>~20 nodes (lock manager bottleneck)</td><td>Oracle RAC, IBM DB2 pureScale</td></tr>
+        <tr><td class="algo-name">Shared-nothing</td><td>Nothing; communication via network only</td><td>~1000s of nodes</td><td>Cassandra, DynamoDB, BigQuery, Kafka</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Why it scales</h2></div>
+    <div class="prose">
+      <p>Shared anything = coordination. Coordination scales sub-linearly with node count (often O(N²) for messages, O(N) for lock contention). Past some N, adding a node makes everything slower because coordination overhead exceeds added work.</p>
+      <p>Shared-nothing eliminates coordination from the data path. A node receives a request, looks up only its local data (or computes only its slice), returns. It doesn't ask other nodes anything. Throughput is N × per-node throughput, perfectly linear.</p>
+      <p>The pattern extends beyond data: <a href="/concepts/stateless-services">stateless services</a> are shared-nothing at the compute layer (no shared session state). <a href="/concepts/sharding">Sharded databases</a> are shared-nothing at the storage layer (each shard owns its data). The principle propagates: anywhere you can avoid sharing, do.</p>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">What you give up</h2></div>
+    <div class="prose">
+      <p>Shared-nothing isn't free. The trade-offs:</p>
+      <ul>
+        <li><strong>No global transactions for free.</strong> A transaction touching data on N shards becomes a <a href="/concepts/transactions-distributed">distributed transaction</a> (saga, 2PC, or "model your data so transactions stay local").</li>
+        <li><strong>Cross-shard joins are app-level.</strong> The DB can't join across nodes; you fetch then join in code, or denormalize.</li>
+        <li><strong>Routing layer needed.</strong> Some component must know which node owns which data — a router, smart client, or <a href="/concepts/consistent-hashing">consistent hashing</a>.</li>
+        <li><strong>Rebalancing.</strong> Adding/removing a node moves some data. Done well (consistent hashing, virtual nodes), it's automatic and incremental. Done poorly, it's a maintenance window.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — designing your data model for shared-nothing</h2></div>
+    <div class="prose">
+      <p>The single biggest determinant of shared-nothing success: <strong>pick a partition key that aligns with your access pattern</strong>. If most queries are scoped to "this user's data," shard by user_id. If most queries are "this tenant's data," shard by tenant_id. Each query then hits exactly one node — perfect locality.</p>
+      <p>Bad partition keys force <strong>scatter-gather</strong>: query goes to all N nodes, results merge. Latency = slowest node's response. Throughput = N× lower than single-shard queries. This is what kills naive sharded systems.</p>
+      <p>Real example — Twitter:</p>
+      <ul>
+        <li><strong>Shard tweets by user_id.</strong> Reading "all of Alice's tweets" hits one shard. Win.</li>
+        <li><strong>"Tweets mentioning @bob."</strong> Bob's mentions are spread across millions of authors' shards. Scatter-gather across the entire fleet. Lose.</li>
+        <li><strong>Solution</strong>: build a <em>second</em> data structure — a "mentions index" — sharded by mentioned-user. Two writes per tweet, but reads stay shard-local. Denormalization to preserve the shared-nothing read property.</li>
+      </ul>
+      <div class="callout callout-good">
+        <div class="callout-label">The interview rule</div>
+        <p>"For shared-nothing scale, every hot query must hit exactly one shard. If a query inherently spans shards, build a denormalized view sharded by that query's access key. Two writes; one read. Always."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">DynamoDB / Cassandra</div><h4>Shared-nothing by design</h4><p>Each partition lives on its node(s). No cross-partition coordination at the data layer.</p></div>
+      <div class="rw-card"><div class="rw-name">BigQuery / Snowflake</div><h4>Compute-storage separation</h4><p>Storage on shared S3-like layer; compute is shared-nothing nodes pulling slices in parallel. New twist on the pattern.</p></div>
+      <div class="rw-card"><div class="rw-name">Kafka brokers</div><h4>Partition-per-broker</h4><p>Each broker owns its partitions. Producer and consumer routing is shared-nothing — no global coordinator on the data path.</p></div>
+      <div class="rw-card"><div class="rw-name">CockroachDB / TiDB</div><h4>Shared-nothing SQL</h4><p>Range-sharded; each range owned by one Raft group. Cross-range transactions exist but are explicit; most queries are local.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Every system in this portfolio that scales beyond one box uses shared-nothing somewhere. URL shortener shards by short-code hash. News feed shards by user_id. Uber shards by geohash. E-commerce federates by domain.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

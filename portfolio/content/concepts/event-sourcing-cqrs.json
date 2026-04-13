@@ -1,0 +1,71 @@
+{
+  "slug": "event-sourcing-cqrs",
+  "title": "Event Sourcing & CQRS",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 320,
+    "s": 55,
+    "l": 50
+  },
+  "category": "Messaging & Async",
+  "blurb": "A traditional DB stores the current state: user 42 has balance $150. How they got there is gone. Event sourcing inverts this: you store the stream of changes (deposits, withdrawals, transfers), and \"current balance\" is a",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>A traditional DB stores the current state: <em>user 42 has balance $150</em>. How they got there is gone. <strong>Event sourcing</strong> inverts this: you store the stream of changes (deposits, withdrawals, transfers), and \"current balance\" is a derived projection. It's how banks actually work — a ledger of transactions, not a balance field.</p>\n      <p><strong>CQRS</strong> (Command Query Responsibility Segregation) splits the system into a write side (commands that produce events) and one or more read sides (projections optimized for each query shape). Pair the two and you get auditability, temporal queries, independent scaling of reads and writes.</p>\n      <p>Useful in: financial systems, order management, collaborative editing, anywhere \"how did we get here?\" matters.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "Traditional vs event-sourced",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Traditional vs event-sourced</h2></div>\n    <div class=\"tradeoff-grid\">\n      <div class=\"tradeoff-option\">\n        <div class=\"tradeoff-label\">Traditional (state-stored)</div>\n        <h4>Current state = source of truth</h4>\n        <p><code>UPDATE users SET balance = 150 WHERE id = 42</code>. The old value is gone. Audit logs? Separate table, may drift, often incomplete. Bug corrupted the state? You can't easily replay to find when.</p>\n      </div>\n      <div class=\"tradeoff-option chosen\">\n        <div class=\"tradeoff-label\">Event-sourced</div>\n        <h4>Events are source of truth; state is derived</h4>\n        <p>Append: <code>{id: \"e7\", user: 42, type: \"deposit\", amt: 50}</code>. Current balance = sum of all deposit/withdraw events. Full history is the only storage. Audit is free. Bugs replayable.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "The three parts",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">The three parts</h2></div>\n    <div class=\"prose\">\n      <ol>\n        <li><strong>Commands.</strong> User intents — \"transfer $50 from A to B.\" Validated against current state. If valid, emit events.</li>\n        <li><strong>Events.</strong> Facts of what happened — \"$50 withdrawn from A (event id e7, timestamp t)\" and \"$50 deposited to B (e8, t)\". Immutable. Appended to the event log (Kafka, EventStore, Postgres table).</li>\n        <li><strong>Projections.</strong> Read-side views computed by replaying events. Current-balances view. Transactions-by-day view. Suspicious-activity view. Each tuned for its query pattern.</li>\n      </ol>\n    \n      <div class=\"code-caption\" data-code-snippet=\"1\">Saga with compensating actions</div>\n      <pre><code class=\"lang-python\"># Order saga: reserve → charge → ship → notify\n# On failure, compensate completed steps in reverse order.\n\nclass Saga:\n    def __init__(self, steps):\n        self.steps = steps  # [(action, compensation), ...]\n        self.completed = []\n\n    def run(self, ctx):\n        for action, compensate in self.steps:\n            try:\n                action(ctx)\n                self.completed.append(compensate)\n            except Exception as e:\n                # Roll back completed steps in reverse\n                for c in reversed(self.completed):\n                    try: c(ctx)\n                    except: pass  # compensations themselves must be idempotent\n                raise\n\n# Use Saga when: transactions span services, low contention, some slack OK\n# Don't use Saga when: strict ACID required, low value (just pay the cost of 2PC)</code></pre>\n  </div>\n\n    <div class=\"diagram-wrap\">\n      <div class=\"diagram-head\"><span class=\"diagram-label\">Event Sourcing + CQRS</span><span class=\"diagram-type\">Mermaid</span></div>\n      <div class=\"diagram-body\">\n        <div class=\"mermaid\">\nflowchart LR\n    C[Client] --&gt;|Command: transfer| W[Write Model]\n    W --&gt;|validate, emit| E[(Event Log)]\n    E --&gt;|subscribe| P1[Balances Projection]\n    E --&gt;|subscribe| P2[Audit Projection]\n    E --&gt;|subscribe| P3[Analytics Projection]\n    C --&gt;|Query balance| P1\n    C --&gt;|Query audit| P2\n        </div>\n      </div>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "What you gain, what you pay",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">What you gain, what you pay</h2></div>\n    <div class=\"prose\">\n      <p><strong>Gains:</strong></p>\n      <ul>\n        <li>Free audit trail — every change traceable to a specific event with actor and timestamp.</li>\n        <li>Time travel — replay events up to any past instant to reproduce historical state (great for debugging, regulatory reports).</li>\n        <li>New projections cost nothing — add a view later, replay events to build it. No data migration.</li>\n        <li>Read and write scale independently — beefy event-log cluster, many lightweight projection services.</li>\n        <li>Natural fit for <a href=\"/concepts/message-queue-vs-pubsub\">pub/sub</a> — events flow downstream to analytics, notifications, search indexing.</li>\n      </ul>\n      <p><strong>Costs:</strong></p>\n      <ul>\n        <li>Every query goes through a projection. Eventual consistency — just wrote an event? The balance view may lag 50ms.</li>\n        <li>Event schema evolution is a nightmare. You rename a field; old events in the log still have the old name. Versioning + upcasters forever.</li>\n        <li>Storage grows linearly with activity, not with current state. Compaction strategies needed (snapshots).</li>\n        <li>Conceptual weight — the team has to think in events, not tables. New hires hate it for 6 months.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — snapshots and replay",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — snapshots and replay</h2></div>\n    <div class=\"prose\">\n      <p>A user has 10,000 events over 5 years. Every time you query their balance, replaying 10k events takes seconds. Solution: <strong>snapshots.</strong></p>\n      <p>Periodically (every 100 events, or daily), compute the current state and persist it with the event ID up to which it's been applied. When querying: load the latest snapshot, apply events <em>after</em> that snapshot's event ID. Balance computation goes from \"replay 10,000\" to \"replay 20.\" Latency becomes constant.</p>\n      <p>Snapshots are derived data — you can always rebuild from events, so their storage is optional and they can be regenerated after a bug fix. This keeps the event log as the single source of truth while making queries practical.</p>\n      <div class=\"callout\">\n        <div class=\"callout-label\">Rule of thumb</div>\n        <p>Don't use event sourcing for a CRUD app. The operational overhead outweighs the benefits. Use it when the history matters as much as the current state — finance, legal, healthcare, audit-heavy domains. For everything else, traditional state storage with an <a href=\"/concepts/transactions-distributed\">outbox pattern</a> gives you 80% of the benefit.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">LMAX Exchange</div><h4>Event-sourced trading</h4><p>Matching engine state is the replay of all orders. Sub-millisecond matching latencies. Reprocess the log to rebuild state on restart.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Stripe ledger</div><h4>Immutable append-only</h4><p>Every financial event (charge, refund, transfer) appended to a ledger. Balances derived. Correct by construction.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">EventStore / Axon</div><h4>Purpose-built DBs</h4><p>Specialized stores for event-sourced apps. Snapshots, projections, subscription APIs built-in.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Kafka Streams / Flink</div><h4>Streaming projections</h4><p>Build materialized views from Kafka topics. CQRS made operational.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Stock exchange is naturally event-sourced (every order is an event). Payment gateway uses event sourcing for the ledger. E-commerce order state is increasingly event-sourced for refund/return workflows.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [
+    {
+      "sectionId": "how-it-works",
+      "source": "flowchart LR\n    C[Client] -->|Command: transfer| W[Write Model]\n    W -->|validate, emit| E[(Event Log)]\n    E -->|subscribe| P1[Balances Projection]\n    E -->|subscribe| P2[Audit Projection]\n    E -->|subscribe| P3[Analytics Projection]\n    C -->|Query balance| P1\n    C -->|Query audit| P2",
+      "index": 0
+    }
+  ],
+  "related": [],
+  "similar": [],
+  "readMinutes": 4
+}

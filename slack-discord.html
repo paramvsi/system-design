@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Slack / Discord — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+
+    :root { --accent-h: 250; --accent-s: 65%; --accent-l: 55%;
+      --accent: hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light: hsl(var(--accent-h), 80%, 95%);
+      --accent-mid: hsl(var(--accent-h), 70%, 88%);
+      --accent-text: hsl(var(--accent-h), var(--accent-s), 38%);
+      --accent-border: hsl(var(--accent-h), 60%, 82%);
+      --hl-yellow:#fff0a0; --hl-yellow-dark:#a07a00;
+      --hl-accent: hsl(var(--accent-h), 90%, 90%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 35%);
+      --bg:#fff; --bg-subtle:#f7f7f5; --bg-raised:#f0eeeb; --bg-code:#f4f3f0;
+      --border:#e4e2de; --border-strong:#ccc9c4;
+      --text-primary:#111110; --text-secondary:#4a4845; --text-muted:#878480;
+      --font-serif:'Instrument Serif',Georgia,serif;
+      --font-sans:'Geist',system-ui,sans-serif;
+      --font-mono:'JetBrains Mono','Fira Code',monospace;
+      --radius-sm:4px; --radius-md:8px; --radius-lg:12px;
+    }
+    .req-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px; }
+    .req-box { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 20px; }
+    .req-box-head { display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size: 12px; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent-text); margin-bottom:10px; font-weight:500; }
+    .req-box-head.nonfunc { color:hsl(38,80%,30%); }
+    .req-list { padding-left:20px; font-size: 15px; color:var(--text-secondary); }
+    .req-list li { margin-bottom:6px; }
+    .endpoint { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px 18px; margin-bottom:10px; }
+    .endpoint-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+    .method { font-family:var(--font-mono); font-size: 11px; font-weight:600; padding:2px 8px; border-radius:3px; letter-spacing:0.05em; }
+    .method.get { background:hsl(190,70%,90%); color:hsl(190,70%,28%); }
+    .method.post { background:hsl(145,55%,90%); color:hsl(145,55%,28%); }
+    .method.ws { background:hsl(270,60%,90%); color:hsl(270,60%,35%); }
+    .method.delete { background:hsl(0,70%,92%); color:hsl(0,70%,38%); }
+    .ep-path { font-family:var(--font-mono); font-size: 15px; color:var(--text-primary); font-weight:500; }
+    .ep-desc { font-size: 15px; color:var(--text-secondary); margin:6px 0 0; }
+    .failure { display:flex; gap:14px; padding:14px 18px; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); margin-bottom:10px; }
+    .failure-icon { font-size:18px; flex-shrink:0; margin-top:2px; }
+    .failure-title { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .failure-desc { font-size: 15px; color:var(--text-secondary); margin-bottom:4px; }
+    .mitigation { font-family:var(--font-mono); font-size: 12px; color:hsl(145,55%,28%); }
+    .similar-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+    .similar-card { display:block; text-decoration:none; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 18px; transition:all 0.15s; }
+    .similar-card:hover { border-color:var(--accent-border); background:var(--accent-light); }
+    .similar-card h4 { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .similar-card p { font-size: 13.5px; color:var(--text-muted); margin:0; }
+    .evolution-step { display:flex; gap:14px; margin-bottom:18px; }
+    .evolution-marker { width:32px; height:32px; border-radius:50%; background:var(--accent-light); border:2px solid var(--accent-border); display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size: 12px; font-weight:600; color:var(--accent-text); flex-shrink:0; }
+    .evolution-content h4 { font-size: 16px; font-weight:600; margin-bottom:4px; }
+    .evolution-content p { font-size: 15px; color:var(--text-secondary); margin:0; }
+  </style>
+</head>
+<body>
+
+<main>
+
+  <div class="hero" id="problem">
+    <div class="hero-kicker">System Design — Real-Time Team Messaging at Scale</div>
+    <h1 class="hero-title">Design <em>Slack / Discord</em></h1>
+    <p class="hero-desc">
+      A real-time messaging platform with channels, DMs, threads, reactions, presence, and file sharing. The hard parts:
+      a <span class="hl">persistent WebSocket fleet</span> holding tens of millions of long-lived connections, <span class="hl-accent">message fan-out</span>
+      into channels with up to hundreds of thousands of members, and a <span class="hl-accent">presence system</span> that reliably tells everyone who's online without collapsing under the cross-product of "everyone watching everyone."
+      Discord carries ~200M MAU; Slack ~35M DAU. Both push billions of messages per day through hot WebSocket paths.
+    </p>
+    <div class="hero-tags">
+      <span class="tag accent">⚡ Core: WebSockets + Fan-Out + Presence</span>
+      <span class="tag">200M MAU (Discord)</span>
+      <span class="tag">~4B msgs/day</span>
+      <span class="tag">Huge channels (100k+ members)</span>
+      <span class="tag">Persistent connections</span>
+    </div>
+  </div>
+
+  <section class="section" id="requirements">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Requirements</h2></div>
+    <div class="req-grid">
+      <div class="req-box">
+        <div class="req-box-head">Functional</div>
+        <ul class="req-list">
+          <li>Send &amp; receive <span class="hl-accent">text messages</span> in channels, DMs, group DMs in real-time</li>
+          <li><span class="hl-accent">Threads / replies</span> — sub-conversations inside a parent message</li>
+          <li><span class="hl-accent">Presence</span> — know which users are online / away / offline</li>
+          <li>Typing indicators, read receipts, emoji reactions</li>
+          <li>File / image attachments; link previews (unfurling)</li>
+          <li>Message history: infinite scroll, search, edit, delete</li>
+          <li>Push notifications when mentioned or DM'd while away</li>
+        </ul>
+      </div>
+      <div class="req-box">
+        <div class="req-box-head nonfunc">Non-Functional</div>
+        <ul class="req-list">
+          <li><span class="hl">Message delivery &lt; 200 ms</span> p99 end-to-end on the same region</li>
+          <li><span class="hl">Ordered delivery</span> per-channel; never show msg B before msg A if A was sent first</li>
+          <li><span class="hl">At-least-once delivery</span>; clients dedupe on message_id</li>
+          <li>Scale to 10M concurrent WebSocket connections per region</li>
+          <li>Channels with up to 500k members (Discord "large guilds")</li>
+          <li>99.99% availability — users notice outages within seconds</li>
+          <li>Eventual consistency on reactions + presence; strong on message order</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="scale">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Scale Estimation</h2></div>
+    <div class="kv-grid">
+      <div class="kv-card">
+        <div class="kv-k">Concurrent WS connections</div>
+        <div class="kv-v">10M</div>
+        <div class="kv-sub">per region; need ~500 gateway servers @ 20k conns each</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Messages / sec (peak)</div>
+        <div class="kv-v">50k</div>
+        <div class="kv-sub">4B/day ÷ 86,400 ≈ 46k avg; peaks 2–3×</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Fan-out amplification</div>
+        <div class="kv-v">~200×</div>
+        <div class="kv-sub">1 msg → avg 200 channel members → 10M deliveries/sec peak</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Message storage</div>
+        <div class="kv-v">~2 TB / day</div>
+        <div class="kv-sub">4B msgs × 500 B avg; ~700 TB/yr raw; compressed ≈ 250 TB/yr</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Presence events</div>
+        <div class="kv-v">10M/min</div>
+        <div class="kv-sub">connect/disconnect/away transitions — dominant overhead on large servers</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">WebSocket payload</div>
+        <div class="kv-v">~1 KB</div>
+        <div class="kv-sub">avg msg envelope; reels/file pointers small; bytes live in blob store</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="api">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">API Design</h2></div>
+    <div class="prose">
+      <p>Two surfaces: a <strong>REST API</strong> for stateful operations (create channel, fetch history) and a <strong>WebSocket gateway</strong> for real-time events. All real-time flows use the WebSocket; REST is for things you'd do from any tab.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method ws">WS</span><span class="ep-path">wss://gateway.example.com/?v=9&amp;token=JWT</span></div>
+      <p class="ep-desc">Establish persistent connection. Server sends Hello + heartbeat_interval; client heartbeats every N seconds. Receives push events (MESSAGE_CREATE, TYPING_START, PRESENCE_UPDATE, etc.)</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/channels/{channel_id}/messages</span></div>
+      <p class="ep-desc">Send a message. Body: <code>{ content, attachments[], reply_to?, nonce }</code>. Nonce enables client-side dedup. Returns <code>{ message_id, ts }</code>.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/api/channels/{channel_id}/messages?before=ID&amp;limit=50</span></div>
+      <p class="ep-desc">Paginated message history. Cursor-based (not offset); cursor = message_id. Lets you scroll back indefinitely.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/channels/{channel_id}/messages/{id}/reactions/{emoji}/@me</span></div>
+      <p class="ep-desc">Add reaction. Separate endpoint so rate limits can target reactions specifically (common spam vector).</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/channels/{channel_id}/typing</span></div>
+      <p class="ep-desc">Broadcast typing-indicator. Fire-and-forget; no persistence. Gateway broadcasts to channel subscribers; auto-expires after 10 s.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/api/search?q=term&amp;channel_id=X</span></div>
+      <p class="ep-desc">Full-text search across message history. Backed by Elasticsearch; results scoped by user's channel membership.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/attachments/upload</span></div>
+      <p class="ep-desc">Returns pre-signed S3 URL + attachment_id. Client uploads directly; then includes attachment_id in <code>POST /messages</code>.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/guilds/{guild_id}/members/{user_id}</span></div>
+      <p class="ep-desc">Join / leave server. Triggers membership update event to all guild members (GUILD_MEMBER_ADD).</p>
+    </div>
+  </section>
+
+  <section class="section" id="architecture">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Architecture</h2></div>
+    <div class="prose">
+      <p>The defining piece is the <strong>gateway tier</strong> — a fleet of stateful WebSocket servers. Each gateway holds tens of thousands of connections. A <strong>session store</strong> (Redis) maps <code>user_id → gateway_id + conn_id</code> so any service can push to any user. A <strong>fan-out bus</strong> (Redis pub/sub or Kafka) delivers messages to the right gateways.</p>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Gateway + Fan-Out Architecture</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 820 460" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Slack/Discord architecture">
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="hsl(250,30%,40%)"/>
+            </marker>
+          </defs>
+          <style>
+/* ux-v2-bumped */
+
+            .lbl { font-family:'Geist',sans-serif; font-size: 12px; fill:#111; }
+            .sub { font-family:'JetBrains Mono',monospace; font-size: 10.5px; fill:#555; }
+            .box { fill:#fff; stroke:hsl(250,40%,70%); stroke-width:1.2; rx:6; }
+            .box-accent { fill:hsl(250,80%,95%); stroke:hsl(250,65%,55%); stroke-width:1.5; rx:6; }
+            .box-data { fill:hsl(38,70%,94%); stroke:hsl(38,60%,60%); stroke-width:1.2; rx:6; }
+            .edge { stroke:hsl(250,30%,40%); stroke-width:1.2; fill:none; }
+          </style>
+
+          <rect x="20" y="30" width="110" height="50" class="box"/>
+          <text x="75" y="52" text-anchor="middle" class="lbl">Desktop / Mobile</text>
+          <text x="75" y="67" text-anchor="middle" class="sub">persistent WS</text>
+
+          <rect x="20" y="120" width="110" height="50" class="box"/>
+          <text x="75" y="142" text-anchor="middle" class="lbl">Web Client</text>
+          <text x="75" y="157" text-anchor="middle" class="sub">browser WS</text>
+
+          <rect data-tooltip="L4 consistent-hash by conn_id for sticky WebSocket sessions. TLS terminates here." data-concept-link="/concepts/load-balancer" x="180" y="70" width="120" height="60" class="box-accent"/>
+          <text x="240" y="92" text-anchor="middle" class="lbl">Load Balancer</text>
+          <text x="240" y="108" text-anchor="middle" class="sub">sticky by conn_id</text>
+          <text x="240" y="122" text-anchor="middle" class="sub">L4 / TLS term</text>
+
+          <rect data-tooltip="One of ~500 gateway servers, each holding ~20k persistent WebSocket connections." data-concept-link="/concepts/websockets-sse-polling" x="350" y="20" width="150" height="55" class="box-accent"/>
+          <text x="425" y="42" text-anchor="middle" class="lbl">Gateway #1</text>
+          <text x="425" y="58" text-anchor="middle" class="sub">20k WS conns</text>
+          <text x="425" y="70" text-anchor="middle" class="sub">Elixir / Go</text>
+
+          <rect x="350" y="90" width="150" height="55" class="box-accent"/>
+          <text x="425" y="112" text-anchor="middle" class="lbl">Gateway #2</text>
+          <text x="425" y="128" text-anchor="middle" class="sub">20k WS conns</text>
+
+          <rect x="350" y="160" width="150" height="55" class="box-accent"/>
+          <text x="425" y="182" text-anchor="middle" class="lbl">Gateway #N</text>
+          <text x="425" y="198" text-anchor="middle" class="sub">… 500 of them</text>
+
+          <rect data-tooltip="Validates + deduplicates by (user, nonce) within 5-min window. Writes to Cassandra before notify." data-concept-link="/concepts/idempotency" x="560" y="20" width="130" height="55" class="box"/>
+          <text x="625" y="42" text-anchor="middle" class="lbl">Message svc</text>
+          <text x="625" y="58" text-anchor="middle" class="sub">write + validate</text>
+
+          <rect x="560" y="90" width="130" height="55" class="box"/>
+          <text x="625" y="112" text-anchor="middle" class="lbl">Presence svc</text>
+          <text x="625" y="128" text-anchor="middle" class="sub">online/offline</text>
+
+          <rect x="560" y="160" width="130" height="55" class="box"/>
+          <text x="625" y="182" text-anchor="middle" class="lbl">Push svc</text>
+          <text x="625" y="198" text-anchor="middle" class="sub">APNs / FCM</text>
+
+          <rect data-tooltip="Sub-ms latency fan-out. Only gateways with active subscribers for a channel get the message." data-concept-link="/concepts/message-queue-vs-pubsub" x="350" y="260" width="150" height="55" class="box-data"/>
+          <text x="425" y="282" text-anchor="middle" class="lbl">Redis pub/sub</text>
+          <text x="425" y="298" text-anchor="middle" class="sub">channel → gateways</text>
+
+          <rect x="180" y="260" width="120" height="55" class="box-data"/>
+          <text x="240" y="282" text-anchor="middle" class="lbl">Session store</text>
+          <text x="240" y="298" text-anchor="middle" class="sub">Redis cluster</text>
+
+          <rect data-tooltip="Partition by channel_id; clustering by monotonic message_id. Durable; source of truth." data-concept-link="/concepts/sharding" x="560" y="260" width="130" height="55" class="box-data"/>
+          <text x="625" y="282" text-anchor="middle" class="lbl">Cassandra</text>
+          <text x="625" y="298" text-anchor="middle" class="sub">msg history; by chan_id + ts</text>
+
+          <rect x="180" y="360" width="120" height="55" class="box-data"/>
+          <text x="240" y="382" text-anchor="middle" class="lbl">Postgres</text>
+          <text x="240" y="398" text-anchor="middle" class="sub">users, guilds, channels</text>
+
+          <rect x="350" y="360" width="150" height="55" class="box-data"/>
+          <text x="425" y="382" text-anchor="middle" class="lbl">Elasticsearch</text>
+          <text x="425" y="398" text-anchor="middle" class="sub">search index</text>
+
+          <rect x="560" y="360" width="130" height="55" class="box-data"/>
+          <text x="625" y="382" text-anchor="middle" class="lbl">S3 / CDN</text>
+          <text x="625" y="398" text-anchor="middle" class="sub">attachments</text>
+
+          <path class="edge" d="M130,55 L180,90" marker-end="url(#arr)"/>
+          <path class="edge" d="M130,145 L180,110" marker-end="url(#arr)"/>
+          <path class="edge" d="M300,85 L350,45" marker-end="url(#arr)"/>
+          <path class="edge" d="M300,100 L350,115" marker-end="url(#arr)"/>
+          <path class="edge" d="M300,115 L350,185" marker-end="url(#arr)"/>
+
+          <path class="edge" d="M500,45 L560,45" marker-end="url(#arr)"/>
+          <path class="edge" d="M500,115 L560,115" marker-end="url(#arr)"/>
+          <path class="edge" d="M500,185 L560,185" marker-end="url(#arr)"/>
+
+          <path class="edge" d="M425,215 L425,260" marker-end="url(#arr)"/>
+          <path class="edge" d="M625,215 L500,260" marker-end="url(#arr)"/>
+
+          <path class="edge" d="M240,175 L240,260" marker-end="url(#arr)"/>
+          <path class="edge" d="M625,215 L625,260" marker-end="url(#arr)"/>
+          <path class="edge" d="M425,315 L425,360" marker-end="url(#arr)"/>
+          <path class="edge" d="M625,315 L625,360" marker-end="url(#arr)"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Deep Dive — Message Send + Fan-Out</h2></div>
+    <div class="prose">
+      <p>Sending a message in a 50k-member channel means one write + 50k pushes. The critical path is: <strong>persist → fan-out → edge-deliver</strong>. The trick is keeping it fast while staying correct under reconnects, dedup, and order preservation.</p>
+      <ol>
+        <li><strong>Client sends over WebSocket</strong> to its gateway with a client-generated <code>nonce</code> (for dedup) and the target <code>channel_id</code>.</li>
+        <li><strong>Gateway validates auth + rate limits</strong> (e.g., 5 msgs / 5 s per channel per user). Relays to Message service via internal gRPC.</li>
+        <li><strong>Message service writes to Cassandra</strong> with partition key = channel_id, clustering key = message_id (Snowflake/ULID — monotonic, sortable). The message_id IS the ordering; no per-row timestamps needed.</li>
+        <li><strong>Publish to Redis pub/sub</strong> on topic <code>channel:{channel_id}</code>. Every gateway subscribes to topics for channels it has active viewers in.</li>
+        <li><strong>Gateways receive the pub/sub event</strong> and push over WS to each local subscriber. At 10M conns × 500 gateways, one channel publish touches only the ~10 gateways where actual viewers sit — not all 500.</li>
+        <li><strong>Offline users</strong> route through Push service: APNs / FCM notification if mobile; queued in inbox if web.</li>
+      </ol>
+
+      <div class="diagram-wrap">
+        <div class="diagram-head">
+          <span class="diagram-label">Sequence — Message Send End-to-End</span>
+          <span class="diagram-type">Mermaid</span>
+        </div>
+        <div class="diagram-body">
+          <div class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant G1 as Gateway A
+    participant MS as Message svc
+    participant DB as Cassandra
+    participant PS as Redis pub/sub
+    participant G2 as Gateway B
+    participant R as Recipient
+
+    C->>G1: WS send { nonce, text }
+    G1->>G1: auth + rate-limit
+    G1->>MS: gRPC createMessage
+    MS->>DB: INSERT by channel_id, msg_id
+    DB-->>MS: ok
+    MS->>PS: PUBLISH channel:X {envelope}
+    MS-->>G1: ack { message_id, ts }
+    G1-->>C: ACK (echoes nonce)
+    PS-->>G2: deliver envelope
+    G2->>R: WS push MESSAGE_CREATE
+          </div>
+        </div>
+      </div>
+
+      <p><strong>Ordering guarantee.</strong> Clients see messages in the order the Message service wrote them to Cassandra, because message_ids are monotonic and clients sort by message_id. Out-of-order arrivals (e.g., reconnected client replaying) are reordered on the client before render.</p>
+
+      <p><strong>Dedup.</strong> Client-generated <code>nonce</code> lets the Message service detect and reject replays of the same send. Server-assigned <code>message_id</code> lets clients detect duplicate delivery (pub/sub at-least-once) and collapse.</p>
+
+      <p><strong>Huge channels.</strong> A 500k-member channel can't fan out to 500k WS conns per message — that's 50k msgs/sec × 500k = 25B events/sec in aggregate. Real answer: only users currently <em>viewing</em> the channel get real-time pushes; everyone else gets an unread-count update and fetches history when they open the channel. Discord calls this "lazy loading" of large guilds.</p>
+
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"Message goes over the client's persistent WebSocket to its gateway, which persists to Cassandra (partition by channel_id, clustering by monotonic message_id) and publishes to a Redis topic per channel. Every gateway subscribes only to channels its users are actively viewing, so one publish fans out to ~10 gateways, not 500. Ordering comes from monotonic message_ids; dedup via client nonce. Large guilds don't fan out messages — only viewers get real-time; everyone else gets unread counts."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Tradeoffs &amp; Design Choices</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Redis pub/sub vs Kafka for fan-out.</strong> Redis pub/sub: sub-ms latency, zero durability, easy ops. Kafka: durable, replayable, higher latency (~5–10 ms). Chat demands latency; the "durable replay" lives in Cassandra history, so Redis pub/sub is the right pick. Kafka is still used upstream for analytics + notifications (audit trail).</li>
+        <li><strong>Cassandra vs Postgres for messages.</strong> Per-channel write patterns are append-only by message_id; Cassandra's partition-by-chan_id gives free sharding + cheap range scans for history. Postgres fails at 4B-row monotonic tables.</li>
+        <li><strong>Presence is cross-product expensive.</strong> 10M online users × ~200 mutuals = 2B presence events per state change wave. Batch + coalesce on gateway egress: only send presence updates that changed in the last few seconds, bundled per tick.</li>
+        <li><strong>Sticky WS sessions.</strong> Can't round-robin each WS frame — they belong to a specific conn. Load balancer uses consistent hashing on conn_id; reconnect lands on a different gateway fine (session store holds user→gateway).</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="failures">
+    <div class="section-head"><span class="section-n">08</span><h2 class="section-title">Failure Modes</h2></div>
+    <div class="failure">
+      <div class="failure-icon">💥</div>
+      <div>
+        <div class="failure-title">Gateway crashes with 20k active connections</div>
+        <div class="failure-desc">One gateway dies; 20k clients reconnect simultaneously → thundering herd on the load balancer + session store.</div>
+        <div class="mitigation">→ Mitigation: client reconnects with jittered backoff (1–30 s). Gateway capacity planned with 30% headroom. Session resume uses <code>session_id</code> to replay missed events (Discord "resume" semantics).</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🕒</div>
+      <div>
+        <div class="failure-title">Redis pub/sub partition drops</div>
+        <div class="failure-desc">Pub/sub is not durable. A partition loss or restart means dropped messages in flight.</div>
+        <div class="mitigation">→ Mitigation: message is always persisted in Cassandra first; pub/sub is only for notify. Clients with live sessions that detect a gap (by message_id sequence) fetch from Cassandra to backfill.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">📴</div>
+      <div>
+        <div class="failure-title">Presence storm on deploy</div>
+        <div class="failure-desc">Rolling deploy drains a gateway → 20k disconnects → 20k × 200 mutuals = 4M offline events. Fan-out service melts.</div>
+        <div class="mitigation">→ Mitigation: graceful shutdown. Drain over 60–120 s. Presence transitions damped with a 30 s "maybe offline" state so reconnects within that window never emit offline→online cycle.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">📣</div>
+      <div>
+        <div class="failure-title">Celebrity @everyone ping</div>
+        <div class="failure-desc">User @-mentions 500k-member channel. Push service must notify every offline member; APNs rate-limits kick in; notifications delayed by minutes.</div>
+        <div class="mitigation">→ Mitigation: throttle @everyone to mods only. Coalesce per-user notifications ("3 mentions in #general"). Pre-shard push pipeline so no single APNs connection bottlenecks.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🔁</div>
+      <div>
+        <div class="failure-title">Client replays same send on flaky network</div>
+        <div class="failure-desc">Client sends msg, network hiccups before ACK, client retries → server writes twice.</div>
+        <div class="mitigation">→ Mitigation: client-supplied <code>nonce</code>. Message service rejects duplicate (user_id, nonce) within a 5-minute window.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🔍</div>
+      <div>
+        <div class="failure-title">Search index lag on new messages</div>
+        <div class="failure-desc">User searches for a message they sent 2 seconds ago; Elasticsearch hasn't indexed it yet.</div>
+        <div class="mitigation">→ Mitigation: accept ~30 s search lag as normal. Client-side fallback: scan last N messages of open channel locally before falling through to Elasticsearch.</div>
+      </div>
+    </div>
+  </section>
+
+  
+  <section class="section" id="antipatterns">
+    <div class="section-head"><span class="section-n">⚠</span><h2 class="section-title">Anti-patterns</h2></div>
+    <div class="prose">
+      
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">One WebSocket server per user</div>
+        <p class="why">Stateful long-lived connections don't scale horizontally with naive sharding.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Pool of gateway servers each holding tens of thousands of conns; consistent hashing by conn_id.</div>
+    </div>
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Persist message in Kafka as source of truth</div>
+        <p class="why">Kafka is event log, not OLTP. Random access for scrollback is slow.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Persist in Cassandra (partition by channel_id, clustering by message_id); Kafka only for fan-out notify.</div>
+    </div>
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Broadcast every message to every channel subscriber via WebSocket</div>
+        <p class="why">500k-member Discord channels × 1 msg = 500k WS sends. Infrastructure melts.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Lazy loading: only users actively viewing get real-time pushes; others see unread counters + fetch on open.</div>
+    </div>
+    </div>
+  </section>
+
+  <section class="section" id="interview-tips">
+    <div class="section-head"><span class="section-n">09</span><h2 class="section-title">Interview Tips</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>Name the hard parts fast.</strong> "Persistent WebSockets, fan-out, presence." Don't start with sharding the user table — that's trivial here. The gateway tier and fan-out is the actual design.</li>
+        <li><strong>Distinguish durability from delivery.</strong> Cassandra holds the durable record; pub/sub is fire-and-forget notify. This decoupling is the whole design — explain it.</li>
+        <li><strong>Huge channels ≠ huge fan-out.</strong> Show that you know Discord doesn't actually push messages to 500k WS conns on every send. Viewers get pushed; others get unread counts + history pull on open.</li>
+        <li><strong>Pick the right storage.</strong> Cassandra (messages) + Postgres (users/guilds) + Elasticsearch (search) + S3 (attachments). Don't jam it all in one DB.</li>
+        <li><strong>Presence is its own system.</strong> It's read-heavy, write-heavy, and not durable. Separate service, separate scale story.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="similar">
+    <div class="section-head"><span class="section-n">10</span><h2 class="section-title">Similar Problems</h2></div>
+    <div class="similar-grid">
+      <a href="../004-whatsapp-system-design/index.html" class="similar-card"><h4>WhatsApp</h4><p>DM-first chat; end-to-end encrypted; same gateway pattern</p></a>
+      <a href="../notification-system/index.html" class="similar-card"><h4>Notification System</h4><p>Push notifications for offline members</p></a>
+      <a href="../live-streaming/index.html" class="similar-card"><h4>Live Streaming Chat</h4><p>Twitch chat — even higher fan-out per channel</p></a>
+      <a href="../distributed-queue/index.html" class="similar-card"><h4>Distributed Queue</h4><p>Pub/sub fabric underpinning message delivery</p></a>
+      <a href="../video-conferencing/index.html" class="similar-card"><h4>Video Conferencing</h4><p>Discord voice channels — SFU architecture for voice/video</p></a>
+    </div>
+  </section>
+
+  <section class="section" id="evolution">
+    <div class="section-head"><span class="section-n">11</span><h2 class="section-title">Evolution</h2></div>
+    <div class="evolution-step">
+      <div class="evolution-marker">1</div>
+      <div class="evolution-content">
+        <h4>MVP — long-polling + single Postgres</h4>
+        <p>HTTP long-poll for "new messages since ts". Postgres for everything. Works to ~10K users. Slack's earliest architecture was close to this.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">2</div>
+      <div class="evolution-content">
+        <h4>WebSocket gateways + Redis</h4>
+        <p>Persistent WS connections via dedicated gateways. Redis pub/sub for fan-out. Cassandra for messages. Carries to ~1M concurrent.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">3</div>
+      <div class="evolution-content">
+        <h4>Separated presence service + sharded pub/sub</h4>
+        <p>Presence extracted because write + read patterns differ. Pub/sub sharded by channel_id hash. ~10M concurrent.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">4</div>
+      <div class="evolution-content">
+        <h4>Large-guild "lazy" fan-out</h4>
+        <p>Guilds &gt; 75k members stop pushing messages to non-viewers; they get unread counts + history-on-open. Discord shipped this specifically because huge servers melted the fan-out tier.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">5</div>
+      <div class="evolution-content">
+        <h4>Multi-region gateways + global routing</h4>
+        <p>Gateways in every region; users connect to nearest. Cross-region channels replicate via Kafka-style log. End-to-end latency held under 200 ms globally.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const FLOW_NODES = [
+  { label: 'Client',        sub: 'sends WS frame' },
+  { label: 'Gateway',       sub: 'auth + rate-limit' },
+  { label: 'Message svc',   sub: 'validate + persist' },
+  { label: 'Cassandra',     sub: 'partition by chan' },
+  { label: 'Redis pub/sub', sub: 'channel topic' },
+  { label: 'Recipient GW',  sub: 'subscribed gateways' },
+  { label: 'Recipient',     sub: 'WS push' },
+];
+const FLOW_DESCS = [
+  'Client sends {nonce, text, channel_id} over persistent WebSocket',
+  'Gateway validates JWT + applies per-user rate limit (5/5s)',
+  'Message service checks dedup via (user_id, nonce) within 5-min window',
+  'Insert by partition key=channel_id, clustering=message_id (monotonic)',
+  'PUBLISH envelope to channel:{id}; only subscribed gateways get it',
+  'Receiving gateways iterate their local subscribers for the channel',
+  'Push MESSAGE_CREATE frame to each active viewer on that gateway',
+];
+</script>
+
+</body>
+</html>

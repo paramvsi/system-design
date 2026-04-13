@@ -1,0 +1,71 @@
+{
+  "slug": "two-generals-byzantine-problems",
+  "title": "Two Generals & Byzantine Problems",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 245,
+    "s": 60,
+    "l": 50
+  },
+  "category": "Distributed Systems",
+  "blurb": "The two foundational impossibility results in distributed systems. Knowing them isn't trivia — they tell you exactly what's possible to build and what's not. Every distributed protocol you'll ever design is constrained b",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>The two foundational impossibility results in distributed systems. Knowing them isn't trivia — they tell you exactly what's possible to build and what's not. Every distributed protocol you'll ever design is constrained by one of these two problems. Senior engineers cite them by name; junior engineers re-discover them by losing data in production.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The Two Generals problem",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The Two Generals problem</h2></div>\n    <div class=\"prose\">\n      <p>Two armies camp on hills on either side of a city. They need to attack at the same time to win — alone, either is defeated. Generals communicate only by messengers, who can be captured.</p>\n      <p>General A sends \"attack at dawn\" via messenger. The messenger arrives. But A doesn't know if the messenger arrived. So A cannot attack — what if the message was lost?</p>\n      <p>B receives, sends back \"OK, will attack at dawn.\" Same problem — B doesn't know if A got the ack. Now B cannot attack either.</p>\n      <p>A, on receiving the ack, sends \"OK got your ack.\" Same problem one more time. The chain never terminates with both sides certain.</p>\n      <p><strong>The result</strong> (Akkoyunlu, Ekanadham, Huber, 1975): there is <span class=\"hl\">no protocol over a lossy channel that lets both parties be 100% certain they will attack together</span>. Coordination over an unreliable channel is provably impossible to make perfect.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "What this means in practice",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">What this means in practice</h2></div>\n    <div class=\"prose\">\n      <p>Every TCP connection, every HTTP request, every database commit acknowledgment faces this. You cannot have <strong>guaranteed</strong> agreement over a network. So real systems pick:</p>\n      <ul>\n        <li><strong>Best-effort</strong> — try once, accept loss. UDP, fire-and-forget logging.</li>\n        <li><strong>At-most-once</strong> with explicit acks — if uncertain, assume the worst (don't act). Used in idempotent reads.</li>\n        <li><strong>At-least-once</strong> with retries + dedup — assume best (re-send), let receiver dedup. The standard for <a href=\"/concepts/delivery-guarantees\">message delivery</a>.</li>\n        <li><strong>Probabilistic</strong> — accept that 99.999% is the best you can do, design around the rare missing case.</li>\n      </ul>\n      <p>The interview answer when someone asks \"can we guarantee X?\" — recognize when X is two-generals-equivalent, then propose at-least-once + idempotency.</p>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "The Byzantine Generals problem",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">The Byzantine Generals problem</h2></div>\n    <div class=\"prose\">\n      <p>Two-generals assumes channels can lose messages. <strong>Byzantine</strong> (Lamport, Shostak, Pease, 1982) is worse: the channels are reliable, but <em>some generals are traitors</em>. They send conflicting messages — \"attack\" to one ally, \"retreat\" to another — to sow confusion.</p>\n      <p>The result: with N generals, you can tolerate at most <strong>(N-1)/3 traitors</strong> while still reaching consensus. With 4 generals, 1 can lie. With 7 generals, 2 can lie. With 10 generals, 3.</p>\n      <p>This is why blockchain consensus (Bitcoin, Ethereum) needs ⅔ honest majority — they're literally solving Byzantine generals where any node may be malicious.</p>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "When you need Byzantine tolerance",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">When you need Byzantine tolerance</h2></div>\n    <div class=\"prose\">\n      <p>Most production systems are <strong>crash-fault tolerant</strong>, not Byzantine-fault tolerant. They assume nodes either work correctly or crash — they don't lie. <a href=\"/concepts/consensus-paxos-raft\">Raft and Paxos</a> work in this model. Cheap; sufficient for almost all internal systems.</p>\n      <p>You need Byzantine tolerance when:</p>\n      <ul>\n        <li><strong>Public blockchains</strong> — anyone can run a node, anyone can be malicious.</li>\n        <li><strong>Aerospace / safety-critical</strong> — Boeing 777 flight control runs Byzantine consensus across redundant computers.</li>\n        <li><strong>Multi-party financial systems</strong> — clearing houses where participants don't fully trust each other.</li>\n        <li><strong>Some military comms</strong> — original motivation for the research.</li>\n      </ul>\n      <p>Cost: BFT consensus is significantly more expensive (more rounds, more messages, ⅔ vs majority). Don't pay for it without need.</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — FLP impossibility",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Deep dive — FLP impossibility</h2></div>\n    <div class=\"prose\">\n      <p>The third foundational result, completing the trio: Fischer-Lynch-Paterson (1985) proved that <strong>in a fully asynchronous distributed system where even one node can crash, no deterministic consensus protocol can guarantee both safety and liveness</strong>.</p>\n      <p>Translation: you can have a protocol that's always safe (never decides wrong) but might never decide. Or always decides but might decide wrong. Not both, in the worst case.</p>\n      <p>Real systems escape FLP by adding assumptions:</p>\n      <ul>\n        <li><strong>Partial synchrony</strong> — assume messages eventually arrive within some bound. Raft, Paxos use this. Real networks behave this way 99.99% of the time.</li>\n        <li><strong>Failure detectors</strong> — eventually accurate guesses about who's alive (see <a href=\"/concepts/heartbeat-failure-detection\">heartbeat</a>).</li>\n        <li><strong>Randomization</strong> — use random delays so adversarial scheduling can't keep stalling progress (Raft's randomized election timeouts).</li>\n      </ul>\n      <p>These three results — Two Generals, Byzantine Generals, FLP — define the entire shape of distributed-systems research. Every protocol works around them in some way.</p>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">Interview-grade answer</div>\n        <p>\"Two Generals proves coordination over lossy channels can never be perfect — we use at-least-once + idempotency to live with this. FLP proves async consensus can't guarantee both safety and liveness — Raft escapes via partial synchrony + randomization. Byzantine fault tolerance is for systems where nodes might lie — overkill for trusted internal infra; required for public blockchains.\"</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">TCP</div><h4>Two Generals in action</h4><p>Three-way handshake doesn't actually solve the problem — both sides still can't be 100% certain. TCP just makes uncertainty rare enough to ignore.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Bitcoin / Ethereum</div><h4>Byzantine consensus at scale</h4><p>PoW + PoS protocols solve Byzantine Generals across thousands of mutually-distrustful nodes. Massive energy/cost; required by trust model.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Boeing 777 flight control</div><h4>BFT in safety systems</h4><p>Three flight computers vote; one disagreeing computer is overridden. Plane survives one Byzantine failure.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">PBFT (Castro-Liskov 1999)</div><h4>Practical BFT</h4><p>The first practical Byzantine consensus protocol. Influences modern systems (Tendermint, HotStuff, libra).</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "08",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">08</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Payment gateway implicitly faces Two Generals on every charge ack — solved with idempotency keys. Stock exchange uses crash-fault-tolerant consensus, not Byzantine, because matching engines are trusted. Distributed locking deals with Two Generals when the lock-server's response is lost.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 4
+}

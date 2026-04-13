@@ -1,0 +1,71 @@
+{
+  "slug": "mobile-offline-first-sync",
+  "title": "Mobile Offline-First Sync",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 145,
+    "s": 55,
+    "l": 42
+  },
+  "category": "Frontend & Mobile",
+  "blurb": "The user opens your app on the subway. No signal. They write a comment, mark a task done, edit a doc. The app should accept their work, not pop \"no internet\" errors. When connectivity returns, everything they did syncs t",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>The user opens your app on the subway. No signal. They write a comment, mark a task done, edit a doc. The app should accept their work, not pop \"no internet\" errors. When connectivity returns, everything they did syncs to the server. <strong>That's offline-first</strong> — and it's vastly harder than it sounds.</p>\n      <p>Two phones edit the same doc while both offline. They reconnect. Whose change wins? What if both add a row with the same primary key? What if one phone deleted what the other modified? These are the hard problems mobile apps face and most get partially wrong.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "The architecture",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The architecture</h2></div>\n    <div class=\"prose\">\n      <ol>\n        <li><strong>Local-first storage.</strong> SQLite (Android Room, iOS Core Data, Realm). All reads + writes go to local DB first.</li>\n        <li><strong>Operation queue.</strong> Writes also append to a pending-operations queue. \"Comment created\", \"Task done\", \"Doc edited at offset 42 inserted X.\"</li>\n        <li><strong>Sync engine.</strong> When online, drains the queue to the server. Server returns canonical state. Local DB updated.</li>\n        <li><strong>Conflict resolution.</strong> Server's authoritative answer might disagree with local optimistic state. Reconcile.</li>\n        <li><strong>Pull updates.</strong> Server pushes (or device pulls) changes from other clients. Apply to local DB. UI updates reactively.</li>\n      </ol>\n      <p>UI never sees \"loading\" for normal interactions — it reads from local DB, optimistic. Network is a background concern that <em>eventually</em> reconciles.</p>\n    \n      <div class=\"code-caption\" data-code-snippet=\"1\">G-Counter CRDT (grow-only counter)</div>\n      <pre><code class=\"lang-python\">class GCounter:\n    \"\"\"Each replica tracks its own contribution; total = sum.\"\"\"\n    def __init__(self, replica_id):\n        self.replica = replica_id\n        self.counts = {replica_id: 0}\n\n    def inc(self, n=1):\n        self.counts[self.replica] += n\n\n    def value(self):\n        return sum(self.counts.values())\n\n    def merge(self, other):\n        for r, v in other.counts.items():\n            self.counts[r] = max(self.counts.get(r, 0), v)\n        return self\n\n# Two phones increment offline; reconnect; merge = sum of each replica's\n# own count. Associative, commutative, idempotent. No conflict resolution needed.\n\n# PN-Counter = two G-counters (inc + dec). Supports decrement.</code></pre>\n  </div>"
+    },
+    {
+      "id": "variants",
+      "label": "The three sync paradigms",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">The three sync paradigms</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Paradigm</th><th>How sync works</th><th>Used by</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Last-write-wins</td><td>Server timestamp wins. Simple. Lossy.</td><td>Most CRUD apps, contact sync</td></tr>\n        <tr><td class=\"algo-name\">Operational Transform (OT)</td><td>Operations transformed to apply against current state</td><td>Google Docs, Sheets — text editing</td></tr>\n        <tr><td class=\"algo-name\">CRDT (Conflict-free Replicated Data Type)</td><td>Data structures that merge automatically</td><td>Figma, Linear, Notion — modern collab apps</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — why CRDTs won",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Deep dive — why CRDTs won</h2></div>\n    <div class=\"prose\">\n      <p>OT requires every operation to be transformed against every concurrent operation — server-side coordination, complex correctness proofs (Google Docs took years to get right). <strong>CRDTs</strong> (Conflict-free Replicated Data Types) are data structures that <em>mathematically merge</em> regardless of order or duplication. Two clients can apply operations in any order and converge to the same result.</p>\n      <p>Concrete CRDTs:</p>\n      <ul>\n        <li><strong>G-Counter</strong> — grow-only counter. Each client tracks its own delta. Sum = total.</li>\n        <li><strong>OR-Set</strong> — observed-remove set. Add and remove operations carry unique tags so concurrent add+remove is unambiguous.</li>\n        <li><strong>RGA / LSEQ</strong> — sequence types for collaborative text. Each character has a unique position-ID; concurrent inserts produce deterministic ordering.</li>\n        <li><strong>YATA / Yjs</strong> — practical CRDT library used by ~all 2024-era collab apps. Powers Linear's editor, the Notion clones, Tldraw, Liveblocks.</li>\n      </ul>\n      <p>The win: zero server-side conflict resolution code. Client A and Client B both run the same merge logic locally; results converge. Server is just a relay + storage. Same code can run peer-to-peer (some apps do this).</p>\n\n      <div class=\"diagram-wrap\">\n        <div class=\"diagram-head\">\n          <span class=\"diagram-label\">CRDT vs LWW Concurrent Update</span>\n          <span class=\"diagram-type\">Mermaid</span>\n        </div>\n        <div class=\"diagram-body\">\n          <div class=\"mermaid\">\nsequenceDiagram\n    participant A as Phone A\n    participant B as Phone B\n    participant S as Server\n\n    Note over A,B: Both offline; both edit list\n    A-&gt;&gt;A: add \"milk\"\n    B-&gt;&gt;B: add \"eggs\"\n    Note over A,B: Both reconnect\n    A-&gt;&gt;S: sync ops\n    B-&gt;&gt;S: sync ops\n    Note over S: LWW: latest write wins → one item lost\n    Note over S: CRDT: both ops merge → list = [milk, eggs]\n    S--&gt;&gt;A: full state [milk, eggs]\n    S--&gt;&gt;B: full state [milk, eggs]\n          </div>\n        </div>\n      </div>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "Practical patterns",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Practical patterns</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>Use stable client-side IDs.</strong> Generate UUIDs locally; don't wait for server-assigned IDs. Server stores client UUIDs; deterministic across sync.</li>\n        <li><strong>Vector clocks for \"since when?\"</strong> Each client tracks \"I last synced at vector V\"; server returns ops since V. Avoids re-syncing the world.</li>\n        <li><strong>Idempotent operations.</strong> Same op applied twice = no double effect. Survives the inevitable retry.</li>\n        <li><strong>Handle deletions specially.</strong> \"Tombstone\" markers prevent zombies (deleted item recreated by another client's old write).</li>\n        <li><strong>Conflict-resolution UI for genuine human conflicts.</strong> Two people edit the same paragraph — show both versions, let user pick. Don't pretend you can auto-resolve everything.</li>\n        <li><strong>Battery + bandwidth.</strong> Don't poll; use long-poll or push. Sync when on WiFi if possible. Coalesce batches.</li>\n      </ul>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">Modern stack</div>\n        <p>\"SQLite local DB. Yjs CRDT for collaborative document state. Background sync via WebSocket when foregrounded; push notifications wake the app for high-priority updates. Vector clock tracks last sync point. Batched commits over WiFi to save battery.\"</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Linear</div><h4>CRDT-backed real-time collab</h4><p>Yjs under the hood. Issues edited offline sync seamlessly. No \"save\" button — everything always synced.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Apple Notes / iCloud</div><h4>CloudKit sync</h4><p>OT-style document sync. Notes work offline; reconcile via iCloud. Per-field merge for partial conflicts.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Google Docs</div><h4>OT pioneer</h4><p>2010s gold standard for OT. Decades of investment in correctness. Slowly shifting toward CRDT internally.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">PowerSync / ElectricSQL / Replicache</div><h4>Sync-as-a-service</h4><p>Productize the offline-sync pattern. Devs describe the schema; library handles sync, CRDT-style merges, conflict resolution.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Google Drive sync engine is a textbook offline-first system. Google Docs uses OT for character-level collaboration. WhatsApp messages queue locally when offline; deliver on reconnect. Notification system relies on push protocols + offline buffering.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [
+    {
+      "sectionId": "deep-dive",
+      "source": "sequenceDiagram\n    participant A as Phone A\n    participant B as Phone B\n    participant S as Server\n\n    Note over A,B: Both offline; both edit list\n    A->>A: add \"milk\"\n    B->>B: add \"eggs\"\n    Note over A,B: Both reconnect\n    A->>S: sync ops\n    B->>S: sync ops\n    Note over S: LWW: latest write wins → one item lost\n    Note over S: CRDT: both ops merge → list = [milk, eggs]\n    S-->>A: full state [milk, eggs]\n    S-->>B: full state [milk, eggs]",
+      "index": 0
+    }
+  ],
+  "related": [],
+  "similar": [],
+  "readMinutes": 4
+}

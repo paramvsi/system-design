@@ -1,0 +1,65 @@
+{
+  "slug": "consistent-hashing",
+  "title": "Consistent Hashing",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 160,
+    "s": 58,
+    "l": 40
+  },
+  "category": "Distributed Systems",
+  "blurb": "You have 10 cache servers. You route keys to them with hash(key) mod 10. It works beautifully. Then you add an 11th server. Now ~90% of your keys hash to a different server — your entire cache invalidates. Origin gets ha",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>You have 10 cache servers. You route keys to them with <code>hash(key) mod 10</code>. It works beautifully. Then you add an 11th server. Now <span class=\"hl-red\">~90% of your keys hash to a different server</span> — your entire cache invalidates. Origin gets hammered, latency spikes, users see \"loading\" everywhere.</p>\n      <p>Consistent hashing (Karger et al., 1997) solves this. When you add or remove a node, only ~1/N of keys move. Adding an 11th server to a 10-server cluster moves 9% of keys. <span class=\"hl-green\">Graceful scaling.</span> It's the technique behind DynamoDB, Cassandra, Memcached clients, and every CDN.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "Intuition — the ring",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Intuition — the ring</h2></div>\n    <div class=\"prose\">\n      <p>Imagine a circle from 0 to 2³² − 1. Each node takes a position on the ring (via <code>hash(node_id)</code>). Each key also takes a position (<code>hash(key)</code>). A key belongs to the <strong>first node you hit going clockwise</strong> from the key's position.</p>\n      <p>Add a node: it claims a fresh arc between two existing nodes. Only the keys in that arc move — from the node that used to own that slice. No other node's keys move. Remove a node: its arc transfers to the next clockwise neighbor. Again, only that slice moves.</p>\n      <p>The genius: <strong>the rest of the ring is stable.</strong> No mass rehashing. Add/remove a node, and only ~1/N of the total keyspace is affected.</p>\n    </div>\n\n    <div class=\"diagram-wrap\">\n      <div class=\"diagram-head\"><span class=\"diagram-label\">The Ring</span><span class=\"diagram-type\">SVG</span></div>\n      <div class=\"diagram-body\">\n        <svg class=\"arch-svg\" viewBox=\"0 0 560 360\" xmlns=\"http://www.w3.org/2000/svg\">\n          <g font-family=\"Geist, system-ui, sans-serif\" font-size=\"11\">\n            <circle cx=\"280\" cy=\"180\" r=\"120\" fill=\"none\" stroke=\"#ccc9c4\" stroke-width=\"1.5\"></circle>\n            <!-- Nodes -->\n            <circle cx=\"280\" cy=\"60\" r=\"8\" fill=\"hsl(160,58%,40%)\"></circle>\n            <text x=\"280\" y=\"50\" text-anchor=\"middle\" font-weight=\"500\">Node A</text>\n            <circle cx=\"400\" cy=\"180\" r=\"8\" fill=\"hsl(160,58%,40%)\"></circle>\n            <text x=\"418\" y=\"184\" font-weight=\"500\">Node B</text>\n            <circle cx=\"280\" cy=\"300\" r=\"8\" fill=\"hsl(160,58%,40%)\"></circle>\n            <text x=\"280\" y=\"320\" text-anchor=\"middle\" font-weight=\"500\">Node C</text>\n            <circle cx=\"160\" cy=\"180\" r=\"8\" fill=\"hsl(160,58%,40%)\"></circle>\n            <text x=\"142\" y=\"184\" text-anchor=\"end\" font-weight=\"500\">Node D</text>\n            <!-- Keys -->\n            <circle cx=\"340\" cy=\"85\" r=\"4\" fill=\"#a07a00\"></circle>\n            <text x=\"346\" y=\"80\" fill=\"#a07a00\">k1 → B</text>\n            <circle cx=\"370\" cy=\"250\" r=\"4\" fill=\"#a07a00\"></circle>\n            <text x=\"376\" y=\"252\" fill=\"#a07a00\">k2 → C</text>\n            <circle cx=\"200\" cy=\"260\" r=\"4\" fill=\"#a07a00\"></circle>\n            <text x=\"156\" y=\"275\" fill=\"#a07a00\">k3 → D</text>\n            <circle cx=\"220\" cy=\"100\" r=\"4\" fill=\"#a07a00\"></circle>\n            <text x=\"166\" y=\"92\" fill=\"#a07a00\">k4 → A</text>\n            <text x=\"280\" y=\"180\" text-anchor=\"middle\" font-size=\"10\" fill=\"#878480\">Keys owned by next clockwise node</text>\n          </g>\n        </svg>\n      </div>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "The virtual-node trick",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">The virtual-node trick</h2></div>\n    <div class=\"prose\">\n      <p>A naive ring has two problems. (1) If 3 nodes happen to hash to nearby positions, one node owns almost nothing and another owns most of the ring — <strong>uneven load</strong>. (2) When a node dies, its entire load transfers to exactly one neighbor — <strong>hot spot on failure</strong>.</p>\n      <p>Fix: each physical node claims <span class=\"hl-accent\">many virtual positions</span> on the ring (typically 100–200). So node A isn't at \"position 1234\" — it's at 200 different positions, scattered across the ring. This makes load spread statistically even, and when a node dies, its 200 slices go to 200 different neighbors.</p>\n      <p>Every real consistent-hashing implementation uses virtual nodes. The word \"consistent hashing\" in interviews should automatically imply \"with virtual nodes.\"</p>\n    \n      <div class=\"code-caption\" data-code-snippet=\"1\">Consistent hash ring (30 lines)</div>\n      <pre><code class=\"lang-python\">from hashlib import md5\nfrom bisect import bisect\n\nclass HashRing:\n    def __init__(self, nodes, vnodes=150):\n        self.ring = {}\n        for n in nodes:\n            for i in range(vnodes):\n                h = int(md5(f\"{n}#{i}\".encode()).hexdigest(), 16)\n                self.ring[h] = n\n        self.sorted = sorted(self.ring)\n\n    def get(self, key):\n        h = int(md5(key.encode()).hexdigest(), 16)\n        idx = bisect(self.sorted, h) % len(self.sorted)\n        return self.ring[self.sorted[idx]]\n\n    def add(self, node, vnodes=150):\n        for i in range(vnodes):\n            h = int(md5(f\"{node}#{i}\".encode()).hexdigest(), 16)\n            self.ring[h] = node\n        self.sorted = sorted(self.ring)\n\n# Adding 1 shard to N=10 → only 1/11 of keys remap (vs N/2 in mod-hashing)</code></pre>\n  </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Compared to alternatives",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Compared to alternatives</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Approach</th><th>Keys moved on +1 node</th><th>Hot spots</th><th>Range queries</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">hash mod N</td><td>~(N−1)/N of all keys</td><td>Even load</td><td>No</td></tr>\n        <tr><td class=\"algo-name\">Consistent hashing</td><td>~1/N of keys</td><td>Uneven unless virtual nodes</td><td>No</td></tr>\n        <tr><td class=\"algo-name\">Range partitioning</td><td>None (new range)</td><td>Easy hot range</td><td>Yes (sorted)</td></tr>\n        <tr><td class=\"algo-name\">Rendezvous hashing</td><td>~1/N of keys</td><td>Even without virtual nodes</td><td>No</td></tr>\n      </tbody>\n    </table>\n    <div class=\"prose\">\n      <p><strong>Rendezvous hashing</strong> (Highest Random Weight, HRW) is a simpler alternative used by some CDNs: compute <code>hash(key, node_id)</code> for each node, pick the node with the highest hash. Achieves the same \"only 1/N moves\" property without a ring or virtual nodes. Conceptually cleaner; slightly slower per lookup (O(N) vs O(log N) with a sorted ring). CRUSH (Ceph's placement algorithm) is a variant.</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — replication on the ring",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — replication on the ring</h2></div>\n    <div class=\"prose\">\n      <p>Consistent hashing pairs elegantly with replication. To store a key with 3× replication, walk the ring <strong>three nodes clockwise</strong> starting from the key's position, placing a copy at each. When a node dies, the N-1 remaining replicas are still on the ring — and the next node clockwise automatically takes the dead node's shard.</p>\n      <p>This is why Cassandra / DynamoDB use it: one algorithm handles partitioning AND replication. When you add a node, it joins the ring, takes ownership of 1/N of the keyspace, and pulls its data from the three nodes that previously held those ranges. No central coordinator; no rehash-the-world; no manual intervention.</p>\n      <p><strong>The interview answer:</strong> \"Consistent hashing with virtual nodes. Each physical node claims ~200 virtual positions for even distribution. Keys map to the next clockwise node; replicas live on the next K clockwise nodes. Adding a node moves ~1/N of keys — graceful scaling without cascading invalidation.\"</p>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Amazon DynamoDB</div><h4>Ring with virtual nodes</h4><p>The original Dynamo paper (2007) introduced this pattern at scale. Each node claims ~256 tokens on the ring.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Cassandra</div><h4>Direct descendant of Dynamo</h4><p>Same ring model. <code>num_tokens</code> config defaults to 256. Explicit replication factor per keyspace.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Memcached clients</div><h4>Client-side ring</h4><p>Clients (ketama, libmemcached) compute the ring locally. Adding a server doesn't require server-side coordination.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Akamai / Cloudflare</div><h4>Content placement</h4><p>Which PoP caches which URL? Consistent hashing decides so that adding a PoP doesn't invalidate the global cache.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>URL shortener shards the redirect DB by consistent-hashed short code. News feed shards feed cache across Redis nodes. Rate limiter shards counters. WhatsApp shards chat data. Distributed logging shards log streams.</p></div>"
+    }
+  ],
+  "archSvg": "<svg class=\"arch-svg\" viewBox=\"0 0 560 360\" xmlns=\"http://www.w3.org/2000/svg\">\n          <g font-family=\"Geist, system-ui, sans-serif\" font-size=\"11\">\n            <circle cx=\"280\" cy=\"180\" r=\"120\" fill=\"none\" stroke=\"#ccc9c4\" stroke-width=\"1.5\"></circle>\n            <!-- Nodes -->\n            <circle cx=\"280\" cy=\"60\" r=\"8\" fill=\"hsl(160,58%,40%)\"></circle>\n            <text x=\"280\" y=\"50\" text-anchor=\"middle\" font-weight=\"500\">Node A</text>\n            <circle cx=\"400\" cy=\"180\" r=\"8\" fill=\"hsl(160,58%,40%)\"></circle>\n            <text x=\"418\" y=\"184\" font-weight=\"500\">Node B</text>\n            <circle cx=\"280\" cy=\"300\" r=\"8\" fill=\"hsl(160,58%,40%)\"></circle>\n            <text x=\"280\" y=\"320\" text-anchor=\"middle\" font-weight=\"500\">Node C</text>\n            <circle cx=\"160\" cy=\"180\" r=\"8\" fill=\"hsl(160,58%,40%)\"></circle>\n            <text x=\"142\" y=\"184\" text-anchor=\"end\" font-weight=\"500\">Node D</text>\n            <!-- Keys -->\n            <circle cx=\"340\" cy=\"85\" r=\"4\" fill=\"#a07a00\"></circle>\n            <text x=\"346\" y=\"80\" fill=\"#a07a00\">k1 → B</text>\n            <circle cx=\"370\" cy=\"250\" r=\"4\" fill=\"#a07a00\"></circle>\n            <text x=\"376\" y=\"252\" fill=\"#a07a00\">k2 → C</text>\n            <circle cx=\"200\" cy=\"260\" r=\"4\" fill=\"#a07a00\"></circle>\n            <text x=\"156\" y=\"275\" fill=\"#a07a00\">k3 → D</text>\n            <circle cx=\"220\" cy=\"100\" r=\"4\" fill=\"#a07a00\"></circle>\n            <text x=\"166\" y=\"92\" fill=\"#a07a00\">k4 → A</text>\n            <text x=\"280\" y=\"180\" text-anchor=\"middle\" font-size=\"10\" fill=\"#878480\">Keys owned by next clockwise node</text>\n          </g>\n        </svg>",
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 4
+}

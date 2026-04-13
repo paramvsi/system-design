@@ -1,0 +1,65 @@
+{
+  "slug": "cache-strategies",
+  "title": "Cache Strategies",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 8,
+    "s": 72,
+    "l": 52
+  },
+  "category": "Caching",
+  "blurb": "A database lookup costs 1–10ms. A cache lookup costs 0.1–1ms. Your feed page makes 40 lookups. Without a cache you're over 100ms just on DB; with one you're under 5ms. That's the difference between a snappy app and a slo",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>A <a href=\"/concepts/database-types\">database</a> lookup costs 1–10ms. A cache lookup costs 0.1–1ms. Your feed page makes 40 lookups. Without a cache you're over 100ms just on DB; with one you're under 5ms. That's the difference between a snappy app and a slow one.</p>\n      <p>But \"put a cache in front of the DB\" hides a design choice with five different answers, each wrong for some workload. The right cache strategy for a product catalog is the wrong one for a payment ledger.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "Intuition",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Intuition</h2></div>\n    <div class=\"prose\">\n      <p>Think of a barista's memory. A customer orders a latte. Does the barista (a) always look up the recipe in the manual and write results on a sticky note after (<strong>cache-aside</strong>), (b) write to the manual AND their sticky note at the same time (<strong>write-through</strong>), (c) only update the sticky note and sync to the manual later (<strong>write-back</strong>), or (d) skip the sticky note entirely for writes (<strong>write-around</strong>)?</p>\n      <p>Each choice trades <span class=\"hl\">consistency for latency</span> in a different direction. None is universally best.</p>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "The five strategies",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">The five strategies</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Strategy</th><th>Read path</th><th>Write path</th><th>Best for</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Cache-aside</td><td>Check cache → miss → read DB → fill cache → return</td><td>Write DB, delete or update cache</td><td>Most app caches — read-heavy, tolerates brief staleness</td></tr>\n        <tr><td class=\"algo-name\">Write-through</td><td>Check cache → miss → read DB → fill cache</td><td>Write cache AND DB synchronously. Both succeed or fail.</td><td>When reads immediately after writes must be fresh</td></tr>\n        <tr><td class=\"algo-name\">Write-back</td><td>Same as write-through</td><td>Write cache, acknowledge. Async flush to DB later.</td><td>Write-heavy, tolerates data loss on crash (counters, analytics)</td></tr>\n        <tr><td class=\"algo-name\">Write-around</td><td>Same as cache-aside</td><td>Write DB only. Cache filled on next read.</td><td>Write-once-read-rarely data (logs, audit trail)</td></tr>\n        <tr><td class=\"algo-name\">Refresh-ahead</td><td>Cache hit returns stale if expiring soon; background refresh triggered.</td><td>Writes go to DB as normal</td><td>Predictable hot keys you want to pre-warm (feed caches, homepage)</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "Tradeoffs",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Tradeoffs</h2></div>\n    <div class=\"tradeoff-grid\">\n      <div class=\"tradeoff-option chosen\">\n        <div class=\"tradeoff-label\">Cache-aside (default)</div>\n        <h4>Simple, survives cache outages</h4>\n        <p>Cache can crash and reads still work (they just hit the DB). Writes don't block on cache. <span class=\"hl-red\">Problem:</span> a read and a write racing can leave stale data in the cache. Mitigate with <code>DELETE</code>-on-write rather than <code>UPDATE</code>-on-write.</p>\n      </div>\n      <div class=\"tradeoff-option\">\n        <div class=\"tradeoff-label\">Write-through</div>\n        <h4>Strong read-after-write consistency</h4>\n        <p>Every successful write is readable from cache immediately. <span class=\"hl-red\">Problem:</span> every write is now two operations. Cache outage blocks writes. Use only when you genuinely need read-after-write consistency (user profile updates, settings).</p>\n      </div>\n    </div>\n    <div class=\"callout callout-warn\">\n      <div class=\"callout-label\">Cache invalidation</div>\n      <p>\"There are only two hard things in computer science: cache invalidation and naming things.\" — Phil Karlton. The harder the consistency you promise, the more expensive invalidation becomes. Prefer <strong>short TTLs with cache-aside</strong> over \"perfect\" invalidation logic.</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — the stale-read race in cache-aside",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — the stale-read race in cache-aside</h2></div>\n    <div class=\"prose\">\n      <p>Consider two clients hitting the same key:</p>\n      <ol>\n        <li>Client A: read cache → <span class=\"hl-red\">miss</span></li>\n        <li>Client A: read DB (gets value <code>v1</code>)</li>\n        <li>Client B: write DB (new value <code>v2</code>)</li>\n        <li>Client B: delete cache key</li>\n        <li>Client A: write cache key ← <strong>writes the now-stale <code>v1</code></strong></li>\n      </ol>\n      <p>Cache now holds <code>v1</code>; DB holds <code>v2</code>. Cache is stale forever (until TTL). This race exists in any cache-aside system. Mitigations:</p>\n      <ul>\n        <li><strong>Short TTLs</strong> — stale window bounded (e.g., 60s).</li>\n        <li><strong>Double-delete</strong> — B deletes the cache, sleeps 500ms, deletes again. Catches A's late write.</li>\n        <li><strong>Versioned values</strong> — cache entry stores <code>{value, version}</code>. On write, A's version is older, gets rejected.</li>\n        <li><strong>Write-through</strong> instead — eliminates the race entirely but costs latency on every write.</li>\n      </ul>\n      <p>The interview answer: \"cache-aside is correct for most workloads if you pair it with short TTLs. If you need read-after-write, switch that specific key's strategy to write-through — don't redesign the whole cache.\"</p>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Facebook TAO</div><h4>Cache-aside at planet scale</h4><p>Billions of entries, 99% read hit rate. Uses leases to mitigate the stale-read race — a reader holds a lease while filling, subsequent writers wait.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Redis in front of Postgres</div><h4>Classic cache-aside</h4><p>The textbook setup. App checks Redis, falls back to Postgres, stores result. Delete on write. TTL of 60s–24h depending on volatility.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">DynamoDB DAX</div><h4>Write-through</h4><p>AWS's managed cache in front of DynamoDB. Writes go through DAX, which writes to DynamoDB synchronously. Zero stale reads.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">CDN</div><h4>Write-around + long TTL</h4><p><a href=\"/concepts/cdn\">CDNs</a> rarely see writes — they pull from origin on first request (write-around is implicit). Invalidation is explicit (<code>POST /purge</code>).</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>URL shortener caches redirects (cache-aside, TTL 24h). News feed caches rendered feeds (cache-aside + refresh-ahead). Ticketmaster caches event availability (write-through to keep inventory accurate).</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

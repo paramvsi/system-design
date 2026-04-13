@@ -1,0 +1,22 @@
+{
+  "Deploy / operator error": [
+    "aws-s3-2017-typo",
+    "knight-capital-2012",
+    "gitlab-2017-db-delete",
+    "crowdstrike-2024-kernel-driver",
+    "reddit-2023-k8s-upgrade",
+    "datadog-2023-systemd"
+  ],
+  "Coordination + consensus": [
+    "github-2018-network-partition",
+    "roblox-2021-consul",
+    "slack-2022-consul"
+  ],
+  "Capacity + cascading failure": [
+    "slack-2021-jan-aws",
+    "cloudflare-2019-regex"
+  ],
+  "Infrastructure + network": [
+    "facebook-2021-bgp"
+  ]
+}

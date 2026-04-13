@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Feature Flags &amp; Rollouts — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 175; --accent-s: 60%; --accent-l: 42%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>"Deploy a new feature to all 100M users at once" is asking for a 3am incident. <strong>Feature flags</strong> let you separate <em>code deploy</em> from <em>feature release</em>: ship the code dark, then turn it on for 1% of users, watch metrics, ramp to 10%, 50%, 100%. If anything goes wrong, flip it off — no rollback, no redeploy.</p>
+      <p>Modern continuous deployment depends on this. Stripe deploys hundreds of times per day; nothing reaches all customers without a flag-controlled rollout.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Four flavors of flag</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Type</th><th>Lifetime</th><th>Use for</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Release flag</td><td>Days–weeks</td><td>Hide an unfinished feature in production until it's ready</td></tr>
+        <tr><td class="algo-name">Experiment flag</td><td>Weeks (A/B test duration)</td><td>Compare variant A vs B; analyze which performs better</td></tr>
+        <tr><td class="algo-name">Permission flag</td><td>Long-lived</td><td>"Premium tier sees this; free tier doesn't"</td></tr>
+        <tr><td class="algo-name">Operational kill switch</td><td>Permanent</td><td>"Disable the recommendations service if it misbehaves" — pairs with <a href="/concepts/graceful-degradation">graceful degradation</a></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">How a check actually evaluates</h2></div>
+    <div class="prose">
+      <p>Code path:</p>
+      <pre style="background:#f4f3f0;padding:12px;border-radius:6px;font-size:12px;font-family:var(--font-mono);overflow-x:auto">if (flags.isEnabled("new-feed-ranker", { user_id, country, plan })) {
+  return newRanker(user);
+} else {
+  return legacyRanker(user);
+}</pre>
+      <p>Inside <code>isEnabled</code>:</p>
+      <ol>
+        <li>Look up the flag's rules (cached locally; refreshed every few seconds).</li>
+        <li>Apply targeting: "enabled for premium users in EU" → check the context.</li>
+        <li>Apply percentage rollout: hash the <code>user_id</code> deterministically into a 0–99 bucket; if bucket &lt; rollout%, return true.</li>
+        <li>Cache the result.</li>
+      </ol>
+      <p>Critical: the bucketing is <strong>deterministic per user</strong>. Same user always gets the same answer until rollout% increases. Otherwise users would flip in/out of the experience randomly per request.</p>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Operational rules that make flags safe</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Default to OFF for new flags.</strong> Code that hasn't been tested in prod stays dark.</li>
+        <li><strong>Test both branches in CI.</strong> Run your suite with the flag on and off.</li>
+        <li><strong>Time-bound release flags.</strong> Track them in a registry; flags older than 60 days get reviewed and deleted. Otherwise you accumulate dead branches.</li>
+        <li><strong>Monitor by flag.</strong> Each flag should expose metrics: enabled-vs-disabled performance, error rate per branch. Alerts when one branch regresses.</li>
+        <li><strong>Make rollback instant.</strong> Flag changes propagate in &lt; 60s. If you have to redeploy to disable a feature, your flag system is broken.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — progressive delivery patterns</h2></div>
+    <div class="prose">
+      <p>Beyond simple percentage rollouts, modern teams use a ladder:</p>
+      <ol>
+        <li><strong>Internal dogfood</strong> — flag enabled only for company employees (filter by email domain). Catch egregious bugs.</li>
+        <li><strong>Beta cohort</strong> — opt-in users / specific accounts. Real-world feedback at low risk.</li>
+        <li><strong>Canary deploy</strong> — code rolled out to 1 server out of N. Hardware-level isolation. If that one server crashes, only its share of traffic is affected.</li>
+        <li><strong>1% percentage rollout</strong> — flag bumps from 0% to 1%. Watch error rate, latency, business metrics. Hold for an hour.</li>
+        <li><strong>10% → 50% → 100%</strong> — over hours or days. Each step is a checkpoint.</li>
+        <li><strong>Cleanup</strong> — once at 100% for a stable period, remove the flag and the legacy branch. Avoid permanent flag debt.</li>
+      </ol>
+      <p>Sophisticated platforms (LaunchDarkly, Split, Optimizely) automate the ladder: define a rollout policy, the platform advances rollout% based on guardrail metrics. Halt automatically if anomalies detected.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">Interview one-liner</div>
+        <p>"Every major change is behind a feature flag. We deploy code dark, ramp via percentage rollout with metric guardrails, and have an instant kill switch. Failed releases roll back in &lt; 1 minute by flipping the flag — no redeploy required."</p>
+      </div>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Progressive Delivery Ladder</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 720 240" xmlns="http://www.w3.org/2000/svg">
+          <g font-family="Geist, system-ui, sans-serif" font-size="11">
+            <!-- Stages baseline -->
+            <line x1="40" y1="180" x2="700" y2="180" stroke="#ccc9c4" stroke-width="1.5"/>
+            <!-- Stage markers -->
+            <g>
+              <circle cx="80"  cy="180" r="7" fill="hsl(175,60%,42%)"/>
+              <text x="80"  y="205" text-anchor="middle" font-size="10" font-weight="500">Internal</text>
+              <text x="80"  y="219" text-anchor="middle" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">~50 users · 1 day</text>
+
+              <circle cx="190" cy="180" r="7" fill="hsl(175,60%,42%)"/>
+              <text x="190" y="205" text-anchor="middle" font-size="10" font-weight="500">Beta</text>
+              <text x="190" y="219" text-anchor="middle" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">~500 · 3 days</text>
+
+              <circle cx="300" cy="180" r="7" fill="hsl(175,60%,42%)"/>
+              <text x="300" y="205" text-anchor="middle" font-size="10" font-weight="500">1%</text>
+              <text x="300" y="219" text-anchor="middle" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">1 hour hold</text>
+
+              <circle cx="410" cy="180" r="7" fill="hsl(175,60%,42%)"/>
+              <text x="410" y="205" text-anchor="middle" font-size="10" font-weight="500">10%</text>
+              <text x="410" y="219" text-anchor="middle" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">2 hour hold</text>
+
+              <circle cx="520" cy="180" r="7" fill="hsl(175,60%,42%)"/>
+              <text x="520" y="205" text-anchor="middle" font-size="10" font-weight="500">50%</text>
+              <text x="520" y="219" text-anchor="middle" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">12 hour hold</text>
+
+              <circle cx="630" cy="180" r="9" fill="hsl(145,55%,42%)"/>
+              <text x="630" y="205" text-anchor="middle" font-size="10" font-weight="500">100%</text>
+              <text x="630" y="219" text-anchor="middle" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">cleanup &amp; remove flag</text>
+            </g>
+            <!-- Bars showing % of users -->
+            <g>
+              <rect x="73"  y="170" width="14" height="2"  fill="hsl(175,60%,42%)"/>
+              <rect x="183" y="168" width="14" height="4"  fill="hsl(175,60%,42%)"/>
+              <rect x="293" y="166" width="14" height="6"  fill="hsl(175,60%,42%)"/>
+              <rect x="403" y="158" width="14" height="14" fill="hsl(175,60%,42%)"/>
+              <rect x="513" y="138" width="14" height="34" fill="hsl(175,60%,42%)"/>
+              <rect x="623" y="80"  width="14" height="92" fill="hsl(145,55%,42%)"/>
+            </g>
+            <!-- Top label -->
+            <text x="360" y="30" text-anchor="middle" font-weight="500">Each step: SLO check → promote OR auto-revert</text>
+            <text x="360" y="50" text-anchor="middle" font-size="10" fill="hsl(0,70%,40%)">Any guardrail breach at any step → instant flag-off (rollback in &lt; 60s)</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-val">&lt; 60 s</div><div class="kv-lbl">flag-flip propagation (LaunchDarkly)</div></div>
+      <div class="kv-card"><div class="kv-val">+0.1%</div><div class="kv-lbl">error-rate threshold for auto-revert</div></div>
+      <div class="kv-card"><div class="kv-val">+10%</div><div class="kv-lbl">P99 latency threshold for auto-revert</div></div>
+      <div class="kv-card"><div class="kv-val">60 days</div><div class="kv-lbl">flag age before mandatory cleanup review</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">LaunchDarkly</div><h4>Managed feature-flag platform</h4><p>SDKs for every language. Sub-second flag propagation. The default for teams that don't want to build it themselves.</p></div>
+      <div class="rw-card"><div class="rw-name">Statsig / Optimizely</div><h4>Flags + experimentation</h4><p>Automatic A/B test analysis per flag. Used by companies with heavy experiment cadence.</p></div>
+      <div class="rw-card"><div class="rw-name">Stripe / Netflix</div><h4>Internal platforms</h4><p>Built their own at scale. Stripe's "Sorbet" and Netflix's "Mantis" tightly integrate with their deploy pipelines.</p></div>
+      <div class="rw-card"><div class="rw-name">Cloudflare Pages / Vercel</div><h4>Edge-config flags</h4><p>Flags read at the CDN edge → instant propagation worldwide. Useful for static-site flag flips.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>News feed gates new ranker rollouts via flags + A/B test. E-commerce uses flags for checkout flow experiments + kill switches per payment provider. Notification system gates new channel integrations.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,65 @@
+{
+  "slug": "edge-computing",
+  "title": "Edge Computing",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 38,
+    "s": 90,
+    "l": 50
+  },
+  "category": "Networking & Delivery",
+  "blurb": "Your origin server is in Virginia. A user in Singapore: 180ms round-trip just to reach you, before any work. CDNs solved this for static content. Edge computing extends the same idea to code — run your business logic at ",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>Your origin server is in Virginia. A user in Singapore: 180ms round-trip just to reach you, before any work. <a href=\"/concepts/cdn\">CDNs</a> solved this for static content. <strong>Edge computing</strong> extends the same idea to <em>code</em> — run your business logic at one of 300+ PoPs near the user. Authenticate, rewrite, A/B test, personalize at the edge — never round-trip to the origin for these. Result: sub-50ms global latency, smaller origin load, lower egress bandwidth.</p>\n      <p>Cloudflare Workers, Vercel Edge, AWS Lambda@Edge, Fastly Compute. Different vendors, same idea: V8 isolates or WASM running globally.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "What \"edge\" actually is",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">What \"edge\" actually is</h2></div>\n    <div class=\"prose\">\n      <p>Three things conflated under \"edge\":</p>\n      <ol>\n        <li><strong>CDN edge</strong> — caches static assets at PoPs. The original \"edge.\"</li>\n        <li><strong>Edge functions</strong> — run small JavaScript / WASM functions at PoPs in response to HTTP requests. Sub-millisecond cold start.</li>\n        <li><strong>Edge databases</strong> — replicated data stores accessible from edge functions (Cloudflare D1/KV/R2, Turso, Upstash). Read at the edge; writes still bottleneck through a region.</li>\n      </ol>\n      <p>Combined: a request from Singapore hits a Singapore PoP, the edge function authenticates + reads from edge KV + responds — without ever touching Virginia. That's \"the edge.\"</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "What runs well at the edge",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">What runs well at the edge</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Use case</th><th>Why edge wins</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">A/B test routing</td><td>Bucket users at the edge, no origin round-trip for the decision</td></tr>\n        <tr><td class=\"algo-name\">Auth + JWT verify</td><td>Reject unauthenticated requests before they hit your origin</td></tr>\n        <tr><td class=\"algo-name\">Geo / device routing</td><td>Edge knows the user's country + device — route to the right backend</td></tr>\n        <tr><td class=\"algo-name\">Image transformation</td><td>Resize / WebP-convert on the fly at the edge; cached afterward</td></tr>\n        <tr><td class=\"algo-name\">Bot detection / rate limiting</td><td>Block bad actors at the edge before they consume origin resources</td></tr>\n        <tr><td class=\"algo-name\">HTML personalization</td><td>Inject user-specific elements into a cached HTML shell — \"smart edge cache\"</td></tr>\n        <tr><td class=\"algo-name\">SEO redirects</td><td>Tens of thousands of legacy URL redirects served at edge instantly</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "What doesn't run at the edge",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">What doesn't run at the edge</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>Heavy compute.</strong> Edge runtimes are CPU-limited (10-50ms typical, longer is throttled). Don't run ML inference on a ResNet at the edge.</li>\n        <li><strong>Long-running processes.</strong> No background jobs, no WebSocket servers (with notable exceptions like Cloudflare Durable Objects).</li>\n        <li><strong>Strict-consistency writes.</strong> Edge writes to a global datastore have to flow somewhere central — you don't escape physics.</li>\n        <li><strong>Stateful services.</strong> Edge functions are stateless. Need state? Fetch from edge KV / database / origin.</li>\n        <li><strong>Anything needing libraries.</strong> Edge runtimes are limited subsets of Node — no native modules, no filesystem, restricted Web APIs only.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — the V8 isolate trick",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — the V8 isolate trick</h2></div>\n    <div class=\"prose\">\n      <p>Lambda cold-starts a container per function (50ms-500ms). Cloudflare Workers cold-starts a V8 isolate (under 5ms). The difference is what makes edge functions feasible.</p>\n      <p>A V8 isolate is a separate JavaScript heap inside the same V8 process. Creating one is microseconds, not milliseconds. Cloudflare runs hundreds of customer functions inside one V8 process, isolated by isolate boundaries. Memory + CPU per request is tiny because there's no container, no process, no JIT warm-up. Cost per request → essentially free.</p>\n      <p>Trade: you can't run arbitrary Node modules. You're inside V8 with the Service Workers Web Platform API surface. WASM works for non-JS code. WebAssembly modules also start in microseconds.</p>\n      <p><strong>Lambda@Edge</strong> uses a different model: small Lambda runtime per request, slower cold starts (~100ms), but more compute headroom and Node.js compatibility. AWS Function URLs + Lambda are catching up; Cloudflare still leads on cold start.</p>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">Modern stack pattern</div>\n        <p>Auth, routing, A/B logic, SEO handling at Cloudflare Workers (free or near-free). Heavy app logic in regional functions or containers. Long-running APIs at origin. Each tier handles what it's good at.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Cloudflare Workers</div><h4>V8-isolate edge runtime</h4><p>Sub-5ms cold starts, 300+ PoPs. KV + Durable Objects + D1 + R2 for state. Pricing rounds to ~$5/M requests.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Vercel Edge Functions</div><h4>Edge runtime for Next.js</h4><p>Built on Cloudflare under the hood. Tight Next.js integration; great DX for full-stack apps.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">AWS Lambda@Edge / CloudFront Functions</div><h4>AWS-native edge</h4><p>Two flavors: Lambda@Edge (full Node, slower) + CloudFront Functions (sub-1ms, restricted). Tight AWS integration.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Fastly Compute</div><h4>WASM-based</h4><p>WebAssembly runtime. Run Rust, Go, AssemblyScript at the edge. Performance-focused; slightly less polished DX.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>URL shortener serves redirects at the edge — sub-50ms globally. YouTube/Netflix uses edge functions for token validation + manifest generation. News feed personalizes top-of-page at the edge. Live streaming uses edge for low-latency manifest + token-protected playback URLs.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

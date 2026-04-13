@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Crypto Exchange — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+
+    :root { --accent-h: 42; --accent-s: 90%; --accent-l: 45%;
+      --accent: hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light: hsl(var(--accent-h), 80%, 94%);
+      --accent-mid: hsl(var(--accent-h), 70%, 88%);
+      --accent-text: hsl(var(--accent-h), var(--accent-s), 32%);
+      --accent-border: hsl(var(--accent-h), 60%, 72%);
+      --hl-yellow:#fff0a0; --hl-yellow-dark:#a07a00;
+      --hl-accent: hsl(var(--accent-h), 90%, 85%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 30%);
+      --bg:#fff; --bg-subtle:#f7f7f5; --bg-raised:#f0eeeb; --bg-code:#f4f3f0;
+      --border:#e4e2de; --border-strong:#ccc9c4;
+      --text-primary:#111110; --text-secondary:#4a4845; --text-muted:#878480;
+      --font-serif:'Instrument Serif',Georgia,serif;
+      --font-sans:'Geist',system-ui,sans-serif;
+      --font-mono:'JetBrains Mono','Fira Code',monospace;
+      --radius-sm:4px; --radius-md:8px; --radius-lg:12px;
+    }
+    .req-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px; }
+    .req-box { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 20px; }
+    .req-box-head { display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size: 12px; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent-text); margin-bottom:10px; font-weight:500; }
+    .req-box-head.nonfunc { color:hsl(38,80%,30%); }
+    .req-list { padding-left:20px; font-size: 15px; color:var(--text-secondary); }
+    .req-list li { margin-bottom:6px; }
+    .endpoint { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px 18px; margin-bottom:10px; }
+    .endpoint-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+    .method { font-family:var(--font-mono); font-size: 11px; font-weight:600; padding:2px 8px; border-radius:3px; letter-spacing:0.05em; }
+    .method.get { background:hsl(190,70%,90%); color:hsl(190,70%,28%); }
+    .method.post { background:hsl(145,55%,90%); color:hsl(145,55%,28%); }
+    .method.ws { background:hsl(270,60%,90%); color:hsl(270,60%,35%); }
+    .method.delete { background:hsl(0,70%,92%); color:hsl(0,70%,38%); }
+    .ep-path { font-family:var(--font-mono); font-size: 15px; color:var(--text-primary); font-weight:500; }
+    .ep-desc { font-size: 15px; color:var(--text-secondary); margin:6px 0 0; }
+    .failure { display:flex; gap:14px; padding:14px 18px; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); margin-bottom:10px; }
+    .failure-icon { font-size:18px; flex-shrink:0; margin-top:2px; }
+    .failure-title { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .failure-desc { font-size: 15px; color:var(--text-secondary); margin-bottom:4px; }
+    .mitigation { font-family:var(--font-mono); font-size: 12px; color:hsl(145,55%,28%); }
+    .similar-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+    .similar-card { display:block; text-decoration:none; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 18px; transition:all 0.15s; }
+    .similar-card:hover { border-color:var(--accent-border); background:var(--accent-light); }
+    .similar-card h4 { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .similar-card p { font-size: 13.5px; color:var(--text-muted); margin:0; }
+    .evolution-step { display:flex; gap:14px; margin-bottom:18px; }
+    .evolution-marker { width:32px; height:32px; border-radius:50%; background:var(--accent-light); border:2px solid var(--accent-border); display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size: 12px; font-weight:600; color:var(--accent-text); flex-shrink:0; }
+    .evolution-content h4 { font-size: 16px; font-weight:600; margin-bottom:4px; }
+    .evolution-content p { font-size: 15px; color:var(--text-secondary); margin:0; }
+  </style>
+</head>
+<body>
+
+<main>
+
+  <div class="hero" id="problem">
+    <div class="hero-kicker">System Design — 24/7 Cryptocurrency Trading</div>
+    <h1 class="hero-title">Design a <em>Crypto Exchange</em></h1>
+    <p class="hero-desc">
+      A cryptocurrency exchange like Coinbase or Binance: order-book trading across hundreds of coin pairs, wallets for hundreds of coins, deposits + withdrawals to the public blockchain, 24/7 operation. The hard parts:
+      a <span class="hl">matching engine</span> that's stricter than a stock exchange (never miss a trade, but also never double-spend);
+      <span class="hl-accent">multi-chain wallet management</span> with hot/cold segregation — exchanges that hold everything in hot wallets get catastrophically hacked (Mt. Gox, FTX's neighbors);
+      and <span class="hl-accent">deposit detection from blockchain</span> — monitoring 20+ chains' finality rules simultaneously without over-crediting reorg-able transactions.
+      Binance does ~$50B+ daily volume; peak trading is 100K+ trades/sec.
+    </p>
+    <div class="hero-tags">
+      <span class="tag accent">⚡ Core: Matching + Wallets + Blockchain Ingress</span>
+      <span class="tag">~100K trades/sec</span>
+      <span class="tag">24/7 operation</span>
+      <span class="tag">200+ coins</span>
+      <span class="tag">Custodial wallets</span>
+    </div>
+  </div>
+
+  <section class="section" id="requirements">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Requirements</h2></div>
+    <div class="req-grid">
+      <div class="req-box">
+        <div class="req-box-head">Functional</div>
+        <ul class="req-list">
+          <li><span class="hl-accent">Order book trading</span> — market + limit + stop orders for pairs (BTC/USD, ETH/BTC, ...)</li>
+          <li>Real-time market data: order book depth, trades, candles</li>
+          <li>Deposit any supported coin from <span class="hl-accent">any blockchain address</span></li>
+          <li>Withdraw to user-specified external address</li>
+          <li>Per-user wallet balances across all supported assets</li>
+          <li>KYC + AML compliance; account tiers unlock higher limits</li>
+          <li>Fiat on/off-ramp (USD, EUR) via bank / card rails</li>
+        </ul>
+      </div>
+      <div class="req-box">
+        <div class="req-box-head nonfunc">Non-Functional</div>
+        <ul class="req-list">
+          <li><span class="hl">Matching latency &lt; 1 ms</span> p99 per order (tight since pros trade here)</li>
+          <li><span class="hl">No lost orders, no phantom trades</span> — strong consistency is sacred</li>
+          <li>24/7/365 uptime; planned maintenance windows only</li>
+          <li>Support 20+ blockchains with different finality rules</li>
+          <li>Never expose &gt; 5% of assets in hot wallets (industry norm post-Mt. Gox)</li>
+          <li>Scale to 100K+ trades/sec peak per pair</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="scale">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Scale Estimation</h2></div>
+    <div class="kv-grid">
+      <div class="kv-card">
+        <div class="kv-k">Trades / sec (peak)</div>
+        <div class="kv-v">~100K</div>
+        <div class="kv-sub">Binance published 1.4M orders/sec peak matching engine capacity</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Order book depth</div>
+        <div class="kv-v">~1M price levels</div>
+        <div class="kv-sub">per active pair; most compact near mid-price; tail is long</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Market data fanout</div>
+        <div class="kv-v">~1M WS conns</div>
+        <div class="kv-sub">traders + bots subscribing to order book updates + trade feed</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Chains monitored</div>
+        <div class="kv-v">~30</div>
+        <div class="kv-sub">Bitcoin, Ethereum, Solana, etc.; each needs its own node + indexer</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Hot wallet %</div>
+        <div class="kv-v">&lt; 5%</div>
+        <div class="kv-sub">rest in cold storage (multi-sig HSM / air-gapped); daily rebalance</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Finality wait</div>
+        <div class="kv-v">varies</div>
+        <div class="kv-sub">BTC: ~6 confirmations (~60 min); ETH: ~12 blocks (~3 min); Solana: finalized slot (~13 sec)</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="api">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">API Design</h2></div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/v1/orders</span></div>
+      <p class="ep-desc">Place an order. Body: <code>{pair: "BTC-USD", side: "buy", type: "limit", price, quantity, client_order_id}</code>. Idempotency via client_order_id. Returns <code>{order_id, status}</code>.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method delete">DELETE</span><span class="ep-path">/api/v1/orders/{id}</span></div>
+      <p class="ep-desc">Cancel resting order. Returns final status. Idempotent (cancelling already-filled order returns current state, not error).</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/api/v1/orderbook?pair=BTC-USD&amp;depth=100</span></div>
+      <p class="ep-desc">Snapshot of order book top-N levels per side. Served from cached view for speed. Most pros use WS for incremental updates instead.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method ws">WS</span><span class="ep-path">wss://ws.example.com/stream</span></div>
+      <p class="ep-desc">Subscribe to channels: <code>{orderbook: BTC-USD, trades: BTC-USD, ticker: *}</code>. Server streams delta updates. Target latency &lt; 10 ms per update.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/api/v1/account/balances</span></div>
+      <p class="ep-desc">Returns all asset balances: <code>{BTC: {available, reserved}, USD: {…}, …}</code>. Reserved = held for open orders.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/v1/deposits/address</span></div>
+      <p class="ep-desc">Get a unique deposit address for a coin. Backend either picks from pre-generated address pool or derives new one from master HD wallet. Address tied to user_id.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/v1/withdrawals</span></div>
+      <p class="ep-desc">Request withdrawal. Body: <code>{coin, amount, address, 2fa_code}</code>. Goes through risk check, withdrawal queue, signing. External tx submitted after approval. Returns pending withdrawal_id.</p>
+    </div>
+  </section>
+
+  <section class="section" id="architecture">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Architecture</h2></div>
+    <div class="prose">
+      <p>Three critical subsystems, isolated for failure-domain + security: (1) the <strong>trading engine</strong> — matching, balance holds, trade settlement — strongly consistent, low-latency; (2) the <strong>blockchain interface</strong> — nodes watching chains for deposits + signing withdrawals — security-critical; (3) the <strong>custody layer</strong> — hot wallet (online, minimal balance) + cold wallet (air-gapped, majority of funds).</p>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Trading + Blockchain + Custody</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 840 520" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Crypto exchange architecture">
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="hsl(42,30%,40%)"/>
+            </marker>
+          </defs>
+          <style>
+/* ux-v2-bumped */
+
+            .lbl { font-family:'Geist',sans-serif; font-size: 12px; fill:#111; }
+            .sub { font-family:'JetBrains Mono',monospace; font-size: 10.5px; fill:#555; }
+            .box { fill:#fff; stroke:hsl(42,40%,70%); stroke-width:1.2; rx:6; }
+            .box-accent { fill:hsl(42,80%,92%); stroke:hsl(42,88%,45%); stroke-width:1.5; rx:6; }
+            .box-data { fill:hsl(215,70%,94%); stroke:hsl(215,60%,55%); stroke-width:1.2; rx:6; }
+            .box-hot { fill:hsl(0,70%,94%); stroke:hsl(0,70%,52%); stroke-width:1.3; rx:6; }
+            .box-cold { fill:hsl(200,40%,92%); stroke:hsl(200,50%,55%); stroke-width:1.3; rx:6; }
+            .group-label { font-family:'JetBrains Mono',monospace; font-size: 11px; letter-spacing:0.08em; fill:hsl(42,75%,35%); text-transform:uppercase; }
+            .group-box { fill:none; stroke:hsl(42,40%,78%); stroke-dasharray:4 3; rx:8; }
+            .edge { stroke:hsl(42,30%,40%); stroke-width:1.2; fill:none; }
+          </style>
+
+          <rect x="20" y="20" width="110" height="50" class="box"/>
+          <text x="75" y="42" text-anchor="middle" class="lbl">Trader / Bot</text>
+          <text x="75" y="57" text-anchor="middle" class="sub">REST + WS</text>
+
+          <rect x="20" y="100" width="110" height="50" class="box"/>
+          <text x="75" y="122" text-anchor="middle" class="lbl">User app</text>
+          <text x="75" y="137" text-anchor="middle" class="sub">deposit/withdraw</text>
+
+          <rect x="160" y="60" width="110" height="50" class="box-accent"/>
+          <text x="215" y="82" text-anchor="middle" class="lbl">API Gateway</text>
+          <text x="215" y="97" text-anchor="middle" class="sub">auth + rate-limit</text>
+
+          <rect x="300" y="20" width="270" height="180" class="group-box"/>
+          <text x="310" y="14" class="group-label">Trading engine (low-latency)</text>
+
+          <rect x="320" y="40" width="110" height="55" class="box-accent"/>
+          <text x="375" y="62" text-anchor="middle" class="lbl">Risk svc</text>
+          <text x="375" y="77" text-anchor="middle" class="sub">balance hold</text>
+          <text x="375" y="90" text-anchor="middle" class="sub">pre-trade check</text>
+
+          <rect x="440" y="40" width="110" height="55" class="box-accent"/>
+          <text x="495" y="62" text-anchor="middle" class="lbl">Matching engine</text>
+          <text x="495" y="77" text-anchor="middle" class="sub">per-pair process</text>
+          <text x="495" y="90" text-anchor="middle" class="sub">priority queue</text>
+
+          <rect x="320" y="115" width="110" height="50" class="box-accent"/>
+          <text x="375" y="137" text-anchor="middle" class="lbl">Trade settler</text>
+          <text x="375" y="152" text-anchor="middle" class="sub">DB commit</text>
+
+          <rect x="440" y="115" width="110" height="50" class="box-accent"/>
+          <text x="495" y="137" text-anchor="middle" class="lbl">Market data</text>
+          <text x="495" y="152" text-anchor="middle" class="sub">pub/sub fanout</text>
+
+          <rect x="600" y="20" width="220" height="180" class="group-box"/>
+          <text x="610" y="14" class="group-label">Data plane</text>
+
+          <rect x="620" y="40" width="95" height="50" class="box-data"/>
+          <text x="667" y="62" text-anchor="middle" class="lbl">Postgres</text>
+          <text x="667" y="77" text-anchor="middle" class="sub">orders + trades</text>
+
+          <rect x="725" y="40" width="95" height="50" class="box-data"/>
+          <text x="772" y="62" text-anchor="middle" class="lbl">Ledger DB</text>
+          <text x="772" y="77" text-anchor="middle" class="sub">double-entry</text>
+
+          <rect x="620" y="110" width="95" height="50" class="box-data"/>
+          <text x="667" y="132" text-anchor="middle" class="lbl">Redis</text>
+          <text x="667" y="147" text-anchor="middle" class="sub">balances cache</text>
+
+          <rect x="725" y="110" width="95" height="50" class="box-data"/>
+          <text x="772" y="132" text-anchor="middle" class="lbl">Kafka</text>
+          <text x="772" y="147" text-anchor="middle" class="sub">trade events</text>
+
+          <rect x="20" y="230" width="800" height="170" class="group-box"/>
+          <text x="30" y="224" class="group-label">Blockchain + Custody</text>
+
+          <rect x="40" y="250" width="130" height="55" class="box-accent"/>
+          <text x="105" y="272" text-anchor="middle" class="lbl">Chain watchers</text>
+          <text x="105" y="287" text-anchor="middle" class="sub">BTC / ETH / SOL / ...</text>
+
+          <rect x="180" y="250" width="130" height="55" class="box-accent"/>
+          <text x="245" y="272" text-anchor="middle" class="lbl">Deposit detector</text>
+          <text x="245" y="287" text-anchor="middle" class="sub">finality per chain</text>
+
+          <rect x="320" y="250" width="130" height="55" class="box-accent"/>
+          <text x="385" y="272" text-anchor="middle" class="lbl">Withdrawal queue</text>
+          <text x="385" y="287" text-anchor="middle" class="sub">risk + manual review</text>
+
+          <rect x="460" y="250" width="130" height="55" class="box-accent"/>
+          <text x="525" y="272" text-anchor="middle" class="lbl">Signer svc</text>
+          <text x="525" y="287" text-anchor="middle" class="sub">HSM-backed</text>
+
+          <rect x="600" y="250" width="100" height="55" class="box-hot"/>
+          <text x="650" y="272" text-anchor="middle" class="lbl">Hot wallet</text>
+          <text x="650" y="287" text-anchor="middle" class="sub">&lt; 5% funds</text>
+
+          <rect x="710" y="250" width="110" height="55" class="box-cold"/>
+          <text x="765" y="272" text-anchor="middle" class="lbl">Cold wallet</text>
+          <text x="765" y="287" text-anchor="middle" class="sub">air-gapped / multisig</text>
+
+          <rect x="40" y="330" width="780" height="55" class="box-data"/>
+          <text x="430" y="352" text-anchor="middle" class="lbl">Treasury / rebalance automation</text>
+          <text x="430" y="367" text-anchor="middle" class="sub">daily sweep hot → cold when hot &gt; threshold; drip cold → hot for outflows</text>
+
+          <rect x="20" y="420" width="800" height="90" class="group-box"/>
+          <text x="30" y="414" class="group-label">Compliance + Ops</text>
+
+          <rect x="40" y="440" width="130" height="50" class="box"/>
+          <text x="105" y="462" text-anchor="middle" class="lbl">KYC / AML</text>
+          <text x="105" y="477" text-anchor="middle" class="sub">tiered limits</text>
+
+          <rect x="180" y="440" width="130" height="50" class="box"/>
+          <text x="245" y="462" text-anchor="middle" class="lbl">Travel-rule</text>
+          <text x="245" y="477" text-anchor="middle" class="sub">counterparty disclosure</text>
+
+          <rect x="320" y="440" width="130" height="50" class="box"/>
+          <text x="385" y="462" text-anchor="middle" class="lbl">Surveillance</text>
+          <text x="385" y="477" text-anchor="middle" class="sub">wash / spoofing</text>
+
+          <rect x="460" y="440" width="130" height="50" class="box"/>
+          <text x="525" y="462" text-anchor="middle" class="lbl">Risk engine</text>
+          <text x="525" y="477" text-anchor="middle" class="sub">circuit breakers</text>
+
+          <rect x="600" y="440" width="220" height="50" class="box"/>
+          <text x="710" y="462" text-anchor="middle" class="lbl">Proof-of-reserves</text>
+          <text x="710" y="477" text-anchor="middle" class="sub">Merkle commitments</text>
+
+          <path class="edge" d="M130,50 L160,75" marker-end="url(#arr)"/>
+          <path class="edge" d="M130,125 L160,100" marker-end="url(#arr)"/>
+          <path class="edge" d="M270,85 L320,65" marker-end="url(#arr)"/>
+          <path class="edge" d="M430,65 L440,65" marker-end="url(#arr)"/>
+          <path class="edge" d="M495,95 L495,115" marker-end="url(#arr)"/>
+          <path class="edge" d="M375,95 L375,115" marker-end="url(#arr)"/>
+          <path class="edge" d="M430,140 L440,140" marker-end="url(#arr)"/>
+          <path class="edge" d="M550,140 L620,135" marker-end="url(#arr)"/>
+          <path class="edge" d="M430,140 L620,65" marker-end="url(#arr)"/>
+          <path class="edge" d="M170,280 L180,280" marker-end="url(#arr)"/>
+          <path class="edge" d="M310,280 L320,280" marker-end="url(#arr)"/>
+          <path class="edge" d="M450,280 L460,280" marker-end="url(#arr)"/>
+          <path class="edge" d="M590,280 L600,280" marker-end="url(#arr)"/>
+          <path class="edge" d="M700,280 L710,280" marker-end="url(#arr)"/>
+          <path class="edge" d="M650,305 L650,330" marker-end="url(#arr)"/>
+          <path class="edge" d="M765,305 L765,330" marker-end="url(#arr)"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Deep Dive — Matching + Deposit Detection + Custody</h2></div>
+    <div class="prose">
+      <p><strong>Matching engine.</strong> One process per trading pair, running a price-time priority order book in memory. Orders flow in via a deterministic sequencer (FIFO). Process:</p>
+      <ol>
+        <li>Pre-trade risk check holds funds: for buy 1 BTC @ $60k → reserve $60k in USD balance (plus fee). If insufficient, reject.</li>
+        <li>Matching engine ingests the order; matches against opposite side at or better than limit. Emits fills.</li>
+        <li>Trade settler consumes fills, writes to ledger (double-entry: buyer's BTC +, buyer's USD -, seller inverse), releases reserved balance delta.</li>
+        <li>Market-data service fans out trade + order-book-delta to WS subscribers with minimal latency.</li>
+      </ol>
+      <p>Critical detail: the matching engine is single-threaded per pair. Determinism + recoverability beat parallelism. State is journaled; on crash, replay from journal. This matches standard securities exchange design; the only crypto-specific piece is fee calculation + decimal precision on tiny fractions.</p>
+
+      <p><strong>Deposit detection.</strong> Chain watchers run full nodes for each supported blockchain. For each block:</p>
+      <ol>
+        <li>Scan transactions for outputs paying to our known deposit addresses.</li>
+        <li>Compare against user → address map; identify which user each incoming tx belongs to.</li>
+        <li>Wait for <strong>chain-specific finality</strong> before crediting user's balance — Bitcoin needs ~6 confirmations (~60 min), Ethereum ~12 (~3 min), Solana waits for finalized slot (~13 s), Polygon uses separate checkpoint rules.</li>
+        <li>On finality, credit balance via ledger write: <code>(user_balance += amount)</code>.</li>
+        <li>Notify user; surface in UI + WebSocket feed.</li>
+      </ol>
+      <p>Missing finality rules is how exchanges get rekt. Crediting before finality → attacker double-spends → exchange eats the loss.</p>
+
+      <div class="diagram-wrap">
+        <div class="diagram-head">
+          <span class="diagram-label">Withdrawal Flow (security-critical)</span>
+          <span class="diagram-type">Mermaid</span>
+        </div>
+        <div class="diagram-body">
+          <div class="mermaid">
+sequenceDiagram
+    participant U as User
+    participant R as Risk svc
+    participant Q as Withdrawal queue
+    participant OP as Ops review
+    participant SG as Signer (HSM)
+    participant H as Hot wallet
+    participant C as Chain
+
+    U->>R: POST /withdrawals (addr, amt, 2fa)
+    R->>R: MFA check + risk score
+    alt low risk + within hot cap
+        R->>Q: enqueue pending
+        Q->>SG: sign tx from hot wallet
+        SG->>H: built + signed tx
+        H->>C: broadcast to blockchain
+        C-->>H: tx confirmed (N blocks)
+        H-->>U: withdrawal success
+    else high risk or large amt
+        R->>OP: flag for manual approval
+        OP-->>R: approve
+        R->>Q: enqueue
+    else triggers cold-wallet draw
+        R->>Q: enqueue; ops initiates cold-to-hot transfer
+        Note over Q: may be hours
+    end
+          </div>
+        </div>
+      </div>
+
+      <p><strong>Custody split: hot vs cold.</strong> Hot wallet holds online keys controlled by the signer service (HSM-backed) — fast to withdraw from, but if compromised, funds drain immediately. Cold wallet keeps the majority offline — multi-sig + hardware + air-gapped signing — practically impossible to drain remotely. Post-Mt. Gox norm: ≤ 5% hot, ≥ 95% cold. Daily treasury automation rebalances as outflows drain the hot side.</p>
+
+      <p><strong>Proof of reserves.</strong> After FTX collapsed (2022), customers and regulators expect exchanges to cryptographically prove they hold users' assets. Standard approach: Merkle tree of customer balances + on-chain proof of wallet holdings. Anyone can verify their balance is included without exposing others'. Not a technical design choice — a trust / political one.</p>
+
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"Per-pair single-threaded matching engine with journaled state. Pre-trade risk holds balances; trade settler writes double-entry ledger. Chain watchers run full nodes for each supported blockchain; deposit crediting waits for chain-specific finality. Custody is hot/cold with ≤ 5% hot; withdrawals flow through risk scoring → signing via HSM → broadcast. Large or suspicious withdrawals require ops approval. Proof-of-reserves via Merkle tree of balances + on-chain wallet proofs."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Tradeoffs &amp; Design Choices</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Custodial vs non-custodial.</strong> Custodial exchanges (Coinbase, Binance) hold user funds; responsible for security. Non-custodial (Uniswap, DEXes) don't hold anything; users sign from their own wallets. Custodial is much easier UX; non-custodial is more regulatory + honesty straightforward. This design is custodial.</li>
+        <li><strong>Single-process per pair vs sharded.</strong> Single process keeps price-time priority trivially correct. Sharding would require distributed matching, hard to get exactly right. Binance / Coinbase both use per-pair processes. The practical scale ceiling is high (tens of thousands/sec per pair) so single-process isn't the bottleneck.</li>
+        <li><strong>Hot wallet size vs withdrawal speed.</strong> Larger hot wallet → faster withdrawals, bigger blast radius if compromised. Smaller hot wallet → safer, but large withdrawals delayed by cold-to-hot transfers. Most exchanges publish an approximate % to manage user expectations.</li>
+        <li><strong>Finality vs UX.</strong> Waiting for 6 BTC confirmations is ~60 min — terrible UX. Some exchanges credit "pending" immediately (user can see + withdraw pending to other products), but block external withdrawal until finality. Balances the UX vs double-spend risk.</li>
+        <li><strong>ACID database vs in-memory matching.</strong> Matching is in-memory for speed. Settlement lands in an ACID database (Postgres + ledger tables) for durability. Don't conflate — matching isn't a DB operation.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="failures">
+    <div class="section-head"><span class="section-n">08</span><h2 class="section-title">Failure Modes</h2></div>
+    <div class="failure">
+      <div class="failure-icon">🔑</div>
+      <div>
+        <div class="failure-title">Hot wallet key compromise</div>
+        <div class="failure-desc">Attacker gets signer service keys; drains hot wallet. Historical exchange killers (e.g., Bitfinex 2016, ~$70M).</div>
+        <div class="mitigation">→ Mitigation: (a) HSM-backed keys (key material never in software); (b) multi-sig require M-of-N approvals for signing; (c) per-transaction rate limits; (d) cold-wallet majority so even full hot-wallet drain is survivable; (e) insurance fund (SAFU) to cover losses.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">⛓️</div>
+      <div>
+        <div class="failure-title">Chain reorganization invalidates deposit</div>
+        <div class="failure-desc">Exchange credited user's deposit after N confs; a reorg orphans that block; deposit "un-happens." User already traded it.</div>
+        <div class="mitigation">→ Mitigation: require enough confirmations per chain that reorg probability is cryptographically negligible; if reorg deeper than expected happens, pause deposits for that chain + manual reconciliation. Monitor reorg depth continuously.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🌀</div>
+      <div>
+        <div class="failure-title">Flash crash on an illiquid pair</div>
+        <div class="failure-desc">Market order sweeps through thin order book; executes across 1000 price levels; final trade at 10% below mid.</div>
+        <div class="mitigation">→ Mitigation: per-order price protection (reject market orders that cross X% of mid); circuit breakers pause a pair if trades move &gt; Y% in Z seconds; post-trade review for obviously-erroneous trades (rare but done).</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🏃</div>
+      <div>
+        <div class="failure-title">Matching engine process crashes mid-fill</div>
+        <div class="failure-desc">Process dies between matching + settlement. Order book + ledger could diverge.</div>
+        <div class="mitigation">→ Mitigation: all matching-engine mutations journaled (append-only log) before applying. On restart, replay journal deterministically from last-settled point. Settlement is idempotent by trade_id.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">💰</div>
+      <div>
+        <div class="failure-title">Double-spend via concurrent orders</div>
+        <div class="failure-desc">User with $1k USD submits two market-buy orders at same time, both for $1k. Both pass pre-check because balance hasn't been held yet.</div>
+        <div class="mitigation">→ Mitigation: pre-trade balance hold is atomic — reserve funds in the account row (DB transaction or Redis INCR with checked delta); matching engine rejects once reserved exceeds available. No race between check and matching.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🕵️</div>
+      <div>
+        <div class="failure-title">Sanctioned address sends deposit</div>
+        <div class="failure-desc">Compliance-sanctioned address (OFAC list) deposits to a user. Exchange credits → regulatory nightmare.</div>
+        <div class="mitigation">→ Mitigation: every incoming tx runs through address-screening (Chainalysis / TRM); funds from sanctioned sources auto-quarantine + compliance review before crediting. Proactive — not after-the-fact.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="interview-tips">
+    <div class="section-head"><span class="section-n">09</span><h2 class="section-title">Interview Tips</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>Frame custody as the hard part.</strong> Matching is "stock exchange with different fee math." Custody + chain ingress are the crypto-specific complexity.</li>
+        <li><strong>Name finality per chain.</strong> BTC 6 confs, ETH 12 blocks, Solana finalized slots. Shows domain fluency.</li>
+        <li><strong>Hot / cold split.</strong> Mention the ≤ 5% hot heuristic. Interviewers know this; omitting it suggests you've never operated one.</li>
+        <li><strong>Per-pair single-threaded matching.</strong> Don't propose "distributed matching engine for throughput." It's wrong + candidates who say it fail hard here.</li>
+        <li><strong>Journaling + replay.</strong> Every mutation goes to a log before state update. Crash recovery is log replay. Universal pattern.</li>
+        <li><strong>Proof of reserves is current.</strong> Post-FTX reality; interviewers expect you to know it. Merkle tree of balances + on-chain wallet proofs.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="similar">
+    <div class="section-head"><span class="section-n">10</span><h2 class="section-title">Similar Problems</h2></div>
+    <div class="similar-grid">
+      <a href="../stock-exchange/index.html" class="similar-card"><h4>Stock Exchange</h4><p>Same matching engine; no wallet / chain / custody</p></a>
+      <a href="../stock-trading-platform/index.html" class="similar-card"><h4>Retail Trading Platform</h4><p>Robinhood-style; trades externally cleared; custody simpler</p></a>
+      <a href="../payment-gateway/index.html" class="similar-card"><h4>Payment Gateway</h4><p>Ledger + idempotent settlement pattern</p></a>
+      <a href="../bidding-platform/index.html" class="similar-card"><h4>Auction / Bidding</h4><p>Matching resting orders against live arrivals</p></a>
+      <a href="../ecommerce-system-design/index.html" class="similar-card"><h4>E-commerce</h4><p>Saga pattern for multi-step financial transactions</p></a>
+    </div>
+  </section>
+
+  <section class="section" id="evolution">
+    <div class="section-head"><span class="section-n">11</span><h2 class="section-title">Evolution</h2></div>
+    <div class="evolution-step">
+      <div class="evolution-marker">1</div>
+      <div class="evolution-content">
+        <h4>MVP — single DB matching + single hot wallet</h4>
+        <p>Python matching against Postgres row updates. Single hot wallet with backup. Works to ~1k trades/day. Early Mt. Gox / Coinbase 2012.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">2</div>
+      <div class="evolution-content">
+        <h4>In-memory matching + hot/cold split</h4>
+        <p>Per-pair in-memory order book with journal. Majority of funds in cold storage with manual signing. ~10k trades/sec/pair.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">3</div>
+      <div class="evolution-content">
+        <h4>Multi-chain support + automated custody</h4>
+        <p>30+ chains; chain watchers for deposits. HSM-backed signer service. Automated daily cold-to-hot rebalance. Global exchange scale.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">4</div>
+      <div class="evolution-content">
+        <h4>Regulatory + compliance layer</h4>
+        <p>KYC/AML integration, sanction screening, travel-rule compliance. Surveillance system for market manipulation. Geo-restricted features per jurisdiction.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">5</div>
+      <div class="evolution-content">
+        <h4>Proof-of-reserves + staking + derivatives</h4>
+        <p>Published Merkle-tree proofs of reserves (post-FTX). Staking services for held coins. Futures + options product lines with own engines + risk systems.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const FLOW_NODES = [
+  { label: 'Trader',         sub: 'place order' },
+  { label: 'Risk svc',       sub: 'balance hold' },
+  { label: 'Matching',       sub: 'per-pair process' },
+  { label: 'Trade settler',  sub: 'ledger commit' },
+  { label: 'Market data',    sub: 'WS fanout' },
+  { label: 'Chain watcher',  sub: 'deposit finality' },
+  { label: 'Signer + hot',   sub: 'withdrawal tx' },
+];
+const FLOW_DESCS = [
+  'Trader sends limit or market order via REST + idempotency key',
+  'Risk service checks + reserves balance in account row (atomic)',
+  'Order queued into per-pair single-threaded matching engine',
+  'Fills written to double-entry ledger; balance reserves released',
+  'Trade + order-book deltas fanned out via WebSocket to subscribers',
+  'Deposit detector waits for chain-specific finality before crediting',
+  'Withdrawal flows through risk + HSM signer → broadcast on chain',
+];
+</script>
+
+</body>
+</html>

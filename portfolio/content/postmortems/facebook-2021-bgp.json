@@ -1,0 +1,64 @@
+{
+  "slug": "facebook-2021-bgp",
+  "title": "BGP Withdrawal",
+  "problemNumber": "10",
+  "difficulty": null,
+  "heroDescription": "A routine maintenance command on Facebook's backbone network triggered a BGP withdrawal of all of Facebook's prefixes — making facebook.com, instagram.com, whatsapp.com unreachable from the internet for 6 hours. Internal tools also used the same DNS; engineers locked themselves out of the systems they needed to fix the outage.",
+  "tags": [
+    "BGP",
+    "DNS",
+    "~6 hour outage",
+    "Meta"
+  ],
+  "accent": {
+    "h": 220,
+    "s": 75,
+    "l": 48
+  },
+  "category": "Infrastructure + network",
+  "blurb": "A routine maintenance command on Facebook's backbone network triggered a BGP withdrawal of all of Facebook's prefixes — making facebook.com, instagram.com, whatsapp.com unreachable from the internet for 6 hours. Internal",
+  "sections": [
+    {
+      "id": "tldr",
+      "label": "TL;DR",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">TL;DR</h2></div>\n    <div class=\"prose\">\n      <p>Engineer runs a command that, due to a bug, takes down the entire backbone network instead of auditing it. Facebook's BGP advertisements get withdrawn from the internet. DNS servers within Facebook's network become unreachable because the backbone is down. DNS servers, seeing no backbone, stop announcing BGP for Facebook's authoritative DNS. Now Facebook doesn't exist on the internet. Because internal tools + door badges + phone networks depended on the same name resolution, engineers couldn't log in or even access the physical data centers to diagnose.</p>\n    </div>"
+    },
+    {
+      "id": "timeline",
+      "label": "Timeline",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Timeline</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>15:39 UTC</strong> — Engineer runs a command during backbone capacity assessment. Bug in audit tool causes all backbone connections to drop.</li>\n        <li><strong>15:40 UTC</strong> — Facebook's DNS resolvers become unreachable. They stop BGP-announcing the prefixes they serve.</li>\n        <li><strong>15:40 UTC</strong> — facebook.com, instagram.com, whatsapp.com return NXDOMAIN or timeout worldwide.</li>\n        <li><strong>15:40 UTC</strong> — Internal engineering tools, Workplace, company Slack, VPN, badge systems (which depend on internal DNS) become inaccessible.</li>\n        <li><strong>~17:00 UTC</strong> — Engineers physically travel to data centers. Manual on-site access to routers requires physical keys (biometric + doors also depend on internal network).</li>\n        <li><strong>21:05 UTC</strong> — Network restored; services begin returning. Thundering herd of 3B users reconnecting extends tail of outage.</li>\n        <li><strong>21:28 UTC</strong> — Most services operational again.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "rootcause",
+      "label": "Root cause",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Root cause</h2></div>\n    <div class=\"prose\">\n      <p>Two cascading failures:</p>\n      <ol>\n        <li><strong>Audit tool bug.</strong> A command intended to assess backbone capacity had a bug that caused it to shut down every backbone link. The policy system that should have rejected this command due to its blast-radius also had a bug, so it approved.</li>\n        <li><strong>DNS tightly coupled to backbone.</strong> Facebook's authoritative DNS servers were deep inside Facebook's own network. When the backbone died, DNS died with it, which made BGP retract the routes to those DNS servers, which made Facebook unroutable.</li>\n        <li><strong>Everything-internal-uses-internal-DNS.</strong> Company tools, badge readers, VPN, physical access systems — all resolved via the same DNS that was now gone.</li>\n      </ol>\n    </div>"
+    },
+    {
+      "id": "impact",
+      "label": "Blast radius",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Blast radius</h2></div>\n    <div class=\"prose\">\n      <p>Facebook, Instagram, WhatsApp, Messenger, Oculus, Workplace fully unavailable for ~6 hours, globally. ~3B users. Small businesses that used WhatsApp as their primary messaging couldn't operate. Market cap loss: $7B intraday. Internal impact: engineers literally unable to work. Some had to physically cut server-room locks.</p>\n    </div>"
+    },
+    {
+      "id": "lessons",
+      "label": "Lessons",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Lessons</h2></div>\n    <div class=\"prose\">\n      <ol>\n        <li><strong>Out-of-band access is non-negotiable.</strong> Critical-recovery tools must not share failure domains with the thing they recover. Separate admin network, cellular-backup badge readers, printed runbooks.</li>\n        <li><strong>Audit-tool guardrails.</strong> Tools that can affect backbone-sized blast radius need a second approval + automated blast-radius check before execution.</li>\n        <li><strong>Don't route DNS inside the service you're announcing.</strong> If your DNS is behind your BGP, you have a circular failure dependency. External DNS (or at minimum a secondary DNS in a totally separate network) is cheap insurance.</li>\n        <li><strong>Test disconnect scenarios.</strong> \"What happens if we lose the internal network?\" is a scenario that should be drilled, not discovered.</li>\n      </ol>\n    </div>"
+    },
+    {
+      "id": "concepts-used",
+      "label": "Concepts in play",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Concepts in play</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><a href=\"/concepts/dns\">DNS</a> — the single-point of resolution that took everything down.</li>\n        <li><a href=\"/concepts/blast-radius-minimization\">Blast radius minimization</a> — audit tools with unbounded impact.</li>\n        <li><a href=\"/concepts/disaster-recovery\">Disaster recovery</a> — out-of-band recovery paths must exist and be tested.</li>\n        <li><a href=\"/concepts/service-mesh\">Service mesh</a> — tight coupling across a global network can become a single failure domain.</li>\n        <li><a href=\"/concepts/multi-region-deployment\">Multi-region</a> — even geographic distribution doesn't help when the control plane is centralized.</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

@@ -1,0 +1,64 @@
+{
+  "slug": "cloudflare-2019-regex",
+  "title": "Catastrophic Regex",
+  "problemNumber": "07",
+  "difficulty": null,
+  "heroDescription": "A single regular expression in a Cloudflare WAF rule consumed all CPU on every Cloudflare machine worldwide within seconds. 502s for everyone Cloudflare fronted — ~10% of the internet — for 27 minutes.",
+  "tags": [
+    "Regex backtracking",
+    "Global",
+    "27 minutes",
+    "WAF"
+  ],
+  "accent": {
+    "h": 270,
+    "s": 55,
+    "l": 52
+  },
+  "category": "Capacity + cascading failure",
+  "blurb": "A single regular expression in a Cloudflare WAF rule consumed all CPU on every Cloudflare machine worldwide within seconds. 502s for everyone Cloudflare fronted — ~10% of the internet — for 27 minutes.",
+  "sections": [
+    {
+      "id": "tldr",
+      "label": "TL;DR",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">TL;DR</h2></div>\n    <div class=\"prose\">\n      <p>Cloudflare deployed a new WAF managed rule containing a regex with catastrophic backtracking. Applied to every HTTP request at every PoP. CPU on every machine globally went to 100% within seconds; every request returned 502. Rollback took 27 minutes because the deploy system itself was impacted.</p>\n    </div>"
+    },
+    {
+      "id": "timeline",
+      "label": "Timeline",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Timeline</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>13:42 UTC</strong> — WAF managed-rules update deployed globally. Contains a new rule with regex: <code>(?:(?:\\\"|'|\\]|\\}|\\\\|\\d|(?:nan|infinity|true|false|null|undefined|symbol|math)|\\`|\\-|\\+)+[)]*;?((?:\\s|-|~|!|\\{\\}|\\|\\||\\+)*.*(?:.*=.*)))</code></li>\n        <li><strong>13:42 UTC</strong> — CPU usage across the entire fleet begins climbing. Within 20 seconds, most machines pinned at 100%.</li>\n        <li><strong>13:45 UTC</strong> — Internal alerts fire. SRE team engages. Identifies WAF process as CPU consumer.</li>\n        <li><strong>13:47 UTC</strong> — Cloudflare's own dashboard + API inaccessible because they proxy through the same infrastructure.</li>\n        <li><strong>13:57 UTC</strong> — Kill switch (a pre-built capability to disable the WAF globally) engaged. CPU drops; requests flow again.</li>\n        <li><strong>14:09 UTC</strong> — Normal service restored after deploy-system catch-up.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "rootcause",
+      "label": "Root cause",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Root cause</h2></div>\n    <div class=\"prose\">\n      <p>The regex exhibited exponential backtracking on specific input patterns. With the input \"x=x\", the engine explored all possible ways to match the alternations; each additional character doubled the work. A 30-character crafted-like input would run for hours.</p>\n      <p>The rule was tested on the rule-writer's laptop (fast enough to not notice), then deployed to production via the normal managed-rules pipeline. No test fixture caught the pathological case; no CI CPU-time ceiling existed for WAF rules.</p>\n      <p>Deeper root cause: PCRE/re2 library choice. PCRE-style backtracking engines are vulnerable to ReDoS; Go's re2 (and Rust's regex crate) guarantee linear-time matching. Cloudflare was using PCRE.</p>\n    </div>"
+    },
+    {
+      "id": "impact",
+      "label": "Blast radius",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Blast radius</h2></div>\n    <div class=\"prose\">\n      <p>Every single HTTP request going through Cloudflare returned 502 for ~27 minutes. That's an estimated ~10% of the web at the time. Discord, Medium, Coinbase, DigitalOcean, Postmates, countless others dark. Financial impact to Cloudflare customers collectively: hundreds of millions of dollars in lost business. Cloudflare's own dashboard inaccessible during the incident, slowing response.</p>\n    </div>"
+    },
+    {
+      "id": "lessons",
+      "label": "Lessons",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Lessons</h2></div>\n    <div class=\"prose\">\n      <ol>\n        <li><strong>Regex engine choice has massive security implications.</strong> PCRE/Perl/Java/JavaScript engines can backtrack exponentially. re2/Rust's engine is guaranteed linear-time. If the regex is untrusted (user input OR rules written by many authors), use a linear-time engine.</li>\n        <li><strong>Kill switches are non-negotiable for global services.</strong> Cloudflare had one, which is why recovery was 27 minutes, not hours. Every critical subsystem should answer \"what's the one-click escape hatch?\"</li>\n        <li><strong>Canary deploys for WAF rule changes.</strong> Deploy to 1% of PoPs for N minutes; watch CPU; promote. Cloudflare added this post-incident; the managed-rules pipeline now canary-staged.</li>\n        <li><strong>CPU budget per request.</strong> WAF rules that consume &gt;X ms get killed and logged. Preventive bound instead of reactive kill switch.</li>\n      </ol>\n    </div>"
+    },
+    {
+      "id": "concepts-used",
+      "label": "Concepts in play",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Concepts in play</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><a href=\"/concepts/feature-flags-rollouts\">Feature flags + rollouts</a> — every global change needs a canary.</li>\n        <li><a href=\"/concepts/circuit-breaker\">Circuit breaker</a> — per-rule CPU ceiling is a circuit.</li>\n        <li><a href=\"/concepts/deployment-strategies-blue-green-canary\">Canary deploys</a> — WAF rules were deployed everywhere at once.</li>\n        <li><a href=\"/concepts/ddos-protection\">DDoS protection</a> — ReDoS is an application-layer DoS vector.</li>\n        <li><a href=\"/concepts/design-cdn\">CDN architecture</a> — how a global edge fleet propagates config.</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

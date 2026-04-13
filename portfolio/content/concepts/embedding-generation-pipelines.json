@@ -1,0 +1,65 @@
+{
+  "slug": "embedding-generation-pipelines",
+  "title": "Embedding Generation Pipelines",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 305,
+    "s": 60,
+    "l": 50
+  },
+  "category": "Machine Learning Systems",
+  "blurb": "You have 100 million product descriptions, 50 million user-generated images, 1 billion documents. To use them with vector search, every one needs an embedding — a 384–1536-dim vector. Calling an embedding model API for e",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>You have 100 million product descriptions, 50 million user-generated images, 1 billion documents. To use them with <a href=\"/concepts/vector-databases\">vector search</a>, every one needs an embedding — a 384–1536-dim vector. Calling an embedding model API for each is straightforward; doing it efficiently for millions+ of items, keeping embeddings fresh as the source updates, and not blowing your budget — that's an engineering problem.</p>\n      <p>An <strong>embedding generation pipeline</strong> is the data infrastructure that produces, updates, and stores vectors at scale. Different from <a href=\"/concepts/feature-store\">feature stores</a>, which target structured features.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "The four-stage pipeline",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The four-stage pipeline</h2></div>\n    <div class=\"prose\">\n      <ol>\n        <li><strong>Source</strong> — text/image/audio in S3, a database, a stream of events.</li>\n        <li><strong>Chunking</strong> — split long text into 200-1000 token pieces (LLM context windows + relevance). Image: resize / crop. Audio: split by silence.</li>\n        <li><strong>Embed</strong> — call the model (OpenAI, Cohere, in-house). One forward pass per chunk → vector.</li>\n        <li><strong>Store</strong> — write vectors + metadata to vector DB. Index updates on the fly.</li>\n      </ol>\n      <p>For 100M items at $0.0001/embedding (OpenAI text-embedding-3-small) = <strong>$10,000</strong> initial backfill. Per-update cost is per-changed-item.</p>\n    </div>\n    <div class=\"kv-grid\">\n      <div class=\"kv-card\"><div class=\"kv-val\">~10 ms</div><div class=\"kv-lbl\">embedding API call (one chunk)</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">~1000 chunks</div><div class=\"kv-lbl\">batch size for throughput</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">$0.0001</div><div class=\"kv-lbl\">per-chunk embedding cost</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">512-1536</div><div class=\"kv-lbl\">typical embedding dim</div></div>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Initial backfill vs incremental update",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Initial backfill vs incremental update</h2></div>\n    <div class=\"tradeoff-grid\">\n      <div class=\"tradeoff-option chosen\">\n        <div class=\"tradeoff-label\">Backfill</div>\n        <h4>One-shot, massive parallelism</h4>\n        <p>Spark/Beam job reads source, batches into chunks, calls embedding API in parallel (1000s of concurrent requests), writes vectors. Hours-days for 100M items. Cost: thousands of dollars one-time.</p>\n      </div>\n      <div class=\"tradeoff-option\">\n        <div class=\"tradeoff-label\">Incremental</div>\n        <h4>CDC + streaming</h4>\n        <p><a href=\"/concepts/cdc-change-data-capture\">CDC</a> from source DB → Kafka → embed worker → vector DB. New / updated items get re-embedded continuously. Steady-state cost is per-update.</p>\n      </div>\n    </div>\n    <div class=\"callout\">\n      <div class=\"callout-label\">Practical pattern</div>\n      <p>One-time backfill on Day 0; incremental from Day 1. Most pipelines run both side by side — batch for backfilling new fields/models, streaming for source changes.</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — chunking is the real problem",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Deep dive — chunking is the real problem</h2></div>\n    <div class=\"prose\">\n      <p>\"Embed the document\" is wrong. Documents are too long for a single embedding to capture meaning. You chunk first, embed each chunk, retrieve the most relevant chunks at query time. <strong>How you chunk determines retrieval quality.</strong></p>\n      <p>Naive: split every 500 tokens. Bad — sentences get cut mid-thought.</p>\n      <p>Better: <strong>recursive splitting on natural boundaries</strong> — paragraphs first, then sentences, then tokens if needed. LangChain's <code>RecursiveCharacterTextSplitter</code> does this.</p>\n      <p>Best: <strong>semantic chunking</strong> — embed sentence-by-sentence, look for cosine-distance jumps to find topic shifts. Chunk at the jumps. Slower but ~20% better retrieval.</p>\n      <p><strong>Chunk overlap</strong> (~50-100 tokens) helps too — context near chunk boundaries shows up in two chunks, retrieval picks whichever is more relevant. Storage cost is +10-20%.</p>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">Real cost breakdown</div>\n        <p>\"100M docs × 5 chunks each = 500M embeddings × $0.0001 = $50k initial. Recursive chunking with 100-token overlap. Stored in pgvector with HNSW indexing. Daily incremental embeds via CDC: ~$200/day for 2M new docs.\"</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "Hosted vs self-hosted embedding model",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Hosted vs self-hosted embedding model</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Choice</th><th>Pros</th><th>Cons</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">OpenAI / Cohere API</td><td>Best quality, no infra, well-tested</td><td>Per-call cost, data leaves your network, rate limits</td></tr>\n        <tr><td class=\"algo-name\">Self-hosted (sentence-transformers, BGE)</td><td>Free per-call, data stays internal, no rate limits</td><td>GPU infra cost, slightly lower quality, you own the ops</td></tr>\n        <tr><td class=\"algo-name\">Cloud-managed (Vertex AI, SageMaker)</td><td>Hybrid — managed infra, your model</td><td>Pricier than DIY but cheaper than per-token API at scale</td></tr>\n      </tbody>\n    </table>\n    <div class=\"prose\">\n      <p>Crossover point: ~10M embeddings/day. Below, hosted API wins on TCO. Above, self-hosted starts paying for itself.</p>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world pipelines",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world pipelines</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Notion AI</div><h4>Per-workspace embeddings</h4><p>Every page chunked + embedded on edit. Stored per-tenant. Powers semantic search inside Notion.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Stripe Docs / GitHub Search</div><h4>Build-time embedding</h4><p>Documentation embedded at build, vectors stored in repo or CDN. No streaming pipeline for static content.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Spotify recommendations</div><h4>Track + user embeddings</h4><p>Daily Spark job re-embeds tracks, user vectors updated on listen events. Vectors fed to ANN candidate generation.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Pinterest visual search</div><h4>Image embeddings via CLIP</h4><p>Every pin embedded on upload via in-house ResNet-derived model. Sub-100ms reverse-image search at billions scale.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Recommendation algorithm depends on a fresh embedding pipeline. Typeahead can leverage embedding-based completion. News feed scores posts by author/topic embeddings.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

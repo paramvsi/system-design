@@ -1,0 +1,65 @@
+{
+  "slug": "interview-framework",
+  "title": "Interview Framework",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 217,
+    "s": 91,
+    "l": 50
+  },
+  "category": "Foundations",
+  "blurb": "You get 45 minutes. The interviewer says \"design Twitter.\" There are a thousand things to say and you'll remember half of them. Without structure, you'll ramble about load balancers for 20 minutes, never estimate scale, ",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>You get 45 minutes. The interviewer says \"design Twitter.\" There are a thousand things to say and you'll remember half of them. Without structure, you'll <span class=\"hl-red\">ramble about load balancers for 20 minutes, never estimate scale, forget to design the API, and leave out the rabbit hole entirely</span>. That's a no-hire signal, and the problem isn't your knowledge — it's your process.</p>\n      <p>The framework below is the one every senior engineer runs in their head. It takes practice to make it automatic, but once it is, you can't design badly.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The four phases",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The four phases</h2></div>\n    <div class=\"prose\">\n      <p>Every system design interview follows the same shape. The ratio is roughly:</p>\n    </div>\n    <div class=\"kv-grid\">\n      <div class=\"kv-card\"><div class=\"kv-val\">5 min</div><div class=\"kv-lbl\">1. Requirements</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">5 min</div><div class=\"kv-lbl\">2. Scale estimation</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">15 min</div><div class=\"kv-lbl\">3. High-level design</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">20 min</div><div class=\"kv-lbl\">4. Deep dive</div></div>\n    </div>\n    <div class=\"prose\"><p>You drive the clock. If you spend 20 minutes on requirements, you'll never reach the deep dive — and the deep dive is where you differentiate.</p></div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "Phase by phase",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Phase by phase</h2></div>\n    <div class=\"prose\">\n      <p><strong>Phase 1 — Requirements (5 min).</strong> Distinguish functional from non-functional. Functional: what the system does (users post, followers see posts). Non-functional: how well it does it (latency &lt; 200ms, 99.9% availability, read-heavy 100:1). <span class=\"hl\">Always ask \"who are the users, how many, where?\"</span> — location matters for <a href=\"/concepts/cdn\">CDN</a> and <a href=\"/concepts/replication\">replication</a>. Don't ask about every conceivable feature — pick 3–4 core flows.</p>\n      <p><strong>Phase 2 — Scale estimation (5 min).</strong> Derive numbers from assumptions. \"100M DAU × 2 posts/user/day = 200M posts/day ÷ 86400s ≈ 2300 writes/sec. Reads are 100× that = 230k reads/sec. Each post is ~1KB → 200GB/day → 70TB/year.\" <span class=\"hl-accent\">The numbers drive the design</span>: 230k reads/sec means CDN and cache at minimum. 70TB/year means sharding matters.</p>\n      <p><strong>Phase 3 — High-level design (15 min).</strong> Sketch one box diagram: clients → LB → API → cache → DB → queue → workers. Label what each piece does. <strong>Establish the single-user baseline first</strong>, then layer in distributed concerns. Define the API (5–6 endpoints with request/response shapes). Pick a database and justify the choice in one line: \"Postgres because we need transactions on the payments table.\"</p>\n      <p><strong>Phase 4 — Deep dive (20 min).</strong> Pick the <strong>one interesting thing</strong> in your design and go deep. For Twitter, it's fan-out. For Uber, it's geospatial indexing. For a URL shortener, it's hashing. <span class=\"hl\">Don't go deep on everything</span> — pick the concept uniquely interesting to this problem and explore its tradeoffs, failure modes, and alternatives. This is where you prove you're senior.</p>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Common pitfalls",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Common pitfalls</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>Jumping to architecture before scale</strong> — you'll end up with Kafka and Cassandra on a problem that fits in a single Postgres. Always estimate first.</li>\n        <li><strong>Designing for scale you don't have</strong> — \"what if 10B users?\" when the prompt said 10k. Build for the stated scale + one order of magnitude of headroom. Not three.</li>\n        <li><strong>Pattern matching without justification</strong> — \"I'll use Redis and Kafka\" with no reason. Every component needs a \"because X\" attached.</li>\n        <li><strong>Ignoring the interviewer</strong> — they'll steer you toward what they want to discuss. Follow their hints. When they ask \"what about consistency?\" — that's the deep dive they want.</li>\n        <li><strong>No API design</strong> — candidates skip endpoints because they seem boring. They're not; the endpoint shape reveals whether you actually understand the product.</li>\n        <li><strong>No numbers in tradeoffs</strong> — \"we'll use caching\" is weak. \"We'll use a 16 GB Redis with cache-aside and 10-minute TTL, covering 90% of reads\" is strong.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — the 3 layers of technical depth",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — the 3 layers of technical depth</h2></div>\n    <div class=\"prose\">\n      <p>For every topic you discuss, know where you are on this ladder — and be ready to climb it when asked.</p>\n      <p><strong>Layer 1 — Conceptual.</strong> What is this component and why do we use it? \"A load balancer distributes requests across servers.\" Every engineer knows this.</p>\n      <p><strong>Layer 2 — Design decisions.</strong> What tradeoffs did we make picking it, and what alternatives did we reject? \"We use L7 load balancing with P2C because our request costs vary. L4 would be faster but can't route by path. Round robin would ignore request-cost variance.\" Mid-level engineers stop here.</p>\n      <p><strong>Layer 3 — Rabbit hole.</strong> What happens when things break or scale further? \"When the LB itself is a single point of failure, we run two LBs with anycast IPs and use DNS round-robin between them. Health checks use TCP rather than HTTP to avoid application-layer false positives. The drain-on-shutdown pattern is...\" Senior engineers operate here.</p>\n      <div class=\"callout\">\n        <div class=\"callout-label\">Rule</div>\n        <p>Go to Layer 3 on <strong>one thing</strong> (the problem's rabbit hole). Stay at Layer 2 on the rest. Don't try to go deep everywhere — you'll run out of time and sound superficial.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "What the rubric actually measures",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">What the rubric actually measures</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Problem-solving</div><h4>Can you break down an ambiguous prompt?</h4><p>Did you clarify requirements before designing? Did you push back on requirements that don't match the stated scale?</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Technical depth</div><h4>Do you know how things actually work?</h4><p>Not \"we use Kafka\" but \"Kafka's commit log is why delivery is at-least-once by default.\" Depth on one thing beats breadth everywhere.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Tradeoff reasoning</div><h4>Can you justify every choice?</h4><p>Every component should have a \"because X\" attached. Every decision should name the alternative you rejected and why.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Communication</div><h4>Can you drive the hour?</h4><p>Time-box yourself. Call out phase transitions (\"let's move to scale\"). Let the interviewer steer. Draw as you talk.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Every problem in this portfolio follows this framework",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Every problem in this portfolio follows this framework</h2></div>\n    <div class=\"prose\"><p>The 11-section structure on every problem page maps directly to these four phases. Section 1–3 = Requirements + Scale. Section 4–5 = High-level. Section 6 = Deep dive. The rest is polish.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 4
+}

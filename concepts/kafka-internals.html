@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Kafka Internals — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 0; --accent-s: 0%; --accent-l: 20%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Kafka is the backbone of event streaming at every serious company. 500k+ messages/sec per broker, years of retention, replayable. In interviews, "we'll use Kafka" isn't an answer — <span class="hl">how</span> Kafka works is. Partitions, consumer groups, offsets, ISR, leader election — understand these and you can reason about throughput, ordering, delivery, and failover without hand-waving.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The core abstraction — a distributed log</h2></div>
+    <div class="prose">
+      <p>A Kafka topic is a <strong>partitioned, distributed, replicated commit log</strong>. Producers append; consumers read by offset; both scale horizontally.</p>
+      <ul>
+        <li><strong>Topic</strong> — named stream of messages (e.g. <code>orders</code>).</li>
+        <li><strong>Partition</strong> — one topic splits into N partitions. Each partition is a single append-only log file on disk. Messages within a partition are strictly ordered.</li>
+        <li><strong>Offset</strong> — a monotonically-increasing integer. Consumer reads from an offset; commits progress.</li>
+        <li><strong>Broker</strong> — a Kafka server. A cluster has many; each hosts some partitions.</li>
+        <li><strong>Replication</strong> — each partition replicated to N brokers (e.g., RF=3). One is leader; others are followers.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">The write path</h2></div>
+    <div class="prose">
+      <p>Producer wants to send message M with key K to topic T:</p>
+      <ol>
+        <li><strong>Partition selection.</strong> Producer computes <code>hash(K) mod num_partitions(T)</code>. Same key → same partition → order preserved per key.</li>
+        <li><strong>Batching.</strong> Producer batches messages by partition (up to linger.ms or batch.size). Sent as one network call.</li>
+        <li><strong>Leader write.</strong> Leader broker for the partition appends to its log file, returns an offset.</li>
+        <li><strong>Replication.</strong> Followers pull from leader, append to their own logs. Once followers in the ISR (in-sync replica set) ack, message is committed.</li>
+        <li><strong>Producer ACK modes.</strong> <code>acks=0</code> (don't wait — fastest, can lose), <code>acks=1</code> (leader ack only — can lose on leader crash), <code>acks=all</code> (all ISR — durable but slower).</li>
+      </ol>
+    
+      <div class="code-caption" data-code-snippet="1">Top-K with heap + CMS</div>
+      <pre><code class="lang-python">import heapq
+import mmh3
+
+class TopK:
+    """Track top K heavy hitters in a stream using CMS + min-heap."""
+    def __init__(self, k=10, cms_width=10**4, cms_depth=4):
+        self.k = k
+        self.cms = CountMinSketch(cms_width, cms_depth)
+        self.heap = []  # min-heap of (count, item)
+        self.in_heap = set()
+
+    def add(self, item):
+        self.cms.add(item)
+        count = self.cms.estimate(item)
+        if item in self.in_heap:
+            # Rebuild heap with updated count (simple)
+            self.heap = [(c, i) for c, i in self.heap if i != item]
+            heapq.heappush(self.heap, (count, item))
+        elif len(self.heap) &lt; self.k:
+            heapq.heappush(self.heap, (count, item))
+            self.in_heap.add(item)
+        elif count &gt; self.heap[0][0]:
+            _, removed = heapq.heapreplace(self.heap, (count, item))
+            self.in_heap.remove(removed); self.in_heap.add(item)
+
+    def top(self):
+        return sorted(self.heap, reverse=True)</code></pre>
+  </div>
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-val">~500k</div><div class="kv-lbl">msgs/sec per broker</div></div>
+      <div class="kv-card"><div class="kv-val">1 KB</div><div class="kv-lbl">typical message size</div></div>
+      <div class="kv-card"><div class="kv-val">100s–1000s</div><div class="kv-lbl">partitions per topic (heavy-use)</div></div>
+      <div class="kv-card"><div class="kv-val">RF=3</div><div class="kv-lbl">standard replication factor</div></div>
+      <div class="kv-card"><div class="kv-val">7 days</div><div class="kv-lbl">default retention</div></div>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Partition Layout — RF=3</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="kf-arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#9ca3af"/></marker>
+          </defs>
+          <g font-family="Geist, system-ui, sans-serif" font-size="11">
+            <text x="360" y="20" text-anchor="middle" font-weight="500" fill="#111110">Topic 'orders' · 3 partitions · RF=3</text>
+            <!-- Brokers -->
+            <g>
+              <rect x="20" y="50" width="200" height="240" rx="8" fill="#fff" stroke="#ccc9c4"/>
+              <text x="120" y="72" text-anchor="middle" font-weight="500">Broker A</text>
+              <rect x="260" y="50" width="200" height="240" rx="8" fill="#fff" stroke="#ccc9c4"/>
+              <text x="360" y="72" text-anchor="middle" font-weight="500">Broker B</text>
+              <rect x="500" y="50" width="200" height="240" rx="8" fill="#fff" stroke="#ccc9c4"/>
+              <text x="600" y="72" text-anchor="middle" font-weight="500">Broker C</text>
+            </g>
+            <!-- Partition 0 -->
+            <g>
+              <rect x="40" y="92" width="160" height="42" rx="5" fill="hsl(0,0%,15%)" stroke="hsl(0,0%,15%)"/>
+              <text x="120" y="111" text-anchor="middle" fill="#fff" font-weight="500">P0 · LEADER</text>
+              <text x="120" y="125" text-anchor="middle" fill="#fff" font-size="9" font-family="JetBrains Mono, monospace">offset 0..N · ISR</text>
+              <rect x="280" y="92" width="160" height="42" rx="5" fill="#f0eeeb" stroke="#ccc9c4"/>
+              <text x="360" y="111" text-anchor="middle">P0 · follower</text>
+              <text x="360" y="125" text-anchor="middle" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">in sync</text>
+              <rect x="520" y="92" width="160" height="42" rx="5" fill="#f0eeeb" stroke="#ccc9c4"/>
+              <text x="600" y="111" text-anchor="middle">P0 · follower</text>
+              <text x="600" y="125" text-anchor="middle" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">in sync</text>
+            </g>
+            <!-- Partition 1 -->
+            <g>
+              <rect x="40" y="146" width="160" height="42" rx="5" fill="#f0eeeb" stroke="#ccc9c4"/>
+              <text x="120" y="165" text-anchor="middle">P1 · follower</text>
+              <text x="120" y="179" text-anchor="middle" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">in sync</text>
+              <rect x="280" y="146" width="160" height="42" rx="5" fill="hsl(0,0%,15%)" stroke="hsl(0,0%,15%)"/>
+              <text x="360" y="165" text-anchor="middle" fill="#fff" font-weight="500">P1 · LEADER</text>
+              <text x="360" y="179" text-anchor="middle" fill="#fff" font-size="9" font-family="JetBrains Mono, monospace">offset 0..N · ISR</text>
+              <rect x="520" y="146" width="160" height="42" rx="5" fill="#f0eeeb" stroke="#ccc9c4"/>
+              <text x="600" y="165" text-anchor="middle">P1 · follower</text>
+              <text x="600" y="179" text-anchor="middle" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">in sync</text>
+            </g>
+            <!-- Partition 2 -->
+            <g>
+              <rect x="40" y="200" width="160" height="42" rx="5" fill="#f0eeeb" stroke="#ccc9c4"/>
+              <text x="120" y="219" text-anchor="middle">P2 · follower</text>
+              <text x="120" y="233" text-anchor="middle" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">in sync</text>
+              <rect x="280" y="200" width="160" height="42" rx="5" fill="#f0eeeb" stroke="#ccc9c4"/>
+              <text x="360" y="219" text-anchor="middle">P2 · follower</text>
+              <text x="360" y="233" text-anchor="middle" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">in sync</text>
+              <rect x="520" y="200" width="160" height="42" rx="5" fill="hsl(0,0%,15%)" stroke="hsl(0,0%,15%)"/>
+              <text x="600" y="219" text-anchor="middle" fill="#fff" font-weight="500">P2 · LEADER</text>
+              <text x="600" y="233" text-anchor="middle" fill="#fff" font-size="9" font-family="JetBrains Mono, monospace">offset 0..N · ISR</text>
+            </g>
+            <!-- Producer -->
+            <text x="360" y="270" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#878480">Producer hashes(key) % 3 → leader of that partition</text>
+            <text x="360" y="284" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#878480">Followers pull from leader · ack when in ISR</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Consumer groups</h2></div>
+    <div class="prose">
+      <p>A consumer group is a set of consumers sharing the workload. Kafka's coordinator assigns each partition to exactly one consumer in the group.</p>
+      <ul>
+        <li>10 partitions, 10 consumers in a group → each consumer owns 1 partition.</li>
+        <li>10 partitions, 5 consumers → each owns 2.</li>
+        <li>10 partitions, 15 consumers → 5 consumers idle (partitions are the unit of parallelism).</li>
+        <li><strong>Different groups are independent.</strong> Group <code>analytics</code> and group <code>billing</code> both read every message — each group has its own offsets. Pub/sub for free.</li>
+        <li><strong>Rebalance.</strong> When a consumer joins or leaves the group, partitions are re-divided. Causes a brief pause; the main operational pain.</li>
+      </ul>
+      <p><strong>Partition count = maximum parallelism per consumer group.</strong> Too few partitions = workers idle. Too many = rebalance cost + broker overhead. 100–1000 partitions per heavily-used topic is typical.</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — why Kafka is fast</h2></div>
+    <div class="prose">
+      <p>Kafka's throughput comes from four design choices, each exploiting the OS rather than fighting it:</p>
+      <p><strong>1. Sequential disk I/O.</strong> Appending to the end of a log file is the fastest thing a spinning disk or SSD can do. ~600 MB/s sequential on a modern SSD. Random I/O is 100× slower. Kafka only appends.</p>
+      <p><strong>2. Page cache as buffer.</strong> Writes go to the OS page cache; reads served from it. Linux flushes to disk in the background. Kafka doesn't maintain its own memory cache — it trusts the OS to do that. This is counter-intuitive; most DBs do the opposite and lose.</p>
+      <p><strong>3. Zero-copy sends.</strong> When a consumer fetches, Kafka uses <code>sendfile()</code> to transfer bytes from page cache directly to the socket, bypassing user space. No CPU copy; no serialization cost.</p>
+      <p><strong>4. Batching everywhere.</strong> Producers batch. Brokers batch replication. Consumers batch fetches. Per-message overhead amortizes toward zero at high throughput.</p>
+      <p>Combined: a Kafka broker on commodity hardware does 500k msgs/sec — roughly 50× what a naive DB could manage. No magic, just alignment with what the kernel is already good at.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">The interview answer</div>
+        <p>"Partitioned append-only log. Producers hash-partition; messages within a partition are strictly ordered. Replication via pull (followers fetch from leader). Consumer groups share partitions one-per-consumer. Throughput from sequential I/O + page cache + zero-copy sendfile."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">LinkedIn</div><h4>Originator</h4><p>Built Kafka for activity streams. Now runs 1T+ messages/day across thousands of brokers.</p></div>
+      <div class="rw-card"><div class="rw-name">Uber</div><h4>Message bus</h4><p>Trip events, driver locations, pricing updates — all on Kafka. Trillion messages per day.</p></div>
+      <div class="rw-card"><div class="rw-name">Netflix</div><h4>Event backbone</h4><p>All user interaction events, 8M+ events/sec at peak. Powers recommendation, A/B testing, operational metrics.</p></div>
+      <div class="rw-card"><div class="rw-name">Confluent Cloud</div><h4>Managed Kafka</h4><p>What most teams pick in 2025 to avoid the ops burden. Same API, SLA-backed, auto-scaling.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>News feed publishes post-events to Kafka for fan-out processing. Notification system uses Kafka per-channel topics. Distributed logging ingests via Kafka before landing in storage. Distributed queue patterns model themselves on Kafka.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,50 @@
+{
+  "slug": "networking",
+  "cluster": "Networking & Delivery",
+  "blurb": "DNS, TCP/UDP, HTTP/2 vs 3, CDN, WebSockets.",
+  "accent": { "h": 190, "s": 70, "l": 45 },
+  "questions": [
+    {
+      "q": "HTTP/2 on a single TCP connection. What causes head-of-line blocking?",
+      "choices": ["Multiple streams fine", "TCP-level packet loss blocks ALL multiplexed streams until retransmit", "TLS handshake", "Header compression"],
+      "correct": 1,
+      "explanation": "HTTP/2 multiplexes N streams over 1 TCP connection. But TCP is a single ordered byte stream — any packet loss pauses all streams until retransmit. HTTP/3 (over QUIC/UDP) solves this with per-stream loss recovery."
+    },
+    {
+      "q": "A client needs real-time bidirectional push from server. Which is best?",
+      "choices": ["HTTP polling", "Server-sent events (SSE)", "WebSocket", "Long-polling"],
+      "correct": 2,
+      "explanation": "WebSocket: full-duplex, persistent. SSE: server→client only. Polling/long-poll: many HTTP requests. For bidirectional chat, WebSocket is the canonical choice."
+    },
+    {
+      "q": "DNS TTL of 300s for a primary; primary dies. How long until resolver clients fully recover to failover IP?",
+      "choices": ["Instant", "Up to 300s (TTL expiry) + DNS propagation", "24 hours", "Depends on HTTP"],
+      "correct": 1,
+      "explanation": "Until TTL expires, resolvers serve the dead IP. Plus resolver-cache propagation. Low-TTL (30–60s) faster failover; tradeoff: more DNS query load."
+    },
+    {
+      "q": "Anycast routing: all CDN PoPs announce the same IP. Which ROUTING decision sends the user's packet to the nearest PoP?",
+      "choices": ["Client-side logic", "BGP (internet routers prefer topologically closest announcement)", "DNS", "Manual admin"],
+      "correct": 1,
+      "explanation": "Each PoP BGP-announces the same prefix. Internet routers naturally prefer the shortest AS path. PoP failure = withdraw BGP = traffic re-routes automatically. Cloudflare's core trick."
+    },
+    {
+      "q": "TCP connection handshake: how many RTTs before data can flow?",
+      "choices": ["1 (SYN only)", "1.5 (SYN + SYN-ACK + ACK; data can piggyback on ACK)", "3", "Depends on MSS"],
+      "correct": 1,
+      "explanation": "SYN → SYN-ACK → ACK = 1.5 RTT. Data can ride the final ACK (TCP Fast Open). QUIC (HTTP/3) combines handshake + first data in 0-RTT for resumed sessions."
+    },
+    {
+      "q": "A reverse proxy (nginx/envoy) vs a forward proxy. Which one sits in FRONT of the app servers?",
+      "choices": ["Forward proxy", "Reverse proxy", "Both same", "NAT"],
+      "correct": 1,
+      "explanation": "Reverse proxy (nginx, ALB, Cloudflare): accepts client requests, fans out to backend pool. Forward proxy (Squid, corporate proxy): accepts internal-client requests, forwards to external internet."
+    },
+    {
+      "q": "HTTP/3 is built on which transport?",
+      "choices": ["TCP", "UDP (QUIC)", "SCTP", "New custom"],
+      "correct": 1,
+      "explanation": "HTTP/3 = HTTP semantics over QUIC, and QUIC is built on UDP. Per-stream loss recovery, 0-RTT resumption, connection migration across network changes."
+    }
+  ]
+}

@@ -1,0 +1,1919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Notification System — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+
+    /* ============================================================
+       DESIGN SYSTEM — DO NOT MODIFY VARIABLE NAMES
+       Only change --accent-h, --accent-s, --accent-l per problem
+       ============================================================ */
+    :root {
+      /* ── Accent — Notification System: Orange ── */
+      --accent-h:       25;
+      --accent-s:       88%;
+      --accent-l:       52%;
+      --accent:         hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light:   hsl(var(--accent-h), 80%, 94%);
+      --accent-mid:     hsl(var(--accent-h), 70%, 88%);
+      --accent-text:    hsl(var(--accent-h), var(--accent-s), 32%);
+      --accent-border:  hsl(var(--accent-h), 60%, 80%);
+
+      /* ── Highlights ── */
+      --hl-yellow:      #fff0a0;
+      --hl-yellow-dark: #a07a00;
+      --hl-accent:      hsl(var(--accent-h), 90%, 88%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 30%);
+
+      /* ── Surfaces ── */
+      --bg:             #ffffff;
+      --bg-subtle:      #f7f7f5;
+      --bg-raised:      #f0eeeb;
+      --bg-code:        #f4f3f0;
+      --border:         #e4e2de;
+      --border-strong:  #ccc9c4;
+
+      /* ── Text ── */
+      --text-primary:   #111110;
+      --text-secondary: #4a4845;
+      --text-muted:     #878480;
+      --text-code:      #2d2c2b;
+
+      /* ── Typography ── */
+      --font-serif:     'Instrument Serif', Georgia, serif;
+      --font-sans:      'Geist', system-ui, sans-serif;
+      --font-mono:      'JetBrains Mono', 'Fira Code', monospace;
+
+      /* ── Radii ── */
+      --radius-sm:      4px;
+      --radius-md:      8px;
+      --radius-lg:      12px;
+    }
+
+    /* ── Reset ── */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--text-primary);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Layout Shell ── */
+    .layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      grid-template-rows: auto 1fr;
+      min-height: 100vh;
+    }
+
+    /* ── Topbar ── */
+    .topbar {
+      grid-column: 1 / -1;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 52px;
+      padding: 0 24px;
+      background: rgba(255,255,255,0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .topbar-left a {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .topbar-left a:hover { color: var(--accent); }
+
+    .topbar-sep {
+      color: var(--border-strong);
+      user-select: none;
+    }
+
+    .topbar-problem {
+      color: var(--accent-text);
+      font-weight: 500;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .topbar-tag {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      background: var(--accent-light);
+      color: var(--accent-text);
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      position: sticky;
+      top: 52px;
+      height: calc(100vh - 52px);
+      overflow-y: auto;
+      padding: 28px 20px 40px;
+      border-right: 1px solid var(--border);
+      background: var(--bg-subtle);
+    }
+
+    .sidebar::-webkit-scrollbar { width: 3px; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+
+    .sidebar-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .sidebar-nav { list-style: none; margin-bottom: 32px; }
+
+    .sidebar-nav li { margin-bottom: 2px; }
+
+    .sidebar-nav a {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 15px;
+      font-weight: 400;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: all 0.15s ease;
+      position: relative;
+    }
+
+    .sidebar-nav a::before {
+      content: '';
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--border-strong);
+      flex-shrink: 0;
+      transition: all 0.2s ease;
+    }
+
+    .sidebar-nav a:hover {
+      background: var(--bg-raised);
+      color: var(--text-primary);
+    }
+
+    .sidebar-nav a.active {
+      background: var(--accent-light);
+      color: var(--accent-text);
+      font-weight: 500;
+    }
+
+    .sidebar-nav a.active::before {
+      background: var(--accent);
+      width: 6px;
+      height: 6px;
+    }
+
+    .sidebar-related {
+      list-style: none;
+      margin-top: 8px;
+    }
+
+    .sidebar-related li { margin-bottom: 4px; }
+
+    .sidebar-related a {
+      font-size: 14.5px;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .sidebar-related a:hover { color: var(--accent); }
+
+    /* ── Main Content ── */
+    .main {
+      padding: 0 48px 120px;
+      max-width: 860px;
+      min-width: 0;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      padding: 56px 0 40px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 48px;
+    }
+
+    .hero-number {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+
+    .hero h1 {
+      font-family: var(--font-serif);
+      font-size: 48px;
+      font-weight: 400;
+      line-height: 1.1;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+      letter-spacing: -0.02em;
+    }
+
+    .hero-desc {
+      font-size: 17px;
+      line-height: 1.65;
+      color: var(--text-secondary);
+      max-width: 600px;
+      margin-bottom: 20px;
+    }
+
+    .hero-tags {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .hero-tag {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 400;
+      letter-spacing: 0.04em;
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-raised);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+
+    /* ── Sections ── */
+    .section {
+      margin-bottom: 56px;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeUp 0.5s ease forwards;
+    }
+
+    .section:nth-child(1)  { animation-delay: 0.05s; }
+    .section:nth-child(2)  { animation-delay: 0.10s; }
+    .section:nth-child(3)  { animation-delay: 0.15s; }
+    .section:nth-child(4)  { animation-delay: 0.20s; }
+    .section:nth-child(5)  { animation-delay: 0.25s; }
+    .section:nth-child(6)  { animation-delay: 0.30s; }
+    .section:nth-child(7)  { animation-delay: 0.35s; }
+    .section:nth-child(8)  { animation-delay: 0.40s; }
+    .section:nth-child(9)  { animation-delay: 0.45s; }
+    .section:nth-child(10) { animation-delay: 0.50s; }
+    .section:nth-child(11) { animation-delay: 0.55s; }
+
+    @keyframes fadeUp {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .section-number {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+
+    .section h2 {
+      font-family: var(--font-serif);
+      font-size: 30px;
+      font-weight: 400;
+      color: var(--text-primary);
+      margin-bottom: 20px;
+      letter-spacing: -0.01em;
+    }
+
+    .section h3 {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin: 28px 0 10px;
+    }
+
+    .section p {
+      color: var(--text-secondary);
+      margin-bottom: 14px;
+      max-width: 680px;
+    }
+
+    .section ul, .section ol {
+      padding-left: 20px;
+      margin-bottom: 16px;
+      color: var(--text-secondary);
+    }
+
+    .section li {
+      margin-bottom: 6px;
+    }
+
+    /* ── Highlight Spans ── */
+    .hl {
+      background: var(--hl-yellow);
+      color: var(--hl-yellow-dark);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+
+    .hl-accent {
+      background: var(--hl-accent);
+      color: var(--hl-accent-dark);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+
+    .hl-red {
+      background: hsl(0, 85%, 93%);
+      color: hsl(0, 70%, 35%);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+
+    .hl-green {
+      background: hsl(145, 60%, 90%);
+      color: hsl(145, 55%, 28%);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+
+    /* ── Cards / Boxes ── */
+    .card {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+
+    .card-accent {
+      background: var(--accent-light);
+      border-color: var(--accent-border);
+    }
+
+    .card h4 {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+
+    .card p {
+      font-size: 16px;
+      color: var(--text-secondary);
+      margin-bottom: 0;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    /* ── Code Blocks ── */
+    .code-block {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: var(--font-mono);
+      font-size: 14.5px;
+      font-weight: 400;
+      color: var(--text-code);
+      line-height: 1.7;
+    }
+
+    .code-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .inline-code {
+      font-family: var(--font-mono);
+      font-size: 15px;
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      padding: 1px 6px;
+      border-radius: var(--radius-sm);
+      color: var(--text-code);
+    }
+
+    /* ── Tables ── */
+    .table-wrap {
+      overflow-x: auto;
+      margin-bottom: 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+    }
+
+    .table-wrap table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 15.5px;
+    }
+
+    .table-wrap th {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      text-align: left;
+      padding: 10px 16px;
+      background: var(--bg-subtle);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .table-wrap td {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+
+    .table-wrap tr:last-child td { border-bottom: none; }
+
+    /* ── Scale Estimation Grid ── */
+    .scale-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .scale-card {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      text-align: center;
+    }
+
+    .scale-card .number {
+      font-family: var(--font-mono);
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--accent-text);
+      margin-bottom: 2px;
+    }
+
+    .scale-card .label {
+      font-size: 13.5px;
+      color: var(--text-muted);
+    }
+
+    /* ── Architecture SVG ── */
+    .arch-diagram {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+    }
+
+    .arch-diagram svg { display: block; margin: 0 auto; }
+
+    .arch-diagram .node {
+      cursor: pointer;
+      transition: filter 0.2s;
+    }
+    .arch-diagram .node:hover { filter: brightness(0.95); }
+
+    .arch-diagram .node rect,
+    .arch-diagram .node-rect {
+      rx: 8;
+      ry: 8;
+      stroke-width: 1.5;
+    }
+
+    .arch-diagram .node-label {
+      font-family: 'Geist', system-ui, sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      fill: var(--text-primary);
+      text-anchor: middle;
+      dominant-baseline: central;
+      pointer-events: none;
+    }
+
+    .arch-diagram .node-sublabel {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 8.5px;
+      fill: var(--text-muted);
+      text-anchor: middle;
+      dominant-baseline: central;
+      pointer-events: none;
+    }
+
+    .arch-diagram .edge {
+      stroke: var(--border-strong);
+      stroke-width: 1.5;
+      fill: none;
+      marker-end: url(#arrowhead);
+    }
+
+    .arch-diagram .edge-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 8px;
+      fill: var(--text-muted);
+      text-anchor: middle;
+    }
+
+    .node-highlight rect { stroke: var(--accent) !important; stroke-width: 2.5 !important; }
+    .node-highlight .node-label { fill: var(--accent-text) !important; }
+
+    /* ── Flow Stepper Widget ── */
+    .flow-stepper {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .flow-stepper-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .flow-stepper-title {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .flow-stepper-controls {
+      display: flex;
+      gap: 8px;
+    }
+
+    .flow-btn {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 5px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .flow-btn:hover {
+      background: var(--accent-light);
+      border-color: var(--accent-border);
+      color: var(--accent-text);
+    }
+
+    .flow-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .flow-btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+    .flow-btn-primary:hover { opacity: 0.9; background: var(--accent); color: white; }
+
+    .flow-steps {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      margin-bottom: 16px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .flow-node {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      white-space: nowrap;
+      transition: all 0.3s ease;
+    }
+
+    .flow-node.active {
+      background: var(--accent-light);
+      border-color: var(--accent);
+      color: var(--accent-text);
+      box-shadow: 0 0 0 3px var(--accent-mid);
+    }
+
+    .flow-node.done {
+      background: var(--accent-light);
+      border-color: var(--accent-border);
+      color: var(--accent-text);
+    }
+
+    .flow-arrow {
+      color: var(--border-strong);
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .flow-desc {
+      font-size: 16px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      padding: 14px 16px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      min-height: 52px;
+    }
+
+    .flow-counter {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 10px;
+      text-align: right;
+    }
+
+    /* ── Mermaid ── */
+    .mermaid-wrap {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+    }
+
+    .mermaid { text-align: center; }
+
+    /* ── Tradeoff Cards ── */
+    .tradeoff {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .tradeoff-option {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+    }
+
+    .tradeoff-option.chosen {
+      border-color: var(--accent-border);
+      background: var(--accent-light);
+    }
+
+    .tradeoff-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .tradeoff-label.yes { color: hsl(145, 55%, 32%); }
+    .tradeoff-label.no  { color: var(--text-muted); }
+
+    .tradeoff-option h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+
+    .tradeoff-option p {
+      font-size: 15px;
+      color: var(--text-secondary);
+      margin-bottom: 0;
+    }
+
+    /* ── Callout ── */
+    .callout {
+      border-left: 3px solid var(--accent);
+      padding: 14px 18px;
+      background: var(--accent-light);
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+      margin-bottom: 16px;
+    }
+
+    .callout p {
+      font-size: 16px;
+      color: var(--accent-text);
+      margin-bottom: 0;
+    }
+
+    .callout-warn {
+      border-left-color: hsl(38, 92%, 50%);
+      background: hsl(38, 80%, 94%);
+    }
+    .callout-warn p { color: hsl(38, 70%, 28%); }
+
+    .callout-danger {
+      border-left-color: hsl(0, 72%, 52%);
+      background: hsl(0, 80%, 95%);
+    }
+    .callout-danger p { color: hsl(0, 65%, 32%); }
+
+    /* ── Interview Tip Cards ── */
+    .tip-card {
+      display: flex;
+      gap: 14px;
+      padding: 16px 20px;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      margin-bottom: 10px;
+    }
+
+    .tip-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .tip-content {
+      font-size: 16px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    .tip-content strong {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    /* ── Similar Problems ── */
+    .similar-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .similar-card {
+      display: block;
+      text-decoration: none;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 18px 20px;
+      transition: all 0.2s ease;
+    }
+
+    .similar-card:hover {
+      border-color: var(--accent-border);
+      background: var(--accent-light);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    }
+
+    .similar-card h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .similar-card p {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      margin-bottom: 0;
+    }
+
+    /* ── Evolution / Timeline ── */
+    .evolution-step {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+      position: relative;
+    }
+
+    .evolution-step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      left: 15px;
+      top: 36px;
+      bottom: -20px;
+      width: 2px;
+      background: var(--border);
+    }
+
+    .evolution-marker {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--accent-light);
+      border: 2px solid var(--accent-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--accent-text);
+      flex-shrink: 0;
+    }
+
+    .evolution-content h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .evolution-content p {
+      font-size: 15.5px;
+      color: var(--text-secondary);
+      margin-bottom: 0;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .main { padding: 0 20px 80px; }
+      .hero h1 { font-size: 34px; }
+      .tradeoff { grid-template-columns: 1fr; }
+      .card-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- ═══════════════════ TOPBAR ═══════════════════ -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <a href="../index.html">System Design</a>
+      <span class="topbar-sep">/</span>
+      <span class="topbar-problem">Notification System</span>
+    </div>
+    <div class="topbar-right">
+      <span class="topbar-tag">HARD</span>
+    </div>
+  </header>
+
+  <!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-label">Sections</div>
+    <ul class="sidebar-nav" id="sidebar-nav">
+      <li><a href="#problem">Problem Statement</a></li>
+      <li><a href="#requirements">Requirements</a></li>
+      <li><a href="#scale">Scale Estimation</a></li>
+      <li><a href="#api">API Design</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#deep-dive">Deep Dive</a></li>
+      <li><a href="#tradeoffs">Tradeoffs</a></li>
+      <li><a href="#failures">Failure Scenarios</a></li>
+      <li><a href="#interview-tips">Interview Tips</a></li>
+      <li><a href="#similar">Similar Problems</a></li>
+      <li><a href="#evolution">Evolution</a></li>
+    </ul>
+
+    <div class="sidebar-label">Related</div>
+    <ul class="sidebar-related">
+      <li><a href="../whatsapp/index.html">WhatsApp / Chat</a></li>
+      <li><a href="../twitter-feed/index.html">Twitter / News Feed</a></li>
+      <li><a href="../kafka/index.html">Distributed Queue (Kafka)</a></li>
+      <li><a href="../rate-limiter/index.html">Rate Limiter</a></li>
+    </ul>
+  </aside>
+
+  <!-- ═══════════════════ MAIN ═══════════════════ -->
+  <main class="main">
+
+    <!-- ── Hero ── -->
+    <div class="hero">
+      <div class="hero-number">System Design — 09</div>
+      <h1>Notification System</h1>
+      <p class="hero-desc">
+        Design a scalable, multi-channel notification platform that reliably delivers OTPs in 2 seconds and promo blasts to 50 million users — without one starving the other.
+      </p>
+      <div class="hero-tags">
+        <span class="hero-tag">Fan-out</span>
+        <span class="hero-tag">Multi-Channel</span>
+        <span class="hero-tag">Priority Queues</span>
+        <span class="hero-tag">Delivery Guarantees</span>
+        <span class="hero-tag">Kafka</span>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 01 · PROBLEM STATEMENT ═══════════════ -->
+    <div class="section" id="problem">
+      <div class="section-number">01</div>
+      <h2>Problem Statement</h2>
+      <p>
+        Every major app — Uber, Amazon, WhatsApp, YouTube — has a notification system behind it. But the notification system is rarely the product itself. It's <span class="hl">infrastructure that every other team depends on</span>. The payments team needs it for OTPs. Marketing needs it for promos. Social needs it for "X liked your post."
+      </p>
+      <p>
+        Think of it like a postal service inside your company. Any team can hand you a letter (notification request), and your job is to figure out: who gets it, through which channel, how urgently, and to confirm it was delivered.
+      </p>
+
+      <div class="callout">
+        <p><strong>Core question:</strong> How do you build a single system that handles a 2-second OTP delivery and a 50-million-user promo blast with the same infrastructure, without one starving the other?</p>
+      </div>
+
+      <p>
+        <strong>Real-world context:</strong> Facebook sends billions of notifications daily. Uber's OTP and ride-status notifications are on the critical path — if they fail, the business fails. Amazon's "your package shipped" emails are high-volume but tolerant of a few minutes' delay. All three coexist in a single notification platform.
+      </p>
+    </div>
+
+    <!-- ═══════════════ 02 · REQUIREMENTS ═══════════════ -->
+    <div class="section" id="requirements">
+      <div class="section-number">02</div>
+      <h2>Requirements</h2>
+
+      <h3>Functional Requirements</h3>
+      <div class="card">
+        <ul>
+          <li><strong>Multi-channel delivery</strong> — Push (<span class="hl-accent">FCM/APNs</span>), SMS (<span class="hl-accent">Twilio</span>), Email (<span class="hl-accent">SES/SendGrid</span>), In-app (stored feed)</li>
+          <li><strong>Priority levels</strong> — Critical (OTP), High (ride update), Medium (social), Low (promos)</li>
+          <li><strong>User preferences</strong> — Per-channel opt-in/out, quiet hours, frequency caps</li>
+          <li><strong>Template system</strong> — Reusable templates with variable substitution: <span class="inline-code">Hi {{name}}, your order {{id}} shipped</span></li>
+          <li><strong>Delivery tracking</strong> — Per-notification lifecycle: created → queued → sent → delivered → read → failed</li>
+          <li><strong>Scheduling</strong> — Future-dated and recurring notifications (weekly digest every Sunday 9 AM)</li>
+          <li><strong>Bulk fan-out</strong> — One event triggers notifications to millions (e.g., all Premium users in a region)</li>
+          <li><strong>In-app notification feed</strong> — Paginated, chronologically ordered list per user</li>
+        </ul>
+      </div>
+
+      <h3>Non-Functional Requirements</h3>
+      <div class="card">
+        <ul>
+          <li><strong>High availability</strong> — Tier-0 infrastructure. If notifications go down, OTPs fail, payments stall, rides can't start.</li>
+          <li><strong>At-least-once delivery</strong> — We'd rather send a duplicate than lose an OTP. Clients handle dedup.</li>
+          <li><strong>Latency-tiered</strong> — Critical: <span class="hl">&lt;3 seconds</span>. High: &lt;30s. Low: minutes are fine.</li>
+          <li><strong>Massive throughput</strong> — Millions of notifications per minute during peak events.</li>
+          <li><strong>Backpressure-aware</strong> — FCM, APNs, Twilio, SES all have rate limits. Throttle per-provider without blocking urgent traffic.</li>
+          <li><strong>Ordering for in-app</strong> — In-app feed chronologically ordered per user. Cross-channel ordering doesn't matter.</li>
+        </ul>
+      </div>
+
+      <h3>Key NFR Tensions</h3>
+      <div class="card-grid">
+        <div class="card">
+          <h4>Latency vs Throughput</h4>
+          <p>A 10M-user promo blast and a single OTP hit the same system. If promo messages flood the queue, the OTP waits. Forces us toward <span class="hl-accent">priority queues</span>.</p>
+        </div>
+        <div class="card">
+          <h4>Reliability vs Cost</h4>
+          <p>SMS is reliable but costs $0.01–0.05/msg. Push is free but requires app install. Channel selection becomes a <span class="hl-accent">routing problem</span>.</p>
+        </div>
+        <div class="card">
+          <h4>Consistency vs Availability</h4>
+          <p>Preference updates need <span class="hl-accent">strong consistency</span>. Sending a promo after opt-out is a GDPR violation.</p>
+        </div>
+        <div class="card">
+          <h4>Simplicity vs Flexibility</h4>
+          <p>Multi-channel fallback, conditional logic, A/B testing on copy — each addition makes the routing layer more complex.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 03 · SCALE ESTIMATION ═══════════════ -->
+    <div class="section" id="scale">
+      <div class="section-number">03</div>
+      <h2>Scale Estimation</h2>
+
+      <p>Starting assumptions: <span class="hl">500M registered users</span>, <span class="hl">100M DAU</span> (20% daily active), <span class="hl">6 notifications per DAU per day</span> across transactional, social, and marketing.</p>
+
+      <div class="scale-grid">
+        <div class="scale-card">
+          <div class="number">600M</div>
+          <div class="label">Notifications / Day</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">1.16B</div>
+          <div class="label">Delivery Attempts / Day</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~35K/s</div>
+          <div class="label">Peak Creation QPS</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~67K/s</div>
+          <div class="label">Peak Delivery QPS</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~1 KB</div>
+          <div class="label">Per Notification</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~600 GB</div>
+          <div class="label">Daily Storage</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">54 TB</div>
+          <div class="label">Active Feed (90 days)</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~4.2 TB</div>
+          <div class="label">Daily Outbound Bandwidth</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>Channel Breakdown</h4>
+        <p>Each notification may hit multiple channels. In-app: 100% (600M). Push: 70% (420M). Email: 20% (120M). SMS: 3% (18M, critical only). Total delivery attempts: ~1.16B/day.</p>
+      </div>
+
+      <div class="card">
+        <h4>What the Numbers Force</h4>
+        <p>
+          <span class="hl">35K/s peak</span> → async queue-based architecture (can't do sync). <span class="hl">54 TB feed</span> → Cassandra/DynamoDB, not PostgreSQL. <span class="hl">50M bulk sends</span> → separate fan-out pipeline with throttling. <span class="hl">Provider rate limits</span> → per-channel worker pools with independent rate limiters.
+        </p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 04 · API DESIGN ═══════════════ -->
+    <div class="section" id="api">
+      <div class="section-number">04</div>
+      <h2>API Design</h2>
+
+      <p>Two distinct consumer sets: <span class="hl-accent">internal services</span> (send notifications, service-to-service auth) and <span class="hl-accent">end users</span> (read feed, manage preferences, user JWT auth).</p>
+
+      <div class="code-label">Send Single Notification — Internal</div>
+      <div class="code-block"><code><pre>POST /v1/notifications
+Headers: X-Service-Id, X-Api-Key, X-Idempotency-Key
+
+{
+  "user_id": "user_abc123",
+  "priority": "critical",
+  "channels": ["push", "sms"],
+  "fallback_chain": true,
+  "fallback_timeout_sec": 30,
+  "template_id": "otp_verification",
+  "template_vars": { "otp_code": "482901", "expiry_minutes": "5" },
+  "metadata": { "deep_link": "app://verify?code=482901" },
+  "ttl_sec": 300
+}
+
+→ 202 Accepted { "notification_id": "notif_7f8a9b2c", "status": "queued" }</pre></code></div>
+
+      <div class="callout">
+        <p><strong>Why 202 not 201:</strong> We're not delivering synchronously. The request is accepted into the queue. <strong>Idempotency key</strong> prevents duplicate OTPs on retry. <strong>Fallback chain</strong>: try push first, SMS after 30s if push fails. <strong>TTL</strong>: expired OTPs are dropped from queue.</p>
+      </div>
+
+      <div class="code-label">Send Bulk Notification — Internal</div>
+      <div class="code-block"><code><pre>POST /v1/notifications/bulk
+
+{
+  "segment": { "type": "query", "filters": { "subscription": "premium", "country": "AE" } },
+  "priority": "low",
+  "channels": ["push", "email"],
+  "template_id": "promo_sale_v2",
+  "template_vars": { "sale_name": "January Mega Sale", "discount": "30%" },
+  "scheduling": {
+    "send_at": "2025-01-20T09:00:00Z",
+    "timezone_aware": true,
+    "throttle_per_sec": 10000
+  },
+  "respect_preferences": true,
+  "dedup_key": "uae-sale-jan2025"
+}
+
+→ 202 Accepted { "bulk_id": "bulk_3e4f", "estimated_recipients": 1200000 }</pre></code></div>
+
+      <div class="code-label">Get Notification Feed — User</div>
+      <div class="code-block"><code><pre>GET /v1/users/me/notifications?cursor=notif_abc&limit=20&unread_only=false
+Authorization: Bearer &lt;jwt&gt;
+
+→ 200 OK {
+  "notifications": [ { "notification_id", "title", "body", "deep_link",
+                        "priority", "is_read", "created_at" }, ... ],
+  "cursor": "notif_6a5b4c",
+  "has_more": true,
+  "unread_count": 7
+}</pre></code></div>
+
+      <div class="code-label">User Preferences</div>
+      <div class="code-block"><code><pre>GET /PUT /v1/users/me/notification-preferences
+
+{
+  "categories": {
+    "transactional": { "push": true, "email": true, "sms": true, "mutable": false },
+    "marketing":     { "push": true, "email": true, "sms": false, "mutable": true }
+  },
+  "quiet_hours": { "enabled": true, "start": "23:00", "end": "07:00",
+                   "timezone": "Asia/Dubai", "override_for_critical": true },
+  "frequency_caps": { "marketing_push_per_day": 3 }
+}</pre></code></div>
+
+      <div class="table-wrap">
+        <table>
+          <tr><th>Endpoint</th><th>Method</th><th>Consumer</th><th>Purpose</th></tr>
+          <tr><td><span class="inline-code">/v1/notifications</span></td><td>POST</td><td>Internal</td><td>Send single notification</td></tr>
+          <tr><td><span class="inline-code">/v1/notifications/bulk</span></td><td>POST</td><td>Internal</td><td>Send to segment</td></tr>
+          <tr><td><span class="inline-code">/v1/users/me/notifications</span></td><td>GET</td><td>User</td><td>Read feed (cursor-paginated)</td></tr>
+          <tr><td><span class="inline-code">/v1/users/me/notifications/read</span></td><td>PATCH</td><td>User</td><td>Mark as read</td></tr>
+          <tr><td><span class="inline-code">/v1/users/me/notification-preferences</span></td><td>GET/PUT</td><td>User</td><td>Manage preferences</td></tr>
+          <tr><td><span class="inline-code">/v1/templates</span></td><td>CRUD</td><td>Internal</td><td>Template management</td></tr>
+          <tr><td>Webhook callback</td><td>POST</td><td>System→Service</td><td>Delivery status updates</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 05 · HIGH-LEVEL ARCHITECTURE ═══════════════ -->
+    <div class="section" id="architecture">
+      <div class="section-number">05</div>
+      <h2>High-Level Architecture</h2>
+
+      <p>The notification system is a <span class="hl-accent">pipeline</span>: a notification enters at one end and exits through a provider at the other. Everything in between is routing, filtering, prioritizing, and tracking.</p>
+
+      <!-- ── Inline SVG Diagram ── -->
+      <div class="arch-diagram">
+        <svg viewBox="0 0 900 520" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="#ccc9c4"/>
+            </marker>
+          </defs>
+
+          <!-- Row 1: Internal Services → Ingestion API -->
+          <g class="node" id="node-services" onclick="hlNode('node-services')">
+            <rect class="node-rect" x="10" y="20" width="120" height="55" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="70" y="42">Internal Services</text>
+            <text class="node-sublabel" x="70" y="57">Payments, Social, Mktg</text>
+          </g>
+
+          <g class="node" id="node-ingestion" onclick="hlNode('node-ingestion')">
+            <rect class="node-rect" x="190" y="20" width="120" height="55" fill="hsl(25,80%,94%)" stroke="hsl(25,60%,80%)"/>
+            <text class="node-label" x="250" y="42">Ingestion API</text>
+            <text class="node-sublabel" x="250" y="57">Validate + Dedup</text>
+          </g>
+
+          <line class="edge" x1="130" y1="47" x2="190" y2="47"/>
+          <text class="edge-label" x="160" y="40">HTTPS</text>
+
+          <!-- Row 2: Priority Kafka Topics -->
+          <g class="node" id="node-kafka-crit" onclick="hlNode('node-kafka-crit')">
+            <rect class="node-rect" x="370" y="5" width="130" height="35" fill="hsl(0,80%,94%)" stroke="hsl(0,60%,80%)"/>
+            <text class="node-label" x="435" y="25">🔴 Critical Queue</text>
+          </g>
+          <g class="node" id="node-kafka-high" onclick="hlNode('node-kafka-high')">
+            <rect class="node-rect" x="370" y="45" width="130" height="35" fill="hsl(25,80%,94%)" stroke="hsl(25,60%,80%)"/>
+            <text class="node-label" x="435" y="65">🟠 High Queue</text>
+          </g>
+          <g class="node" id="node-kafka-med" onclick="hlNode('node-kafka-med')">
+            <rect class="node-rect" x="370" y="85" width="130" height="35" fill="hsl(45,80%,92%)" stroke="hsl(45,60%,78%)"/>
+            <text class="node-label" x="435" y="105">🟡 Medium Queue</text>
+          </g>
+          <g class="node" id="node-kafka-low" onclick="hlNode('node-kafka-low')">
+            <rect class="node-rect" x="370" y="125" width="130" height="35" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="435" y="145">⚪ Low Queue</text>
+          </g>
+
+          <line class="edge" x1="310" y1="35" x2="370" y2="22"/>
+          <line class="edge" x1="310" y1="42" x2="370" y2="62"/>
+          <line class="edge" x1="310" y1="50" x2="370" y2="102"/>
+          <line class="edge" x1="310" y1="55" x2="370" y2="142"/>
+          <text class="edge-label" x="340" y="12">Kafka</text>
+
+          <!-- Fan-Out Service -->
+          <g class="node" id="node-fanout" onclick="hlNode('node-fanout')">
+            <rect class="node-rect" x="190" y="120" width="120" height="55" fill="hsl(25,80%,94%)" stroke="hsl(25,60%,80%)"/>
+            <text class="node-label" x="250" y="142">Fan-Out Service</text>
+            <text class="node-sublabel" x="250" y="157">Bulk → Individual</text>
+          </g>
+
+          <line class="edge" x1="250" y1="75" x2="250" y2="120"/>
+          <text class="edge-label" x="268" y="100">Bulk jobs</text>
+
+          <!-- Processing Workers -->
+          <g class="node" id="node-processing" onclick="hlNode('node-processing')">
+            <rect class="node-rect" x="560" y="45" width="140" height="70" fill="hsl(25,80%,94%)" stroke="hsl(25,60%,80%)"/>
+            <text class="node-label" x="630" y="70">Processing Workers</text>
+            <text class="node-sublabel" x="630" y="87">Template • Prefs • Route</text>
+          </g>
+
+          <line class="edge" x1="500" y1="22" x2="560" y2="65"/>
+          <line class="edge" x1="500" y1="62" x2="560" y2="75"/>
+          <line class="edge" x1="500" y1="102" x2="560" y2="85"/>
+          <line class="edge" x1="500" y1="142" x2="560" y2="95"/>
+
+          <!-- Preference + Template stores -->
+          <g class="node" id="node-prefs" onclick="hlNode('node-prefs')">
+            <rect class="node-rect" x="560" y="145" width="140" height="45" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="630" y="163">Preferences DB</text>
+            <text class="node-sublabel" x="630" y="178">PostgreSQL (strong)</text>
+          </g>
+
+          <line class="edge" x1="630" y1="115" x2="630" y2="145"/>
+
+          <!-- Channel-specific queues + workers -->
+          <!-- Push -->
+          <g class="node" id="node-push" onclick="hlNode('node-push')">
+            <rect class="node-rect" x="770" y="5" width="120" height="45" fill="hsl(25,80%,94%)" stroke="hsl(25,60%,80%)"/>
+            <text class="node-label" x="830" y="22">Push Workers</text>
+            <text class="node-sublabel" x="830" y="37">FCM / APNs</text>
+          </g>
+          <!-- Email -->
+          <g class="node" id="node-email" onclick="hlNode('node-email')">
+            <rect class="node-rect" x="770" y="58" width="120" height="45" fill="hsl(25,80%,94%)" stroke="hsl(25,60%,80%)"/>
+            <text class="node-label" x="830" y="75">Email Workers</text>
+            <text class="node-sublabel" x="830" y="90">SES / SendGrid</text>
+          </g>
+          <!-- SMS -->
+          <g class="node" id="node-sms" onclick="hlNode('node-sms')">
+            <rect class="node-rect" x="770" y="111" width="120" height="45" fill="hsl(25,80%,94%)" stroke="hsl(25,60%,80%)"/>
+            <text class="node-label" x="830" y="128">SMS Workers</text>
+            <text class="node-sublabel" x="830" y="143">Twilio</text>
+          </g>
+          <!-- In-App -->
+          <g class="node" id="node-inapp" onclick="hlNode('node-inapp')">
+            <rect class="node-rect" x="770" y="164" width="120" height="45" fill="hsl(25,80%,94%)" stroke="hsl(25,60%,80%)"/>
+            <text class="node-label" x="830" y="181">In-App Workers</text>
+            <text class="node-sublabel" x="830" y="196">Feed + WebSocket</text>
+          </g>
+
+          <line class="edge" x1="700" y1="60" x2="770" y2="27"/>
+          <line class="edge" x1="700" y1="72" x2="770" y2="80"/>
+          <line class="edge" x1="700" y1="85" x2="770" y2="133"/>
+          <line class="edge" x1="700" y1="95" x2="770" y2="186"/>
+          <text class="edge-label" x="740" y="14">Channel Queues</text>
+
+          <!-- Bottom row: Data Stores -->
+          <g class="node" id="node-cassandra" onclick="hlNode('node-cassandra')">
+            <rect class="node-rect" x="20" y="260" width="130" height="55" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="85" y="282">Feed Store</text>
+            <text class="node-sublabel" x="85" y="297">Cassandra (54 TB)</text>
+          </g>
+
+          <g class="node" id="node-redis" onclick="hlNode('node-redis')">
+            <rect class="node-rect" x="170" y="260" width="130" height="55" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="235" y="282">Cache + Counters</text>
+            <text class="node-sublabel" x="235" y="297">Redis</text>
+          </g>
+
+          <g class="node" id="node-device" onclick="hlNode('node-device')">
+            <rect class="node-rect" x="320" y="260" width="130" height="55" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="385" y="282">Device Registry</text>
+            <text class="node-sublabel" x="385" y="297">Tokens + Metadata</text>
+          </g>
+
+          <g class="node" id="node-tracker" onclick="hlNode('node-tracker')">
+            <rect class="node-rect" x="470" y="260" width="140" height="55" fill="hsl(25,80%,94%)" stroke="hsl(25,60%,80%)"/>
+            <text class="node-label" x="540" y="282">Delivery Tracker</text>
+            <text class="node-sublabel" x="540" y="297">Status + Webhooks</text>
+          </g>
+
+          <g class="node" id="node-ws" onclick="hlNode('node-ws')">
+            <rect class="node-rect" x="630" y="260" width="130" height="55" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="695" y="282">WebSocket GW</text>
+            <text class="node-sublabel" x="695" y="297">Real-time push</text>
+          </g>
+
+          <g class="node" id="node-scheduler" onclick="hlNode('node-scheduler')">
+            <rect class="node-rect" x="780" y="260" width="110" height="55" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="835" y="282">Scheduler</text>
+            <text class="node-sublabel" x="835" y="297">Cron + Delayed</text>
+          </g>
+
+          <!-- Connections to bottom row -->
+          <line class="edge" x1="830" y1="209" x2="85" y2="260" style="stroke-dasharray: 4 3;"/>
+          <line class="edge" x1="830" y1="209" x2="695" y2="260" style="stroke-dasharray: 4 3;"/>
+          <line class="edge" x1="830" y1="156" x2="385" y2="260" style="stroke-dasharray: 4 3;"/>
+          <line class="edge" x1="830" y1="50" x2="540" y2="260" style="stroke-dasharray: 4 3;"/>
+        </svg>
+      </div>
+
+      <!-- ── Flow Stepper ── -->
+      <div class="flow-stepper">
+        <div class="flow-stepper-header">
+          <span class="flow-stepper-title">Critical OTP Flow — Step Through</span>
+          <div class="flow-stepper-controls">
+            <button class="flow-btn" onclick="resetFlow()" id="flow-reset" disabled>Reset</button>
+            <button class="flow-btn flow-btn-primary" onclick="runFlow()" id="flow-next">Next Step →</button>
+          </div>
+        </div>
+        <div class="flow-steps" id="flow-steps">
+          <!-- Populated by JS -->
+        </div>
+        <div class="flow-desc" id="flow-desc">Click <strong>Next Step</strong> to walk through how a critical OTP notification flows end-to-end.</div>
+        <div class="flow-counter" id="flow-counter"></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 06 · DEEP DIVE ═══════════════ -->
+    <div class="section" id="deep-dive">
+      <div class="section-number">06</div>
+      <h2>Deep Dive — Fan-Out, Push vs Pull &amp; Delivery Guarantees</h2>
+
+      <h3>Fan-Out: Staged Bulk Sends</h3>
+      <p>
+        The naive approach — enqueuing 50M messages at once — floods queues, blows memory during segment resolution, and causes a downstream provider stampede. The production approach uses <span class="hl">three stages</span>:
+      </p>
+      <p>
+        <strong>Stage 1 — Job Creation (instant):</strong> Write a single bulk_job row to the database, return 202.<br/>
+        <strong>Stage 2 — Segment Resolution (streaming):</strong> Fan-out service streams users in 5K batches via cursor, pre-filters by preferences (eliminates ~20% before queuing), throttles enqueue at caller-specified rate, and checkpoints progress for crash recovery.<br/>
+        <strong>Stage 3 — Delivery:</strong> Individual notifications flow through the normal pipeline at a steady, manageable rate.
+      </p>
+
+      <h3>Push vs Pull for In-App</h3>
+      <p>
+        <strong>Pull:</strong> User opens feed → query <span class="hl-accent">Cassandra</span> (partition key = user_id, cluster key = created_at DESC). Single-partition read, ~2ms. Redis caches page 1 (last 50 notifications) for ~90% cache hit rate — <span class="hl">60× cheaper than storing the full feed in Redis RAM</span>.
+      </p>
+      <p>
+        <strong>Push:</strong> Real-time badge updates via <span class="hl-accent">WebSocket Gateway</span>. Connection registry in Redis maps user_id → gateway instance. On new notification, publish to the specific gateway holding the user's connection. At 10M concurrent connections, ~25 GB RAM per gateway instance across 20 pods.
+      </p>
+
+      <h3>Delivery Guarantees: At-Least-Once + Idempotency</h3>
+      <p>
+        Exactly-once across a network boundary with external providers is <span class="hl-red">impossible</span> (Two Generals' Problem). We always retry, with idempotency at <span class="hl">4 layers</span>:
+      </p>
+
+      <!-- Mermaid Sequence Diagram -->
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+sequenceDiagram
+    participant PS as Payments Service
+    participant API as Ingestion API
+    participant RD as Redis (Dedup)
+    participant KF as Kafka Critical
+    participant PW as Processing Worker
+    participant PU as Push Worker
+    participant FCM as FCM (Google)
+    participant DT as Delivery Tracker
+    participant SMS as SMS Worker
+
+    PS->>API: POST /v1/notifications (OTP)
+    API->>RD: Check idempotency key
+    RD-->>API: Not seen ✓
+    API->>KF: Enqueue to notifications.critical
+    API-->>PS: 202 Accepted
+
+    KF->>PW: Consume message
+    PW->>RD: Check processed set (SETNX)
+    RD-->>PW: New ✓
+    PW->>PW: Resolve template + check prefs
+    PW->>KF: Enqueue to delivery.push
+
+    KF->>PU: Consume push message
+    PU->>RD: Check delivery log
+    RD-->>PU: Not sent ✓
+    PU->>FCM: Send push notification
+    FCM-->>PU: 200 OK
+    PU->>DT: Status → "sent"
+
+    Note over DT: Start 30s fallback timer
+
+    FCM-->>DT: Delivery receipt
+    DT->>DT: Status → "delivered"
+    DT->>DT: Cancel SMS fallback ✓
+    DT->>PS: Webhook: OTP delivered via push
+
+    Note over DT,SMS: If push fails or times out after 30s:
+    DT->>SMS: Trigger SMS fallback
+    SMS->>SMS: Deliver via Twilio
+        </div>
+      </div>
+
+      <div class="card-grid">
+        <div class="card">
+          <h4>Layer 1 — Ingestion</h4>
+          <p>Redis <span class="inline-code">SETNX</span> on idempotency key (24h TTL). Duplicate requests return same notification_id without re-queuing.</p>
+        </div>
+        <div class="card">
+          <h4>Layer 2 — Processing</h4>
+          <p>Atomic <span class="inline-code">SETNX</span> on processed set. Kafka consumer commits offset <em>after</em> processing, not before.</p>
+        </div>
+        <div class="card">
+          <h4>Layer 3 — Delivery</h4>
+          <p>Check delivery log before calling provider. FCM <span class="inline-code">collapse_key</span> reduces visible duplicates on device.</p>
+        </div>
+        <div class="card">
+          <h4>Layer 4 — Client</h4>
+          <p>Client maintains local set of recent notification_ids (~200). Last line of defense against server-side dedup failures.</p>
+        </div>
+      </div>
+
+      <h3>Retry Strategy</h3>
+      <p>
+        Exponential backoff with <span class="hl-accent">retry Kafka topics</span>: <span class="inline-code">delivery.push.retry.1</span> (2s), <span class="inline-code">.retry.2</span> (8s), <span class="inline-code">.retry.3</span> (32s), <span class="inline-code">.dlq</span> (dead letter). Critical: 6 retries (~10 min window). Low: 2 retries (~10s), then silent drop.
+      </p>
+    </div>
+
+    <!-- ═══════════════ 07 · TRADEOFFS ═══════════════ -->
+    <div class="section" id="tradeoffs">
+      <div class="section-number">07</div>
+      <h2>Key Design Decisions &amp; Tradeoffs</h2>
+
+      <h3>Queue Architecture</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Separate Kafka Topics per Priority</h4>
+          <p>4 topics with dedicated consumer pools. Critical consumers are never blocked by low-priority backlog. 60/25/10/5 worker allocation.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Single Topic with Priority Field</h4>
+          <p>Kafka is FIFO per partition — no skip-ahead. A 50M promo blast blocks OTPs. Would require building an in-app priority queue on top of Kafka.</p>
+        </div>
+      </div>
+
+      <h3>Feed Store</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Cassandra</h4>
+          <p>Single-partition reads at 54 TB. Native TTL for 90-day expiry. ~$5K/month. Partition key = user_id, clustering key = created_at DESC.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Redis Sorted Sets</h4>
+          <p>~10.8 TB in RAM at ~$324K/month. Great as a page-1 cache (we use it for that), but unsustainable as the primary 90-day store.</p>
+        </div>
+      </div>
+
+      <h3>Real-Time Updates</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>WebSocket + Pull Fallback</h4>
+          <p>&lt;1s badge updates for online users. Connection registry in Redis for targeted routing. 20 gateway pods, ~25 GB RAM each.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Push Notification Piggyback</h4>
+          <p>Zero extra infrastructure. Client updates badge on push receipt. But 5–30s delay due to OS throttling. Fine for most apps, not for ride-status-critical ones.</p>
+        </div>
+      </div>
+
+      <h3>Delivery Guarantee</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>At-Least-Once + Idempotency</h4>
+          <p>Always retry on failure. 4-layer dedup (ingestion, processing, delivery, client). Duplicate rate &lt;0.1%. Can't lose OTPs.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Exactly-Once</h4>
+          <p><span class="hl-red">Impossible</span> across network boundaries with external providers (FCM, Twilio). Only works within Kafka's own transaction boundary.</p>
+        </div>
+      </div>
+
+      <h3>API Model</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Async (202 Accepted)</h4>
+          <p>Decouple acceptance from delivery. Ingestion API stays fast (&lt;50ms p99). Provider outages don't cascade to ingestion unavailability.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Synchronous (200 with result)</h4>
+          <p>At 7K/sec, blocking until FCM responds requires 14K+ concurrent threads. Provider outage cascades to all channels. Only viable at &lt;100 notifications/sec.</p>
+        </div>
+      </div>
+
+      <h3>Template Resolution</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Write Time (Eager)</h4>
+          <p>Resolve templates at processing time. Store full rendered text. No read-path dependency on template service. Simple.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Read Time (Lazy)</h4>
+          <p>4× less storage per record. Allows retroactive template fixes. But adds latency to every feed read and creates hard dependency on template service for reads.</p>
+        </div>
+      </div>
+
+      <h3>Preference Check Location</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Coarse at Fan-Out + Fine at Processing</h4>
+          <p>Coarse check eliminates ~20% of bulk messages before queueing (saves 10M Kafka messages on a 50M blast). Fine check catches quiet hours, frequency caps, channel prefs.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Processing Only</h4>
+          <p>Simpler (one check location). But wastes queue capacity and worker resources on notifications we'll ultimately drop.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 08 · FAILURE SCENARIOS ═══════════════ -->
+    <div class="section" id="failures">
+      <div class="section-number">08</div>
+      <h2>What Can Go Wrong</h2>
+
+      <div class="card">
+        <h4>🔴 Provider Outage (FCM / Twilio / SES)</h4>
+        <p><strong>Impact:</strong> One channel completely blocked. Retry storms fill retry topics, new messages pile up. <strong>Mitigation:</strong> <span class="hl-accent">Circuit breaker pattern</span> — after 50 failures in 60s, stop sending to that provider. Critical traffic routes to fallback channel. Non-critical held in deferred topic until recovery.</p>
+      </div>
+
+      <div class="card">
+        <h4>🔴 Thundering Herd from Bulk Send</h4>
+        <p><strong>Impact:</strong> 50M promo blast + organic traffic overwhelms push workers. FCM returns 429s. <strong>Mitigation:</strong> Physical isolation — separate worker pools for critical vs low priority with independent FCM API quotas. <span class="hl-accent">Adaptive throttling</span> on fan-out based on consumer lag.</p>
+      </div>
+
+      <div class="card">
+        <h4>🟠 Preference Desync — Send After Opt-Out</h4>
+        <p><strong>Impact:</strong> User opts out of marketing at 14:00:01, cached preference is stale, marketing push sent at 14:00:03. GDPR violation risk. <strong>Mitigation:</strong> Cache invalidation on write. Marketing notifications bypass cache — <span class="hl-accent">synchronous PostgreSQL read</span> for compliance.</p>
+      </div>
+
+      <div class="card">
+        <h4>🟠 SMS Cost Explosion</h4>
+        <p><strong>Impact:</strong> Delayed FCM delivery receipts trigger SMS fallbacks unnecessarily. 1% false fallback × 420M pushes = 4.2M wasted SMS = $126K/day. <strong>Mitigation:</strong> Conservative fallback timeouts per priority (30s critical, 2min high, none for medium/low). Re-check push delivery status before sending SMS.</p>
+      </div>
+
+      <div class="card">
+        <h4>🟠 Device Token Rot</h4>
+        <p><strong>Impact:</strong> 10–30% of stored tokens become stale over time. 84M wasted FCM calls/day. <strong>Mitigation:</strong> Reactive cleanup on "NotRegistered" response. Weekly proactive health check with FCM dry_run. Token refresh on every app open.</p>
+      </div>
+
+      <div class="card">
+        <h4>🟡 Kafka Broker Failure</h4>
+        <p><strong>Impact:</strong> Writes fail for affected partitions. <strong>Mitigation:</strong> Replication factor = 3, min.insync.replicas = 2. Leadership transfer in ~30s. Redis fallback buffer for critical notifications during brief outages.</p>
+      </div>
+
+      <div class="card">
+        <h4>🟡 Duplicate Notifications Despite Idempotency</h4>
+        <p><strong>Impact:</strong> Worker crashes between processing and Redis write → reprocesses on restart. <strong>Mitigation:</strong> Atomic <span class="inline-code">SETNX</span> instead of check-then-set. If Redis is down, fail open (accept brief duplicate spike). Client-side dedup as ultimate safety net.</p>
+      </div>
+
+      <div class="card">
+        <h4>🟡 Queue Starvation (Low Priority Never Processed)</h4>
+        <p><strong>Impact:</strong> Marketing campaigns that should deliver in 1 hour take 12 hours. <strong>Mitigation:</strong> Dynamic worker rebalancing based on consumer lag. Minimum 2 workers per priority level always. SLA alerts per priority topic.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 09 · INTERVIEW TIPS ═══════════════ -->
+    
+  <section class="section" id="antipatterns">
+    <div class="section-head"><span class="section-n">⚠</span><h2 class="section-title">Anti-patterns</h2></div>
+    <div class="prose">
+      
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Send every notification to every device immediately</div>
+        <p class="why">10M notifications/sec ingest; APNs/FCM rate-limits throttle you.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Queue + batch per-device-token; respect provider rate limits; dedup collapsed notifications.</div>
+    </div>
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Send SMS for every in-app notification</div>
+        <p class="why">Cost explodes; users unsubscribe.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Channel preferences per user; in-app default; SMS only for critical (payment, 2FA).</div>
+    </div>
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Write notification to DB synchronously before acking API</div>
+        <p class="why">Notification service becomes part of the hot path.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Fire-and-forget event to Kafka; notify service consumes + delivers async.</div>
+    </div>
+    </div>
+  </section>
+
+  <div class="section" id="interview-tips">
+      <div class="section-number">09</div>
+      <h2>Interview Tips</h2>
+
+      <div class="tip-card">
+        <span class="tip-icon">💡</span>
+        <div class="tip-content">
+          <strong>Scope first — ask 5 questions</strong><br/>
+          What channels? Platform or feature? Scale (DAU)? Priority levels? Delivery guarantees? This narrows a dozen-direction problem into a specific design. Proposing numbers yourself ("Let me assume 100M DAU") signals confidence.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">⚡</span>
+        <div class="tip-content">
+          <strong>Draw the pipeline, not the boxes</strong><br/>
+          Start with the data flow: Ingestion → Priority Queues → Processing → Channel Queues → Providers. This gives the interviewer the full picture in 60 seconds. Then add detail where they want to go deep.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🎯</span>
+        <div class="tip-content">
+          <strong>Lead with the OTP-vs-promo tension</strong><br/>
+          This is the defining constraint. Explain priority isolation (separate Kafka topics, dedicated consumer pools). This single point demonstrates you understand both the business requirement and the technical solution.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🚫</span>
+        <div class="tip-content">
+          <strong>Never say "exactly-once delivery"</strong><br/>
+          It's impossible across a network boundary with external providers. Say "at-least-once with idempotency at every layer" and explain the 4-layer dedup strategy. This signals real distributed systems understanding.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🏗️</span>
+        <div class="tip-content">
+          <strong>Proactively discuss failures</strong><br/>
+          Don't wait for "what could go wrong?" Bring up provider outages and circuit breakers yourself. Mention the thundering herd from bulk sends. This signals senior-level thinking that goes beyond the happy path.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">📐</span>
+        <div class="tip-content">
+          <strong>45-minute structure</strong><br/>
+          Scoping (5 min) → Scale estimation (3 min) → Architecture pipeline (10 min) → API design (5 min) → Deep dive on ONE topic for 15 min (priority queues OR delivery guarantees OR fan-out) → Tradeoffs + failures (5 min) → Q&A (2 min).
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 10 · SIMILAR PROBLEMS ═══════════════ -->
+    <div class="section" id="similar">
+      <div class="section-number">10</div>
+      <h2>Similar Problems</h2>
+
+      <div class="similar-grid">
+        <a href="../whatsapp/index.html" class="similar-card">
+          <h4>WhatsApp / Chat System</h4>
+          <p>Shares WebSocket gateway, device registry, delivery guarantees. Differs: bidirectional, E2E encryption, message ordering between users.</p>
+        </a>
+        <a href="../twitter-feed/index.html" class="similar-card">
+          <h4>Twitter / News Feed</h4>
+          <p>Same fan-out pattern and Cassandra feed store. Differs: fan-out-on-write vs read tradeoff for follower graphs.</p>
+        </a>
+        <a href="../kafka/index.html" class="similar-card">
+          <h4>Distributed Message Queue</h4>
+          <p>Notification system is a consumer of Kafka. Shares topic design, consumer groups, exactly-once semantics within Kafka.</p>
+        </a>
+        <a href="../rate-limiter/index.html" class="similar-card">
+          <h4>Rate Limiter</h4>
+          <p>Token bucket rate limiting is a component within the notification system — per-user frequency caps and per-provider throttling.</p>
+        </a>
+        <a href="../email-service/index.html" class="similar-card">
+          <h4>Email Delivery Service</h4>
+          <p>Email is one channel here. A dedicated email service goes deeper: SMTP, IP reputation, DKIM/SPF, deliverability analytics.</p>
+        </a>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 11 · EVOLUTION ═══════════════ -->
+    <div class="section" id="evolution">
+      <div class="section-number">11</div>
+      <h2>Evolution</h2>
+      <p>How this design grows from MVP to planet-scale. Architecture is derived from scale, not pattern-matched from blog posts.</p>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">1</div>
+        <div class="evolution-content">
+          <h4>MVP — Single Server, One Channel (10K users)</h4>
+          <p>Flask + PostgreSQL + Celery + FCM. One channel, one priority, one server. Preferences are a boolean column. Templates are hardcoded strings. Deployable in a day. Breaks at ~1M notifications/day when the single Celery worker becomes a bottleneck.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">2</div>
+        <div class="evolution-content">
+          <h4>Multi-Channel with Queues (1M DAU)</h4>
+          <p>Add email + SMS channels. Replace Celery with <span class="hl-accent">Kafka</span> for durability and replay. Two priority topics (critical, normal). User preference table with per-channel opt-in/out. Separate notification feed table partitioned by month.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">3</div>
+        <div class="evolution-content">
+          <h4>Platform Scale (50M DAU)</h4>
+          <p>Template CRUD API. 4 priority levels with dedicated consumer pools. Bulk fan-out service with throttling. <span class="hl-accent">Cassandra</span> for feed store. Fallback chains with delivery tracker. Webhook system for calling services. WebSocket gateway for real-time updates.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">4</div>
+        <div class="evolution-content">
+          <h4>Planet Scale (500M DAU)</h4>
+          <p>Multi-region deployment. <span class="hl-accent">ML-powered channel selection</span> (predicts best channel per user). Notification aggregation ("Ahmed and 47 others liked your post"). Batch provider APIs. Send-time optimization. Per-team SMS cost governance. GDPR compliance audit trails.</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SCRIPTS
+     ═══════════════════════════════════════════════════════ -->
+<script>
+  // ── Mermaid Init ──
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: 'hsl(25, 80%, 94%)',
+      primaryTextColor: '#111110',
+      primaryBorderColor: 'hsl(25, 60%, 80%)',
+      lineColor: '#ccc9c4',
+      secondaryColor: '#f7f7f5',
+      tertiaryColor: '#f0eeeb',
+      fontFamily: 'Geist, system-ui, sans-serif',
+      fontSize: '13px'
+    }
+  });
+
+  // ── Sidebar Scroll Observer ──
+  (function() {
+    const sections = document.querySelectorAll('.section[id]');
+    const navLinks = document.querySelectorAll('#sidebar-nav a');
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+          navLinks.forEach(link => {
+            link.classList.toggle('active', link.getAttribute('href') === '#' + id);
+          });
+        }
+      });
+    }, {
+      rootMargin: '-80px 0px -60% 0px',
+      threshold: 0
+    });
+
+    sections.forEach(s => observer.observe(s));
+  })();
+
+  // ── Architecture Node Highlight ──
+  let highlightedNode = null;
+  function hlNode(id) {
+    if (highlightedNode) {
+      document.getElementById(highlightedNode).classList.remove('node-highlight');
+    }
+    if (highlightedNode === id) {
+      highlightedNode = null;
+      return;
+    }
+    document.getElementById(id).classList.add('node-highlight');
+    highlightedNode = id;
+  }
+
+  // ── Flow Stepper ──
+  const FLOW_NODES = [
+    'Payments Svc',
+    'Ingestion API',
+    'Redis Dedup',
+    'Kafka Critical',
+    'Processing',
+    'Push Worker',
+    'FCM',
+    'Delivery Tracker'
+  ];
+
+  const FLOW_DESCS = [
+    'The Payments service sends a POST /v1/notifications request with priority "critical", channels ["push", "sms"], fallback_chain: true, and an idempotency key to prevent duplicate OTPs on retry.',
+    'The Ingestion API validates the payload, authenticates the calling service via API key, and checks the idempotency key in Redis. If the key has been seen, it returns the existing notification_id without re-queuing.',
+    'Redis SETNX atomically checks and stores the idempotency key (24h TTL). This ensures that even if the Payments service retries the same request, only one notification is created.',
+    'The notification is written to the Kafka "notifications.critical" topic. This topic has dedicated consumer pods (60% of worker capacity) so critical messages are never blocked by promo traffic.',
+    'A Processing Worker consumes the message, resolves the template ("Your OTP is 482901"), checks user preferences (transactional = always allowed), and routes to channel-specific topics: delivery.push first, with SMS registered as fallback.',
+    'The Push Worker reads from delivery.push, looks up the user\'s device token from the Device Registry, formats the payload for FCM (Android) or APNs (iOS), and sends the push notification.',
+    'FCM receives the notification and delivers it to the user\'s device. It returns a 200 OK to our Push Worker. Later, a delivery receipt confirms the notification reached the device.',
+    'The Delivery Tracker records status as "delivered", cancels the 30-second SMS fallback timer, and fires a webhook to the Payments service confirming OTP delivery. Total time: ~1.2 seconds.'
+  ];
+
+  let flowStep = -1;
+  const flowStepsEl = document.getElementById('flow-steps');
+  const flowDescEl  = document.getElementById('flow-desc');
+  const flowCounter = document.getElementById('flow-counter');
+  const flowNextBtn = document.getElementById('flow-next');
+  const flowResetBtn = document.getElementById('flow-reset');
+
+  // Build step nodes
+  FLOW_NODES.forEach((name, i) => {
+    if (i > 0) {
+      const arrow = document.createElement('span');
+      arrow.className = 'flow-arrow';
+      arrow.textContent = '→';
+      flowStepsEl.appendChild(arrow);
+    }
+    const node = document.createElement('span');
+    node.className = 'flow-node';
+    node.id = 'fnode-' + i;
+    node.textContent = name;
+    flowStepsEl.appendChild(node);
+  });
+
+  function runFlow() {
+    flowStep++;
+    if (flowStep >= FLOW_NODES.length) {
+      flowNextBtn.disabled = true;
+      flowDescEl.innerHTML = '<strong>✓ Flow complete.</strong> OTP delivered in ~1.2 seconds. If push had failed, the Delivery Tracker would have triggered SMS fallback after 30s. Click Reset to start over.';
+      return;
+    }
+
+    flowResetBtn.disabled = false;
+
+    for (let i = 0; i < flowStep; i++) {
+      document.getElementById('fnode-' + i).classList.remove('active');
+      document.getElementById('fnode-' + i).classList.add('done');
+    }
+
+    document.getElementById('fnode-' + flowStep).classList.add('active');
+    document.getElementById('fnode-' + flowStep).scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+
+    flowDescEl.innerHTML = FLOW_DESCS[flowStep];
+    flowCounter.textContent = `Step ${flowStep + 1} of ${FLOW_NODES.length}`;
+
+    if (flowStep === FLOW_NODES.length - 1) {
+      flowNextBtn.textContent = 'Finish ✓';
+    }
+  }
+
+  function resetFlow() {
+    flowStep = -1;
+    FLOW_NODES.forEach((_, i) => {
+      const el = document.getElementById('fnode-' + i);
+      el.classList.remove('active', 'done');
+    });
+    flowDescEl.innerHTML = 'Click <strong>Next Step</strong> to walk through how a critical OTP notification flows end-to-end.';
+    flowCounter.textContent = '';
+    flowNextBtn.disabled = false;
+    flowNextBtn.textContent = 'Next Step →';
+    flowResetBtn.disabled = true;
+  }
+</script>
+
+</body>
+</html>

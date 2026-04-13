@@ -1,0 +1,65 @@
+{
+  "slug": "vector-databases",
+  "title": "Vector Databases",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 280,
+    "s": 60,
+    "l": 50
+  },
+  "category": "Machine Learning Systems",
+  "blurb": "The query is \"movies like Inception.\" Postgres can't help — there's no SQL operator for \"semantically similar.\" With embeddings (vectors of 384-1536 floats representing meaning), the answer is: nearest neighbors of Incep",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>The query is \"movies like Inception.\" Postgres can't help — there's no SQL operator for \"semantically similar.\" With <strong>embeddings</strong> (vectors of 384-1536 floats representing meaning), the answer is: nearest neighbors of Inception's vector. But finding the nearest among 100 million vectors with brute force is ~30 GB of math per query. <strong>Vector databases</strong> use approximate-nearest-neighbor (ANN) indexes to do it in <span class=\"hl\">5-50ms</span>.</p>\n      <p>Every LLM-powered app uses one — RAG (retrieval-augmented generation), semantic search, recommendation systems, dedup, image search. Pinecone, Weaviate, pgvector, Milvus all implement the same core idea differently.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "What an embedding is",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">What an embedding is</h2></div>\n    <div class=\"prose\">\n      <p>An embedding is a dense vector that represents the meaning of something — a word, a sentence, a product, an image. Trained so that similar things have similar vectors (cosine distance close to 1 / L2 distance close to 0).</p>\n      <ul>\n        <li>\"king\" + \"woman\" - \"man\" ≈ \"queen\" (the famous word2vec example).</li>\n        <li>OpenAI <code>text-embedding-3-small</code> outputs 1536-dim vectors for any text.</li>\n        <li>CLIP outputs vectors that encode <em>both</em> images and text in the same space — \"a red bicycle\" and a photo of a red bike land near each other.</li>\n      </ul>\n      <p>\"Find similar\" reduces to \"find nearest neighbors in vector space.\" That's the whole game.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "ANN — approximate nearest neighbor",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">ANN — approximate nearest neighbor</h2></div>\n    <div class=\"prose\">\n      <p>Exact nearest neighbor over 100M vectors = compute distance to every vector = <span class=\"hl-red\">tens of seconds per query</span>. Useless.</p>\n      <p>ANN indexes pre-organize vectors so most aren't scanned at query time. Three main families:</p>\n    </div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Algorithm</th><th>How</th><th>Build cost</th><th>Recall</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">HNSW</td><td>Hierarchical graph; query walks down layers narrowing in</td><td>O(N log N), high RAM</td><td>~95-99% (default for most VDBs)</td></tr>\n        <tr><td class=\"algo-name\">IVF (inverted file)</td><td>Cluster into K buckets via k-means; query scans nearest bucket</td><td>O(N), tunable</td><td>~85-95%</td></tr>\n        <tr><td class=\"algo-name\">Product Quantization (PQ)</td><td>Compress vectors to 8-bit codes per sub-space</td><td>Big RAM savings</td><td>Some recall loss; often combined with IVF/HNSW</td></tr>\n        <tr><td class=\"algo-name\">ScaNN (Google)</td><td>Anisotropic vector quantization + tree</td><td>Best recall/latency tradeoff</td><td>Used inside Google Search</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "variants",
+      "label": "The vector-DB landscape",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">The vector-DB landscape</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Pinecone</div><h4>Managed, simplest</h4><p>SaaS only. HNSW under the hood. Pay per pod-hour. Tight integration with LangChain/LlamaIndex.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Weaviate / Qdrant / Milvus</div><h4>Self-hosted OSS</h4><p>Run your own. HNSW + filtering, multi-tenancy, GraphQL APIs (Weaviate). Most flexible.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">pgvector</div><h4>Postgres extension</h4><p>Stores vectors as Postgres column. IVF + HNSW. Underrated — for &lt; 10M vectors, no separate DB needed.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Elasticsearch / OpenSearch dense_vector</div><h4>Existing search engine + vectors</h4><p>Add HNSW alongside inverted-index search. Use when you already run Elasticsearch.</p></div>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — RAG, the killer use case",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — RAG, the killer use case</h2></div>\n    <div class=\"prose\">\n      <p>Retrieval-Augmented Generation is why every team is suddenly buying a vector DB:</p>\n      <ol>\n        <li>Your company has 10,000 internal documents.</li>\n        <li>Embed each doc (or chunks of it) → 10k vectors stored in a vector DB.</li>\n        <li>User asks: \"What's our refund policy?\"</li>\n        <li>Embed the question → query vector.</li>\n        <li>Vector DB returns top-5 nearest doc chunks (~10ms).</li>\n        <li>Build LLM prompt: \"Given these docs: [chunks], answer: [question]\"</li>\n        <li>LLM generates an answer grounded in your docs, not in its training data.</li>\n      </ol>\n      <p>This is why every chatbot ever shipped in 2024-2025 has a vector DB behind it. The pattern: <strong>vector DB for retrieval, LLM for synthesis</strong>. Costs: ~$0.0001 per query for the embedding, ~$0.001 per query for the LLM call. Cheap enough to be free for most use cases.</p>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">Interview answer</div>\n        <p>\"For semantic search and RAG we use a vector DB with HNSW indexing. Documents embedded once via OpenAI embeddings; queries embedded at request time and ANN-searched in ~10ms. Top-5 chunks injected into the LLM prompt for grounded answers.\"</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world systems",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world systems</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Spotify Annoy</div><h4>2014-era ANN</h4><p>Random projection trees. Used internally for music recommendation candidate generation. Open-sourced.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Facebook FAISS</div><h4>The reference library</h4><p>C++ ANN library with every algorithm under the sun. Most vector DBs use FAISS or its derivatives internally.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Google MUVERA / ScaNN</div><h4>Production ANN</h4><p>Powers Search + YouTube candidate generation. ScaNN is the open-source library; MUVERA the internal serving stack.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">OpenAI File Search</div><h4>Vectors-as-a-service</h4><p>Hosted vector store with chunking + embedding + RAG built in. Skip ops entirely.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Typeahead can use vector search for semantic-similarity completions. Recommendation algorithm uses ANN over user/item embeddings as candidate generation. Web crawler can dedup near-identical pages via embedding similarity.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

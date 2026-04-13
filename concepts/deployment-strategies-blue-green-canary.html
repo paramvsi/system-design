@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Blue-Green &amp; Canary Deployments — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 145; --accent-s: 60%; --accent-l: 42%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>You ship 100 deploys a week. Each one risks breaking production. The naive "stop the old version, start the new version" gives you 30 seconds of total outage and a rollback that takes longer than the original deploy. <strong>Deployment strategies</strong> — blue-green, canary, rolling — let you ship continuously with zero downtime and instant rollback. Pairs with <a href="/concepts/feature-flags-rollouts">feature flags</a> for the application-layer release dimension.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The four strategies</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Strategy</th><th>How it works</th><th>Rollback</th><th>Cost</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Recreate</td><td>Stop old, start new. Downtime during deploy.</td><td>Re-run with old image</td><td>Free; bad UX</td></tr>
+        <tr><td class="algo-name">Rolling</td><td>Replace instances N at a time. Old + new run side by side briefly.</td><td>Roll back the same way (slow)</td><td>Cheap; default in K8s</td></tr>
+        <tr><td class="algo-name">Blue-green</td><td>Two full environments. Switch traffic atomically.</td><td>Switch traffic back instantly</td><td>2× infra during deploy</td></tr>
+        <tr><td class="algo-name">Canary</td><td>Deploy to a small slice (1%). Watch metrics. Promote or revert.</td><td>Revert before promotion</td><td>Minimal extra infra</td></tr>
+      </tbody>
+    </table>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Traffic Mix Over Time — Old (gray) vs New (green)</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg">
+          <g font-family="Geist, system-ui, sans-serif" font-size="11">
+            <!-- 4 rows -->
+            <!-- Recreate -->
+            <text x="20" y="40" font-weight="500">Recreate</text>
+            <rect x="120" y="25" width="200" height="22" fill="#878480"/>
+            <rect x="320" y="25" width="40"  height="22" fill="hsl(0,0%,90%)" stroke="#ccc9c4"/>
+            <rect x="360" y="25" width="200" height="22" fill="hsl(145,55%,42%)"/>
+            <text x="340" y="62" text-anchor="middle" font-size="9" fill="hsl(0,70%,40%)" font-family="JetBrains Mono, monospace">DOWNTIME · 30s</text>
+
+            <!-- Rolling -->
+            <text x="20" y="120" font-weight="500">Rolling</text>
+            <rect x="120" y="105" width="200" height="22" fill="#878480"/>
+            <rect x="320" y="105" width="40"  height="22" fill="#878480"/>
+            <rect x="360" y="105" width="40"  height="22" fill="#a5b8a0"/>
+            <rect x="400" y="105" width="40"  height="22" fill="#7da375"/>
+            <rect x="440" y="105" width="40"  height="22" fill="#4f8b46"/>
+            <rect x="480" y="105" width="80"  height="22" fill="hsl(145,55%,42%)"/>
+            <text x="440" y="142" text-anchor="middle" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">gradual swap, no downtime</text>
+
+            <!-- Blue-green -->
+            <text x="20" y="200" font-weight="500">Blue-Green</text>
+            <rect x="120" y="185" width="240" height="22" fill="#878480"/>
+            <rect x="120" y="160" width="240" height="22" fill="hsl(145,55%,42%)" opacity="0.55"/>
+            <rect x="360" y="185" width="200" height="22" fill="hsl(145,55%,42%)"/>
+            <text x="240" y="222" text-anchor="middle" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">2× infra during deploy</text>
+            <text x="370" y="178" font-size="9" fill="hsl(145,55%,28%)" font-family="JetBrains Mono, monospace">flip · instant</text>
+
+            <!-- Canary -->
+            <text x="20" y="285" font-weight="500">Canary</text>
+            <rect x="120" y="270" width="200" height="22" fill="#878480"/>
+            <rect x="320" y="270" width="60"  height="22" fill="#878480"/>
+            <rect x="320" y="270" width="6"   height="22" fill="hsl(145,55%,42%)"/>
+            <rect x="380" y="270" width="60"  height="22" fill="#878480"/>
+            <rect x="380" y="270" width="20"  height="22" fill="hsl(145,55%,42%)"/>
+            <rect x="440" y="270" width="60"  height="22" fill="#878480"/>
+            <rect x="440" y="270" width="40"  height="22" fill="hsl(145,55%,42%)"/>
+            <rect x="500" y="270" width="60"  height="22" fill="hsl(145,55%,42%)"/>
+            <text x="440" y="307" text-anchor="middle" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">1% → 10% → 50% → 100% with metric checks</text>
+
+            <!-- X-axis -->
+            <line x1="120" y1="335" x2="560" y2="335" stroke="#ccc9c4"/>
+            <text x="120" y="350" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">deploy starts</text>
+            <text x="560" y="350" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace" text-anchor="end">time →</text>
+
+            <!-- Legend -->
+            <rect x="600" y="25" width="14" height="14" fill="#878480"/>
+            <text x="620" y="36" font-size="10">old</text>
+            <rect x="600" y="48" width="14" height="14" fill="hsl(145,55%,42%)"/>
+            <text x="620" y="59" font-size="10">new</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-val">2×</div><div class="kv-lbl">infra cost during blue-green</div></div>
+      <div class="kv-card"><div class="kv-val">+5-10%</div><div class="kv-lbl">infra cost during canary</div></div>
+      <div class="kv-card"><div class="kv-val">~5 sec</div><div class="kv-lbl">blue-green flip latency</div></div>
+      <div class="kv-card"><div class="kv-val">~2 hr</div><div class="kv-lbl">typical canary 1%→100% duration</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Blue-green in detail</h2></div>
+    <div class="prose">
+      <p>You run two environments behind a router (LB, DNS, service mesh):</p>
+      <ul>
+        <li><strong>Blue</strong> — current production. Receiving 100% traffic.</li>
+        <li><strong>Green</strong> — new version. Deployed but no traffic yet. Smoke tested.</li>
+      </ul>
+      <p>Cut over: flip the router from blue → green. All new requests go to green. Done.</p>
+      <p><strong>Rollback</strong> = flip back. Instant. Old environment was running, just not serving.</p>
+      <p><strong>Cost</strong>: 2× infrastructure during the deploy window (often hours-long for safety). Trade money for instant rollback. Used for high-stakes critical services where rollback speed matters most.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Canary in detail</h2></div>
+    <div class="prose">
+      <p>Deploy the new version to a small subset of instances (typically 1-5%). Other instances stay on the old version. The router (LB, mesh) splits traffic by percentage.</p>
+      <p>Watch metrics on the canary instances:</p>
+      <ul>
+        <li>Error rate per response code.</li>
+        <li>P50/P95/P99 latency.</li>
+        <li>Business metrics — conversion rate, signup rate, whatever matters.</li>
+        <li>Compare canary vs baseline. Anomalies → revert.</li>
+      </ul>
+      <p>If healthy after a hold period (15 min - 1 hour), promote: bump canary to 10%, watch, then 25%, then 50%, then 100%. Each step is a checkpoint with automated guardrails. Spinnaker, Argo Rollouts, Flagger automate the whole ladder.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">Why canary beats blue-green for most services</div>
+        <p>Blue-green is binary — all or none. Canary lets you discover problems with 1% blast radius instead of 100%. The bug that only shows up under real production load? Canary catches it before it bites everyone.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — automated canary analysis</h2></div>
+    <div class="prose">
+      <p>Modern canary platforms (Flagger, Argo Rollouts) do <strong>automated promotion + rollback</strong> based on SLO compliance. The pattern:</p>
+      <ol>
+        <li>Operator pushes new version with deploy spec including SLO checks.</li>
+        <li>Platform deploys to 5% of capacity.</li>
+        <li>Every 30s, platform queries Prometheus: "P99 latency on canary vs baseline within 10%?" "Error rate on canary &lt; baseline + 0.1%?"</li>
+        <li>If checks pass for 10 minutes → promote to 25%.</li>
+        <li>Repeat at 50%, 100%.</li>
+        <li>Any check fails → automatic revert.</li>
+      </ol>
+      <p>Operator never touches the deploy after pushing. SLO-violating changes self-revert before anyone is paged. Confidence in deploys goes from "fingers crossed" to "trust the system." Netflix and Lyft both run this pattern.</p>
+      <p>The catch: requires good SLO definitions (see <a href="/concepts/slos-slis-slas">SLIs/SLOs</a>) and metric instrumentation. Garbage-in metrics = false confidence in your canary analysis.</p>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Compatibility constraints</h2></div>
+    <div class="prose">
+      <p>All these strategies have one painful invariant: <strong>old + new must coexist briefly</strong>. So new versions must be <strong>backwards-compatible</strong> with old versions of:</p>
+      <ul>
+        <li>Database schema (don't drop a column the old code reads)</li>
+        <li>API contracts (don't break old clients hitting your service)</li>
+        <li>Message formats (old workers may still consume)</li>
+      </ul>
+      <p>Common pattern: <strong>expand-then-contract migrations.</strong> Add a new column / endpoint / message field. Old code ignores it. Deploy new code that uses it. Once 100% on new, remove the old. Two deploys instead of one, but always backwards-compatible during transition.</p>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Netflix Spinnaker</div><h4>Multi-cloud canary</h4><p>Deploy to AWS + GCE simultaneously with canary analysis. Open-source; battle-tested at Netflix scale.</p></div>
+      <div class="rw-card"><div class="rw-name">Argo Rollouts / Flagger</div><h4>K8s-native</h4><p>CRDs that turn standard deployments into canary or blue-green with automated promotion. The new default in K8s shops.</p></div>
+      <div class="rw-card"><div class="rw-name">AWS CodeDeploy</div><h4>Lambda + ECS canary</h4><p>Native canary support for Lambda (10% then 100%) and ECS services. Native to the AWS deploy story.</p></div>
+      <div class="rw-card"><div class="rw-name">Istio / Linkerd traffic shifting</div><h4>Service mesh canary</h4><p>Mesh handles the percentage routing. Canary is just a YAML change. Combine with feature flags for full progressive delivery.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">08</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>News feed deploys ranker changes via canary with auto-promotion. E-commerce uses blue-green for checkout — instant rollback critical near peak shopping. Payment gateway is canary-only (small slice for hours, monitor everything). Notification system uses rolling for back-end workers, canary for client-facing APIs.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

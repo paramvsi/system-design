@@ -1,0 +1,71 @@
+{
+  "slug": "api-gateway",
+  "title": "API Gateway",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 195,
+    "s": 70,
+    "l": 45
+  },
+  "category": "Scaling",
+  "blurb": "You have 40 microservices behind the scenes. A mobile client wanting to render a home screen shouldn't call 20 different hostnames, each with different auth, rate limits, and retry policies. An API gateway is the single ",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>You have 40 microservices behind the scenes. A mobile client wanting to render a home screen shouldn't call 20 different hostnames, each with different auth, rate limits, and retry policies. An <strong>API gateway</strong> is the single door to the backend: it handles auth, rate limiting, routing, protocol translation, and request/response shaping — so each service can focus on its own logic.</p>\n      <p>It's part of the classic \"one thing to rule them all\" infra tier, alongside the <a href=\"/concepts/load-balancer\">load balancer</a>.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "What a gateway actually does",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">What a gateway actually does</h2></div>\n    <div class=\"prose\">\n      <ol>\n        <li><strong>Authentication &amp; authorization.</strong> Validate JWTs, OAuth tokens, API keys. Reject unauthenticated requests before they touch backends.</li>\n        <li><strong>Rate limiting &amp; quotas.</strong> 1000 RPS per API key, 100 RPS per IP for unauthenticated. Centralized — individual services don't implement rate limiting.</li>\n        <li><strong>Routing.</strong> <code>/api/v1/orders/*</code> → orders service. <code>/api/v1/users/*</code> → users service. Path-based, host-based, header-based.</li>\n        <li><strong>Protocol translation.</strong> Client speaks REST/JSON; upstream speaks gRPC. Gateway translates.</li>\n        <li><strong>Aggregation.</strong> Client wants home screen (user + recent orders + recommendations). Gateway calls 3 services, merges responses into one. Reduces mobile round-trips.</li>\n        <li><strong>Circuit breaking &amp; retries.</strong> Downstream service is failing — gateway stops hammering it; returns cached or degraded response.</li>\n        <li><strong>Observability.</strong> Every request logged, traced, metered at one point.</li>\n      </ol>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "Gateway vs load balancer vs reverse proxy",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Gateway vs load balancer vs reverse proxy</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Component</th><th>Primary job</th><th>Aware of</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Load balancer</td><td>Distribute requests across instances of one service</td><td>TCP/connections, basic HTTP</td></tr>\n        <tr><td class=\"algo-name\">Reverse proxy</td><td>Forward requests to an upstream; terminate TLS; add/remove headers</td><td>HTTP, TLS, maybe caching</td></tr>\n        <tr><td class=\"algo-name\">API gateway</td><td>Cross-cutting concerns for many services: auth, rate limit, routing, aggregation</td><td>Full API semantics, users, quotas</td></tr>\n      </tbody>\n    </table>\n    <div class=\"prose\">\n      <p>Practically: an API gateway often <em>is</em> a reverse proxy with plugins (Nginx + Lua, Envoy + filters, Kong, AWS API Gateway). Plus a load balancer underneath routing to service instances. It's a spectrum, not a strict hierarchy.</p>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Patterns — BFF vs central gateway",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Patterns — BFF vs central gateway</h2></div>\n    <div class=\"tradeoff-grid\">\n      <div class=\"tradeoff-option\">\n        <div class=\"tradeoff-label\">One gateway for everything</div>\n        <h4>Central API gateway</h4>\n        <p>One service routes to everything. Simple ops. Risks: becomes a monolith itself, bottleneck at scale, feature flag hell as clients' needs diverge.</p>\n      </div>\n      <div class=\"tradeoff-option chosen\">\n        <div class=\"tradeoff-label\">BFF — Backend For Frontend</div>\n        <h4>One gateway per client type</h4>\n        <p>Separate gateway tuned for each frontend: iOS BFF, Web BFF, partner API. Each aggregates what its client needs; aggressive response shaping possible. Used at Netflix, Spotify. Scales team responsibility cleanly.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "What to put in the gateway (and what NOT to)",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">What to put in the gateway (and what NOT to)</h2></div>\n    <div class=\"prose\">\n      <p><strong>Belongs at the gateway:</strong> auth, rate limit, routing, TLS termination, request ID injection, access logs, basic validation (size limits, required headers).</p>\n      <p><strong>Belongs in services:</strong> business logic, domain validation, data access, service-to-service calls.</p>\n      <p><strong>The anti-pattern:</strong> business logic creeping into the gateway. \"Let's add a special rule for orders worth over $10,000\" — the gateway has now hidden a business rule where nobody looks. When in doubt, keep the gateway dumb.</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — gateway latency overhead",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Deep dive — gateway latency overhead</h2></div>\n    <div class=\"prose\">\n      <p>The gateway sits on every request's critical path. Even a 5ms overhead, compounded across 100M requests/day = 500k seconds of user-perceived latency. Measure religiously.</p>\n      <p>Sources of overhead:</p>\n      <ul>\n        <li><strong>Auth lookup</strong> — hitting an external auth service per request is 5–10ms. Cache JWT validation results (signed tokens = no lookup needed, just signature verify).</li>\n        <li><strong>Rate limit counter increment</strong> — Redis INCR is fast (&lt;1ms) but adds a round-trip.</li>\n        <li><strong>TLS termination</strong> — 1–3ms per new TLS handshake. Session resumption + HTTP/2 minimize this.</li>\n        <li><strong>Request body inspection</strong> — parsing for validation or transformation costs CPU.</li>\n      </ul>\n      <p>Best practice: keep cache of decoded tokens (TTL ≈ token expiry). Batch rate-limit writes. Use local rate-limiter (token bucket in memory) with eventual sync to Redis for cross-instance coordination. Most gateways do all of this out of the box.</p>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Kong</div><h4>Open-source, plugin-based</h4><p>Nginx + Lua. Plugins for auth, rate limit, logging, transformation. Self-hosted or enterprise.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">AWS API Gateway</div><h4>Managed</h4><p>REST and WebSocket APIs. Built-in IAM/Cognito integration, Lambda targets, CloudWatch metrics. Expensive at scale but zero ops.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Envoy</div><h4>The data plane</h4><p>Used in Istio and as a direct gateway. Modern HTTP/2+gRPC-native. First-class observability. What Lyft, Google, AWS AppMesh run.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Netflix Zuul / Spring Cloud Gateway</div><h4>JVM-based</h4><p>Netflix's original gateway, now used alongside their custom layer. Pattern: filter chain processes each request.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "08",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">08</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>News feed uses an API gateway for mobile BFF aggregation. E-commerce uses it for all external traffic + rate limiting + auth. WhatsApp API uses a gateway for partner integrations. Notification system exposes a gateway for third-party webhooks.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

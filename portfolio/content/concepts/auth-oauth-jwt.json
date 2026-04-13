@@ -1,0 +1,77 @@
+{
+  "slug": "auth-oauth-jwt",
+  "title": "Auth — OAuth & JWT",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 225,
+    "s": 65,
+    "l": 48
+  },
+  "category": "Observability & Security",
+  "blurb": "Every API needs to answer: who is this user, and what are they allowed to do? Roll your own auth and you'll have a CVE within months. OAuth 2.0 is how you delegate authentication to a trusted identity provider. JWTs are ",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>Every API needs to answer: <strong>who is this user, and what are they allowed to do?</strong> Roll your own auth and you'll have a CVE within months. OAuth 2.0 is how you delegate authentication to a trusted identity provider. JWTs are how you carry proof of identity between services.</p>\n      <p>Understand both, including <em>when NOT to use JWTs as sessions</em> (a surprisingly common mistake).</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "Authentication vs authorization",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Authentication vs authorization</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>Authentication (authn)</strong> — \"who are you?\" Verifies identity. Username + password, social login, MFA.</li>\n        <li><strong>Authorization (authz)</strong> — \"what can you do?\" Checks permissions. RBAC (role-based), ABAC (attribute-based), resource-level policies.</li>\n      </ul>\n      <p>OAuth 2.0 is an authorization protocol, not an authentication protocol. OpenID Connect (OIDC) sits on top of OAuth to add authentication. When people say \"OAuth login,\" they usually mean OIDC + OAuth together.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "OAuth 2.0 authorization code flow",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">OAuth 2.0 authorization code flow</h2></div>\n    <div class=\"prose\">\n      <p>The modern canonical flow for web apps (with PKCE extension for public clients):</p>\n      <ol>\n        <li>User clicks \"Log in with Google.\"</li>\n        <li>App redirects browser to Google's authorization endpoint with <code>client_id</code> + requested scopes + redirect URI + PKCE challenge.</li>\n        <li>User authenticates with Google, consents to scopes.</li>\n        <li>Google redirects browser back to your app with an authorization <strong>code</strong>.</li>\n        <li>Your backend exchanges the code + PKCE verifier for an <strong>access token</strong> (short-lived) and a <strong>refresh token</strong> (long-lived).</li>\n        <li>Your backend uses the access token to call Google APIs, or creates its own session for the user.</li>\n      </ol>\n      <p>Key insight: the access token never touches the browser. Client-side Single-Page Apps use PKCE to prevent code interception; public clients get the code via redirect but also need the PKCE verifier (secret only the client knows) to exchange it.</p>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "JWT anatomy",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">JWT anatomy</h2></div>\n    <div class=\"prose\">\n      <p>JSON Web Token — three base64 parts joined by dots: <code>header.payload.signature</code>.</p>\n      <pre style=\"background:#f4f3f0;padding:12px;border-radius:6px;font-size:12px;font-family:var(--font-mono);overflow-x:auto\">HEADER    {\"alg\":\"RS256\",\"typ\":\"JWT\"}\nPAYLOAD   {\"sub\":\"42\",\"iss\":\"https://auth.example.com\",\"exp\":1735689600,\"roles\":[\"admin\"]}\nSIGNATURE RS256-signature over header + payload</pre>\n      <p>Server verifies by recomputing the signature with its public key. Tampered payload → signature mismatch → reject. The payload (<strong>claims</strong>) is not encrypted — it's base64, readable by anyone. Don't put secrets in there.</p>\n      <p>Standard claims: <code>sub</code> (subject/user), <code>iss</code> (issuer), <code>exp</code> (expiry), <code>aud</code> (audience), <code>iat</code> (issued at). Custom claims (roles, tenant_id) are added by the issuer.</p>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "Stateless JWTs vs sessions in Redis",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Stateless JWTs vs sessions in Redis</h2></div>\n    <div class=\"tradeoff-grid\">\n      <div class=\"tradeoff-option\">\n        <div class=\"tradeoff-label\">JWT-based auth</div>\n        <h4>Stateless, no session store</h4>\n        <p>Every request carries the JWT. Server verifies signature + expiry. No DB or Redis lookup. <span class=\"hl-red\">Catch:</span> revoking access before expiry is hard. If a user's JWT is stolen, they keep access until it expires (usually 15 min to 1 hour).</p>\n      </div>\n      <div class=\"tradeoff-option chosen\">\n        <div class=\"tradeoff-label\">Opaque session tokens</div>\n        <h4>Random string, state in Redis</h4>\n        <p>Token is an opaque ID; server looks up <code>sessions:abc123</code> in Redis. <span class=\"hl-green\">Easy to revoke</span> — just DELETE the key. Adds a Redis round-trip per request but Redis is fast. Industry default for user sessions.</p>\n      </div>\n    </div>\n    <div class=\"callout callout-warn\">\n      <div class=\"callout-label\">Common mistake</div>\n      <p>Using JWTs as user sessions because \"stateless is cool.\" Then trying to add revocation, which requires the very session store you tried to avoid. Moral: <strong>use JWTs for service-to-service auth and short-lived access tokens; use opaque tokens for long-lived user sessions</strong>.</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — refresh tokens done right",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Deep dive — refresh tokens done right</h2></div>\n    <div class=\"prose\">\n      <p>Access tokens are short (15 min). Refresh tokens are long (days/weeks/months) and used to mint new access tokens without re-asking the user.</p>\n      <p>Threats:</p>\n      <ul>\n        <li><strong>Refresh token theft.</strong> Attacker steals the refresh token, gets new access tokens indefinitely. Mitigation: <strong>refresh token rotation</strong> — every use of a refresh token returns a new one and invalidates the old. If the attacker uses it, the real user's next refresh fails and you detect the compromise.</li>\n        <li><strong>Token binding.</strong> Bind tokens to device fingerprints or TLS certificates. Stolen token from another device = rejected.</li>\n        <li><strong>Reuse detection.</strong> If an old (already-rotated) refresh token is used, invalidate the whole family — both the attacker and the real user are logged out. Safer to re-auth than to keep serving the attacker.</li>\n      </ul>\n      <p>Auth0, Okta, and every modern IdP do all three by default. If you're rolling your own, follow OAuth 2.1 draft recommendations — they codify what's actually safe.</p>\n    </div>\n\n    <div class=\"diagram-wrap\">\n      <div class=\"diagram-head\">\n        <span class=\"diagram-label\">Token Lifecycle — Access + Refresh + Rotation</span>\n        <span class=\"diagram-type\">Mermaid</span>\n      </div>\n      <div class=\"diagram-body\">\n        <div class=\"mermaid\">\nstateDiagram-v2\n    [*] --&gt; Issued: Login\n    Issued --&gt; Active: token sent to client\n    Active --&gt; Expired: 15 min elapsed\n    Expired --&gt; Refreshing: client uses refresh token\n    Refreshing --&gt; Active: new access + new refresh issued\n    Refreshing --&gt; Compromised: old refresh re-used (attacker)\n    Compromised --&gt; [*]: invalidate ALL family · force re-auth\n    Active --&gt; Revoked: explicit logout / admin action\n    Revoked --&gt; [*]\n        </div>\n      </div>\n    </div>\n\n    <div class=\"kv-grid\">\n      <div class=\"kv-card\"><div class=\"kv-val\">15 min</div><div class=\"kv-lbl\">access token TTL</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">30 days</div><div class=\"kv-lbl\">refresh token TTL</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">1× use</div><div class=\"kv-lbl\">refresh token rotation</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">10⁻⁹</div><div class=\"kv-lbl\">prob of HMAC forgery (HS256)</div></div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Auth0 / Okta</div><h4>Managed OIDC + OAuth</h4><p>Identity-as-a-service. Handles social login, MFA, enterprise SSO, user management. Most SaaS companies use one of these instead of DIY auth.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">AWS Cognito</div><h4>AWS-native</h4><p>Same pattern but integrated with other AWS services. Cheaper at scale if you're AWS-heavy; less polished UX than Auth0/Okta.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Keycloak</div><h4>Open-source OIDC</h4><p>Self-hosted. Full-featured. You own the DB. Used by teams with strict data residency needs.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Service mesh mTLS</div><h4>Auth for service-to-service</h4><p>Istio/Linkerd issue workload identities. Cert-based auth between pods. No JWTs needed inside the mesh.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "08",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">08</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>E-commerce uses OAuth for login + JWTs for service-to-service. WhatsApp uses device-based auth with refresh tokens. Payment gateway uses OAuth client credentials flow for merchant API access.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [
+    {
+      "sectionId": "deep-dive",
+      "source": "stateDiagram-v2\n    [*] --> Issued: Login\n    Issued --> Active: token sent to client\n    Active --> Expired: 15 min elapsed\n    Expired --> Refreshing: client uses refresh token\n    Refreshing --> Active: new access + new refresh issued\n    Refreshing --> Compromised: old refresh re-used (attacker)\n    Compromised --> [*]: invalidate ALL family · force re-auth\n    Active --> Revoked: explicit logout / admin action\n    Revoked --> [*]",
+      "index": 0
+    }
+  ],
+  "related": [],
+  "similar": [],
+  "readMinutes": 4
+}

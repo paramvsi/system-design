@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>DNS — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 210; --accent-s: 60%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Every request to your API starts with "what IP is <code>api.example.com</code>?" That's DNS. Get it wrong and users can't reach you. Configure TTLs wrong and users are stuck on a dead IP for hours after you change it. Pick the wrong DNS provider and you die when they go down (see: Dyn 2016, half the internet offline).</p>
+      <p>DNS is also the first place in your stack where you can do <strong>global traffic management</strong>: geo-route users to the nearest region, fail over a dead datacenter, A/B test by %. If you don't use it that way, you're leaving power on the table.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">How resolution works</h2></div>
+    <div class="prose">
+      <p>Client wants <code>api.example.com</code>. It asks its <strong>resolver</strong> (usually run by the ISP or Google at 8.8.8.8, or Cloudflare 1.1.1.1). The resolver walks the DNS hierarchy:</p>
+      <ol>
+        <li><strong>Root servers</strong> → "who handles <code>.com</code>?" → "these TLD servers."</li>
+        <li><strong>TLD servers</strong> → "who handles <code>example.com</code>?" → "these authoritative name servers."</li>
+        <li><strong>Authoritative name server</strong> → "what's <code>api.example.com</code>?" → "IP 203.0.113.42 (or: here's a CNAME → resolve that)."</li>
+      </ol>
+      <p>Each answer includes a <strong>TTL</strong> (time-to-live) — how long the resolver can cache it. Next time a client asks, resolver returns the cached answer without walking the hierarchy.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Record types you care about</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Record</th><th>Purpose</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">A</td><td>Domain → IPv4</td><td><code>api.example.com → 203.0.113.42</code></td></tr>
+        <tr><td class="algo-name">AAAA</td><td>Domain → IPv6</td><td><code>api.example.com → 2001:db8::1</code></td></tr>
+        <tr><td class="algo-name">CNAME</td><td>Alias → another domain</td><td><code>www.example.com → example.com</code></td></tr>
+        <tr><td class="algo-name">MX</td><td>Mail server for a domain</td><td><code>example.com → mx.google.com</code></td></tr>
+        <tr><td class="algo-name">TXT</td><td>Arbitrary text (SPF, DKIM, domain verification)</td><td><code>v=spf1 include:_spf.google.com ~all</code></td></tr>
+        <tr><td class="algo-name">NS</td><td>Which name servers are authoritative</td><td><code>example.com → ns1.cloudflare.com</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">DNS as a traffic-management tool</h2></div>
+    <div class="prose">
+      <p>Authoritative DNS servers can return <strong>different answers to different clients</strong>. This enables:</p>
+      <ul>
+        <li><strong>Geo-routing.</strong> US client asks → returns US-East IP. EU client asks → returns EU-West IP. Latency-optimal.</li>
+        <li><strong>Weighted round-robin.</strong> 80% of answers point to region A, 20% to region B. Used for gradual traffic shifts during deploys.</li>
+        <li><strong>Health-based failover.</strong> Authoritative DNS monitors each endpoint. If US-East fails health checks, return US-West until recovery.</li>
+        <li><strong>Anycast.</strong> Many servers announce the same IP from different regions (BGP magic). The network itself routes each client to the nearest. Used by Cloudflare, most CDNs, and 1.1.1.1.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">TTL — the propagation tradeoff</h2></div>
+    <div class="prose">
+      <p>TTL controls how long resolvers cache the answer. Short TTL = fast failover, high query load on your DNS. Long TTL = cached everywhere, slow to propagate changes.</p>
+    </div>
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-val">60–300s</div><div class="kv-lbl">TTL for actively-managed records (blue/green)</div></div>
+      <div class="kv-card"><div class="kv-val">1–24 h</div><div class="kv-lbl">TTL for stable records</div></div>
+      <div class="kv-card"><div class="kv-val">~48 h</div><div class="kv-lbl">worst-case stale cache (ignoring misbehaving resolvers)</div></div>
+      <div class="kv-card"><div class="kv-val">~3 s</div><div class="kv-lbl">typical resolution time (cached)</div></div>
+    </div>
+    <div class="prose">
+      <p>Before planning a cutover: lower TTL days in advance. After cutover is stable: raise TTL again to reduce query load and cost.</p>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">TTL=300s — When Does Each Resolver See the New IP?</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg">
+          <g font-family="Geist, system-ui, sans-serif" font-size="11">
+            <!-- Time axis 0..600s -->
+            <line x1="80" y1="220" x2="700" y2="220" stroke="#ccc9c4" stroke-width="1.5"/>
+            <text x="80" y="240" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">t=0</text>
+            <text x="200" y="240" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">t=100s</text>
+            <text x="380" y="240" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">t=300s (TTL)</text>
+            <text x="560" y="240" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">t=500s</text>
+            <text x="700" y="240" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace" text-anchor="end">t=600s</text>
+
+            <!-- Origin event -->
+            <line x1="200" y1="40" x2="200" y2="220" stroke="hsl(0,70%,55%)" stroke-width="1.5" stroke-dasharray="4 3"/>
+            <text x="200" y="32" text-anchor="middle" font-size="10" fill="hsl(0,70%,40%)" font-weight="500">primary fails · update authoritative DNS</text>
+
+            <!-- Resolver lanes -->
+            <g>
+              <text x="20" y="65" font-weight="500" fill="#878480">Resolver A</text>
+              <rect x="80" y="55" width="120" height="18" fill="hsl(0,70%,55%)" rx="2"/>
+              <rect x="200" y="55" width="500" height="18" fill="hsl(145,55%,42%)" rx="2"/>
+              <text x="260" y="68" font-size="9" fill="white" font-weight="500">cached BAD until next miss → refresh now</text>
+
+              <text x="20" y="105" font-weight="500" fill="#878480">Resolver B</text>
+              <rect x="80" y="95" width="220" height="18" fill="hsl(0,70%,55%)" rx="2"/>
+              <rect x="300" y="95" width="400" height="18" fill="hsl(145,55%,42%)" rx="2"/>
+              <text x="320" y="108" font-size="9" fill="white" font-weight="500">cached entry expires → re-fetch</text>
+
+              <text x="20" y="145" font-weight="500" fill="#878480">Resolver C</text>
+              <rect x="80" y="135" width="380" height="18" fill="hsl(0,70%,55%)" rx="2"/>
+              <rect x="460" y="135" width="240" height="18" fill="hsl(145,55%,42%)" rx="2"/>
+              <text x="480" y="148" font-size="9" fill="white" font-weight="500">last to expire</text>
+
+              <text x="20" y="185" font-weight="500" fill="#878480">Misbehaving resolver</text>
+              <rect x="80" y="175" width="620" height="18" fill="hsl(0,70%,55%)" rx="2"/>
+              <text x="280" y="188" font-size="9" fill="white" font-weight="500">ignores TTL · stuck on bad IP for hours</text>
+            </g>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="kv-grid">
+      <div class="kv-card"><div class="kv-val">~300 s</div><div class="kv-lbl">avg failover with TTL=300</div></div>
+      <div class="kv-card"><div class="kv-val">~10%</div><div class="kv-lbl">resolvers ignore TTL</div></div>
+      <div class="kv-card"><div class="kv-val">~24 hr</div><div class="kv-lbl">long-tail of misbehaving resolvers</div></div>
+      <div class="kv-card"><div class="kv-val">3-7 days</div><div class="kv-lbl">lower TTL ahead of planned cutover</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Deep dive — anycast, the trick behind 1.1.1.1</h2></div>
+    <div class="prose">
+      <p>Normal IP: one machine owns that IP. Anycast IP: many machines across the world each announce "I am 1.1.1.1" via BGP. When a client sends a packet to 1.1.1.1, the global routing table picks the <em>topologically nearest</em> announcer — almost always the closest one geographically.</p>
+      <p>Result: a single IP address served from ~300 cities. Any one PoP can fail and traffic automatically reroutes to the next closest. No DNS change needed. Clients don't know or care. This is how CDNs, global DNS resolvers, and modern anycast load balancers work.</p>
+      <p>For your systems: usually you rent anycast from someone else (Cloudflare, AWS Global Accelerator). Running your own anycast means BGP peering at multiple internet exchanges — a commitment, not a side project.</p>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Route 53</div><h4>AWS managed DNS</h4><p>Integrated with AWS. Geo routing, weighted routing, health checks. ~99.99% SLA. Default for AWS-native stacks.</p></div>
+      <div class="rw-card"><div class="rw-name">Cloudflare DNS</div><h4>Anycast everywhere</h4><p>Fastest resolver, free. Used for both authoritative (<code>*.cloudflare.com</code>) and recursive (<code>1.1.1.1</code>).</p></div>
+      <div class="rw-card"><div class="rw-name">NS1 / Dyn</div><h4>Traffic-steering specialists</h4><p>Sophisticated routing (real-user metrics, data-driven). Pricier. Used by Netflix, LinkedIn historically.</p></div>
+      <div class="rw-card"><div class="rw-name">Redundant providers</div><h4>Run two authoritative DNS providers</h4><p>Post-Dyn 2016, serious companies keep DNS in two providers simultaneously (Cloudflare + Route 53). One goes down, the other answers.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">08</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>URL shortener uses short, memorable domains + low TTL for fast failover. YouTube/Netflix use DNS geo-routing to direct users to the nearest CDN edge. Google Maps uses DNS-based region routing.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

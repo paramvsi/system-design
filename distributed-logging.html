@@ -1,0 +1,1562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Distributed Logging Framework — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+
+    :root {
+      --accent-h:       234;
+      --accent-s:       70%;
+      --accent-l:       52%;
+      --accent:         hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light:   hsl(var(--accent-h), 80%, 94%);
+      --accent-mid:     hsl(var(--accent-h), 70%, 88%);
+      --accent-text:    hsl(var(--accent-h), var(--accent-s), 32%);
+      --accent-border:  hsl(var(--accent-h), 60%, 80%);
+      --hl-yellow:      #fff0a0;
+      --hl-yellow-dark: #a07a00;
+      --hl-accent:      hsl(var(--accent-h), 90%, 88%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 30%);
+      --bg:             #ffffff;
+      --bg-subtle:      #f7f7f5;
+      --bg-raised:      #f0eeeb;
+      --bg-code:        #f4f3f0;
+      --border:         #e4e2de;
+      --border-strong:  #ccc9c4;
+      --text-primary:   #111110;
+      --text-secondary: #4a4845;
+      --text-muted:     #878480;
+      --text-code:      #2d2c2b;
+      --font-serif:     'Instrument Serif', Georgia, serif;
+      --font-sans:      'Geist', system-ui, sans-serif;
+      --font-mono:      'JetBrains Mono', 'Fira Code', monospace;
+      --radius-sm:      4px;
+      --radius-md:      8px;
+      --radius-lg:      12px;
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+    body {
+      font-family: var(--font-sans);
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--text-primary);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      grid-template-rows: auto 1fr;
+      min-height: 100vh;
+    }
+    .topbar {
+      grid-column: 1 / -1;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 52px;
+      padding: 0 24px;
+      background: rgba(255,255,255,0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .topbar-left a {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .topbar-left a:hover { color: var(--accent); }
+    .topbar-sep { color: var(--border-strong); user-select: none; }
+    .topbar-problem { color: var(--accent-text); font-weight: 500; }
+    .topbar-right { display: flex; align-items: center; gap: 16px; }
+    .topbar-tag {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      background: var(--accent-light);
+      color: var(--accent-text);
+    }
+    .sidebar {
+      position: sticky;
+      top: 52px;
+      height: calc(100vh - 52px);
+      overflow-y: auto;
+      padding: 28px 20px 40px;
+      border-right: 1px solid var(--border);
+      background: var(--bg-subtle);
+    }
+    .sidebar::-webkit-scrollbar { width: 3px; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+    .sidebar-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+    .sidebar-nav { list-style: none; margin-bottom: 32px; }
+    .sidebar-nav li { margin-bottom: 2px; }
+    .sidebar-nav a {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 15px;
+      font-weight: 400;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: all 0.15s ease;
+      position: relative;
+    }
+    .sidebar-nav a::before {
+      content: '';
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--border-strong);
+      flex-shrink: 0;
+      transition: all 0.2s ease;
+    }
+    .sidebar-nav a:hover { background: var(--bg-raised); color: var(--text-primary); }
+    .sidebar-nav a.active { background: var(--accent-light); color: var(--accent-text); font-weight: 500; }
+    .sidebar-nav a.active::before { background: var(--accent); width: 6px; height: 6px; }
+    .sidebar-related { list-style: none; margin-top: 8px; }
+    .sidebar-related li { margin-bottom: 4px; }
+    .sidebar-related a { font-size: 14.5px; color: var(--text-muted); text-decoration: none; transition: color 0.15s; }
+    .sidebar-related a:hover { color: var(--accent); }
+    .main { padding: 0 48px 120px; max-width: 860px; min-width: 0; }
+    .hero { padding: 56px 0 40px; border-bottom: 1px solid var(--border); margin-bottom: 48px; }
+    .hero-number {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+    .hero h1 {
+      font-family: var(--font-serif);
+      font-size: 48px;
+      font-weight: 400;
+      line-height: 1.1;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+      letter-spacing: -0.02em;
+    }
+    .hero-desc { font-size: 17px; line-height: 1.65; color: var(--text-secondary); max-width: 600px; margin-bottom: 20px; }
+    .hero-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+    .hero-tag {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 400;
+      letter-spacing: 0.04em;
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-raised);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+    .section {
+      margin-bottom: 56px;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeUp 0.5s ease forwards;
+    }
+    .section:nth-child(1)  { animation-delay: 0.05s; }
+    .section:nth-child(2)  { animation-delay: 0.10s; }
+    .section:nth-child(3)  { animation-delay: 0.15s; }
+    .section:nth-child(4)  { animation-delay: 0.20s; }
+    .section:nth-child(5)  { animation-delay: 0.25s; }
+    .section:nth-child(6)  { animation-delay: 0.30s; }
+    .section:nth-child(7)  { animation-delay: 0.35s; }
+    .section:nth-child(8)  { animation-delay: 0.40s; }
+    .section:nth-child(9)  { animation-delay: 0.45s; }
+    .section:nth-child(10) { animation-delay: 0.50s; }
+    .section:nth-child(11) { animation-delay: 0.55s; }
+    @keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
+    .section-number {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    .section h2 {
+      font-family: var(--font-serif);
+      font-size: 30px;
+      font-weight: 400;
+      color: var(--text-primary);
+      margin-bottom: 20px;
+      letter-spacing: -0.01em;
+    }
+    .section h3 {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin: 28px 0 10px;
+    }
+    .section p { color: var(--text-secondary); margin-bottom: 14px; max-width: 680px; }
+    .section ul, .section ol { padding-left: 20px; margin-bottom: 16px; color: var(--text-secondary); }
+    .section li { margin-bottom: 6px; }
+    .hl { background: var(--hl-yellow); color: var(--hl-yellow-dark); padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+    .hl-accent { background: var(--hl-accent); color: var(--hl-accent-dark); padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+    .hl-red { background: hsl(0, 85%, 93%); color: hsl(0, 70%, 35%); padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+    .hl-green { background: hsl(145, 60%, 90%); color: hsl(145, 55%, 28%); padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+    .card { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px 24px; margin-bottom: 16px; }
+    .card-accent { background: var(--accent-light); border-color: var(--accent-border); }
+    .card h4 { font-family: var(--font-sans); font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; }
+    .card p { font-size: 16px; color: var(--text-secondary); margin-bottom: 0; }
+    .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .code-block {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      overflow-x: auto;
+    }
+    .code-block code { font-family: var(--font-mono); font-size: 14.5px; font-weight: 400; color: var(--text-code); line-height: 1.7; }
+    .code-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .inline-code {
+      font-family: var(--font-mono);
+      font-size: 15px;
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      padding: 1px 6px;
+      border-radius: var(--radius-sm);
+      color: var(--text-code);
+    }
+    .table-wrap { overflow-x: auto; margin-bottom: 16px; border: 1px solid var(--border); border-radius: var(--radius-md); }
+    .table-wrap table { width: 100%; border-collapse: collapse; font-size: 15.5px; }
+    .table-wrap th {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      text-align: left;
+      padding: 10px 16px;
+      background: var(--bg-subtle);
+      border-bottom: 1px solid var(--border);
+    }
+    .table-wrap td { padding: 10px 16px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
+    .table-wrap tr:last-child td { border-bottom: none; }
+    .scale-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .scale-card { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; text-align: center; }
+    .scale-card .number { font-family: var(--font-mono); font-size: 22px; font-weight: 500; color: var(--accent-text); margin-bottom: 2px; }
+    .scale-card .label { font-size: 13.5px; color: var(--text-muted); }
+    .arch-diagram { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 32px; margin-bottom: 20px; overflow-x: auto; }
+    .arch-diagram svg { display: block; margin: 0 auto; }
+    .arch-diagram .node { cursor: pointer; transition: filter 0.2s; }
+    .arch-diagram .node:hover { filter: brightness(0.95); }
+    .arch-diagram .node rect, .arch-diagram .node-rect { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arch-diagram .node-label { font-family: 'Geist', system-ui, sans-serif; font-size: 13.5px; font-weight: 500; fill: var(--text-primary); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+    .arch-diagram .node-sublabel { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; fill: var(--text-muted); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+    .arch-diagram .edge { stroke: var(--border-strong); stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+    .arch-diagram .edge-label { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; fill: var(--text-muted); text-anchor: middle; }
+    .node-highlight rect { stroke: var(--accent) !important; stroke-width: 2.5 !important; }
+    .node-highlight .node-label { fill: var(--accent-text) !important; }
+    .flow-stepper { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 20px; }
+    .flow-stepper-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .flow-stepper-title { font-family: var(--font-mono); font-size: 12px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+    .flow-stepper-controls { display: flex; gap: 8px; }
+    .flow-btn { font-family: var(--font-mono); font-size: 12px; font-weight: 500; padding: 5px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg); color: var(--text-secondary); cursor: pointer; transition: all 0.15s; }
+    .flow-btn:hover { background: var(--accent-light); border-color: var(--accent-border); color: var(--accent-text); }
+    .flow-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .flow-btn-primary { background: var(--accent); border-color: var(--accent); color: white; }
+    .flow-btn-primary:hover { opacity: 0.9; background: var(--accent); color: white; }
+    .flow-steps { display: flex; gap: 4px; align-items: center; margin-bottom: 16px; overflow-x: auto; padding-bottom: 4px; }
+    .flow-node { font-family: var(--font-mono); font-size: 12px; font-weight: 500; padding: 6px 14px; border-radius: var(--radius-sm); background: var(--bg); border: 1px solid var(--border); color: var(--text-muted); white-space: nowrap; transition: all 0.3s ease; }
+    .flow-node.active { background: var(--accent-light); border-color: var(--accent); color: var(--accent-text); box-shadow: 0 0 0 3px var(--accent-mid); }
+    .flow-node.done { background: var(--accent-light); border-color: var(--accent-border); color: var(--accent-text); }
+    .flow-arrow { color: var(--border-strong); font-size: 16px; flex-shrink: 0; }
+    .flow-desc { font-size: 16px; color: var(--text-secondary); line-height: 1.6; padding: 14px 16px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); min-height: 52px; }
+    .flow-counter { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); margin-top: 10px; text-align: right; }
+    .mermaid-wrap { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 20px; overflow-x: auto; }
+    .mermaid { text-align: center; }
+    .tradeoff { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .tradeoff-option { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px 20px; }
+    .tradeoff-option.chosen { border-color: var(--accent-border); background: var(--accent-light); }
+    .tradeoff-label { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px; }
+    .tradeoff-label.yes { color: hsl(145, 55%, 32%); }
+    .tradeoff-label.no  { color: var(--text-muted); }
+    .tradeoff-option h4 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+    .tradeoff-option p { font-size: 15px; color: var(--text-secondary); margin-bottom: 0; }
+    .callout { border-left: 3px solid var(--accent); padding: 14px 18px; background: var(--accent-light); border-radius: 0 var(--radius-md) var(--radius-md) 0; margin-bottom: 16px; }
+    .callout p { font-size: 16px; color: var(--accent-text); margin-bottom: 0; }
+    .callout-warn { border-left-color: hsl(38, 92%, 50%); background: hsl(38, 80%, 94%); }
+    .callout-warn p { color: hsl(38, 70%, 28%); }
+    .callout-danger { border-left-color: hsl(0, 72%, 52%); background: hsl(0, 80%, 95%); }
+    .callout-danger p { color: hsl(0, 65%, 32%); }
+    .tip-card { display: flex; gap: 14px; padding: 16px 20px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); margin-bottom: 10px; }
+    .tip-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+    .tip-content { font-size: 16px; color: var(--text-secondary); line-height: 1.6; }
+    .tip-content strong { color: var(--text-primary); font-weight: 600; }
+    .similar-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .similar-card { display: block; text-decoration: none; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px 20px; transition: all 0.2s ease; }
+    .similar-card:hover { border-color: var(--accent-border); background: var(--accent-light); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+    .similar-card h4 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+    .similar-card p { font-size: 13.5px; color: var(--text-muted); margin-bottom: 0; }
+    .evolution-step { display: flex; gap: 16px; margin-bottom: 20px; position: relative; }
+    .evolution-step:not(:last-child)::after { content: ''; position: absolute; left: 15px; top: 36px; bottom: -20px; width: 2px; background: var(--border); }
+    .evolution-marker { width: 32px; height: 32px; border-radius: 50%; background: var(--accent-light); border: 2px solid var(--accent-border); display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 13.5px; font-weight: 600; color: var(--accent-text); flex-shrink: 0; }
+    .evolution-content h4 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+    .evolution-content p { font-size: 15.5px; color: var(--text-secondary); margin-bottom: 0; }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .main { padding: 0 20px 80px; }
+      .hero h1 { font-size: 34px; }
+      .tradeoff { grid-template-columns: 1fr; }
+      .card-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- ═══════════════════ TOPBAR ═══════════════════ -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <a href="../index.html">System Design</a>
+      <span class="topbar-sep">/</span>
+      <span class="topbar-problem">Distributed Logging</span>
+    </div>
+    <div class="topbar-right">
+      <span class="topbar-tag">Hard</span>
+    </div>
+  </header>
+
+  <!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-label">Sections</div>
+    <ul class="sidebar-nav" id="sidebar-nav">
+      <li><a href="#problem">Problem Statement</a></li>
+      <li><a href="#requirements">Requirements</a></li>
+      <li><a href="#scale">Scale Estimation</a></li>
+      <li><a href="#api">API Design</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#deep-dive">Deep Dive</a></li>
+      <li><a href="#tradeoffs">Tradeoffs</a></li>
+      <li><a href="#failures">Failure Scenarios</a></li>
+      <li><a href="#interview-tips">Interview Tips</a></li>
+      <li><a href="#similar">Similar Problems</a></li>
+      <li><a href="#evolution">Evolution</a></li>
+    </ul>
+
+    <div class="sidebar-label">Related</div>
+    <ul class="sidebar-related">
+      <li><a href="../kafka/index.html">Distributed Message Queue</a></li>
+      <li><a href="../notification-system/index.html">Notification System</a></li>
+      <li><a href="../rate-limiter/index.html">Rate Limiter</a></li>
+      <li><a href="../web-crawler/index.html">Web Crawler</a></li>
+    </ul>
+  </aside>
+
+  <!-- ═══════════════════ MAIN ═══════════════════ -->
+  <main class="main">
+
+    <!-- ── Hero ── -->
+    <div class="hero">
+      <div class="hero-number">System Design — Distributed Logging</div>
+      <h1>Distributed Logging Framework</h1>
+      <p class="hero-desc">
+        Design a centralized logging system that ingests hundreds of thousands of events per second from thousands of services, stores them durably with compression, and enables full-text search across billions of log lines in seconds.
+      </p>
+      <div class="hero-tags">
+        <span class="hero-tag">Write-Heavy</span>
+        <span class="hero-tag">Append-Only</span>
+        <span class="hero-tag">Full-Text Search</span>
+        <span class="hero-tag">Streaming</span>
+        <span class="hero-tag">Tiered Storage</span>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 01 · PROBLEM STATEMENT ═══════════════ -->
+    <div class="section" id="problem">
+      <div class="section-number">01</div>
+      <h2>Problem Statement</h2>
+
+      <p>
+        Think of a single server running your app. Something goes wrong — a user can't check out. You <span class="inline-code">ssh</span> in, run <span class="inline-code">tail -f /var/log/app.log</span>, find the error, fix it. Simple.
+      </p>
+      <p>
+        Now your company grows to <span class="hl">2,000 microservices</span> across <span class="hl">100,000 containers</span>. A user reports "I placed an order but never got a confirmation email." To debug this, you'd need to trace what happened across the API Gateway, Auth Service, Order Service, Payment Service, and Notification Service — each running on dozens of servers. You don't know which specific server handled this user's request.
+      </p>
+
+      <h3>What Breaks at Scale</h3>
+      <div class="card-grid">
+        <div class="card">
+          <h4>Ephemeral Infrastructure</h4>
+          <p>On Kubernetes, containers are killed and restarted constantly. When a container dies, its local logs vanish. The evidence is destroyed before you even know there's a bug.</p>
+        </div>
+        <div class="card">
+          <h4>No Correlation</h4>
+          <p>Even if you could search all servers, logs have different formats, clock skew, and no way to link "this auth log" to "this payment log" for the same user request.</p>
+        </div>
+        <div class="card">
+          <h4>No Proactive Detection</h4>
+          <p>You're only looking at logs after a user complains. If the payment service has been throwing errors for 20 minutes, nobody knows without centralized alerting.</p>
+        </div>
+        <div class="card">
+          <h4>Compliance &amp; Audit</h4>
+          <p>Regulations (SOX, GDPR, PCI-DSS) require retaining certain logs for months or years. Individual servers can't guarantee that — disks fill up, servers get decommissioned.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <p><strong>Core question:</strong> How do you build a system that ingests 500K+ log events per second, stores them durably for weeks to years, and lets engineers search across all of them in seconds?</p>
+      </div>
+
+      <h3>Why This Is Architecturally Interesting</h3>
+      <p>
+        This is fundamentally a <span class="hl-accent">write-heavy, append-only, time-series-ish</span> problem with a <span class="hl-accent">full-text search</span> requirement bolted on. Most systems optimize for either writes OR search, not both. The competing forces:
+      </p>
+      <ul>
+        <li><strong>Insane write volume</strong> — 500K+ events/sec. Most databases buckle under this write load.</li>
+        <li><strong>Full-text search</strong> — Engineers want to search for specific error messages, user IDs buried in log lines, stack trace fragments across petabytes.</li>
+        <li><strong>Time-series nature</strong> — Almost every query includes a time range, so storage must be optimized for time-partitioned access.</li>
+        <li><strong>100:1 write-to-read ratio</strong> — Most logs are never read, but when they are (during an incident at 3am), search must be fast.</li>
+        <li><strong>Cost pressure</strong> — At 20+ TB/day raw data, the difference between indexing everything vs indexing selectively is millions of dollars per year.</li>
+      </ul>
+
+      <h3>What We're NOT Building</h3>
+      <p>
+        <span class="hl-red">Not a metrics system</span> (numeric time-series like CPU = 73% — different storage model).
+        <span class="hl-red">Not distributed tracing</span> (request flow across services via trace IDs — overlaps but has its own data model).
+        <span class="hl-red">Not a SIEM</span> (security analysis layer on top of logs). These are all related "pillars of observability" — but each warrants its own design.
+      </p>
+    </div>
+
+    <!-- ═══════════════ 02 · REQUIREMENTS ═══════════════ -->
+    <div class="section" id="requirements">
+      <div class="section-number">02</div>
+      <h2>Requirements</h2>
+
+      <h3>Functional Requirements</h3>
+      <div class="card">
+        <ul>
+          <li><strong>Log Ingestion</strong> — Accept log events from thousands of services via lightweight agents on each host. Each log carries: timestamp, service name, severity level, message body, and arbitrary key-value metadata.</li>
+          <li><strong>Full-Text Search</strong> — Query logs by time range + structured filters (service, severity) + keyword search in message body. Support boolean operators, phrase queries, and wildcard matching.</li>
+          <li><strong>Live Tail</strong> — Real-time streaming of logs matching a filter, like <span class="inline-code">tail -f</span> across the entire fleet. Must work with zero indexing delay.</li>
+          <li><strong>Alerting Rules</strong> — Define threshold-based rules (e.g., "alert if service=payments AND level=ERROR exceeds 100/min"). Evaluate in real-time, fire notifications via PagerDuty/Slack.</li>
+          <li><strong>Retention Policies</strong> — Hot tier (fast search, 7 days), Warm tier (slower search, 30 days), Cold tier (archive only, 1 year+), with automatic tiering.</li>
+          <li><strong>Multi-Tenancy</strong> — Team-level isolation and per-tenant ingestion quotas to prevent noisy-neighbor problems.</li>
+        </ul>
+      </div>
+
+      <h3>Non-Functional Requirements</h3>
+      <div class="card">
+        <ul>
+          <li><strong>Write Throughput:</strong> <span class="hl">500K events/sec sustained, 2M/sec burst</span> — this is a write-dominated system</li>
+          <li><strong>Ingestion-to-Searchable Latency:</strong> <span class="hl">&lt; 30 seconds</span> — near real-time, not real-time (live tail handles the real-time case)</li>
+          <li><strong>Search Latency:</strong> P99 &lt; 5 seconds for queries spanning 1 hour of data</li>
+          <li><strong>Durability:</strong> Zero log loss once acknowledged by the ingestion layer</li>
+          <li><strong>Availability:</strong> 99.9% — the logging system must be more available than the systems it monitors</li>
+          <li><strong>Storage Efficiency:</strong> Compression is survival — logs compress 10:1, which is the difference between manageable and bankrupt</li>
+        </ul>
+      </div>
+
+      <div class="callout-warn callout">
+        <p><strong>Key tension:</strong> 500K writes/sec demands append-only async ingestion, but full-text search demands pre-built indexes. The entire architecture navigates this conflict.</p>
+      </div>
+
+      <h3>Requirements Conflict Matrix</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Requirement</th><th>Pushes Toward</th><th>Conflicts With</th></tr></thead>
+          <tbody>
+            <tr><td>500K writes/sec</td><td>Append-only, batched, async indexing</td><td>Search latency (async = delay)</td></tr>
+            <tr><td>Full-text search</td><td>Inverted index (Elasticsearch-style)</td><td>Storage cost, write throughput</td></tr>
+            <tr><td>&lt;30s to searchable</td><td>Frequent index flushes</td><td>Efficient segment sizes</td></tr>
+            <tr><td>Durability</td><td>Kafka replication, acks=all</td><td>Write latency (more acks = slower)</td></tr>
+            <tr><td>Cost efficiency</td><td>Compress everything, index less</td><td>Search speed (less index = slower)</td></tr>
+            <tr><td>Live tail</td><td>Direct Kafka consumption</td><td>Separate infrastructure path</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 03 · SCALE ESTIMATION ═══════════════ -->
+    <div class="section" id="scale">
+      <div class="section-number">03</div>
+      <h2>Scale Estimation</h2>
+
+      <p>Everything derived from first principles. Starting assumptions: <span class="hl">2,000 microservices</span>, each running ~50 instances, each emitting ~5 log lines/sec. Average log event size: <span class="hl">500 bytes</span>.</p>
+
+      <div class="scale-grid">
+        <div class="scale-card">
+          <div class="number">500K/sec</div>
+          <div class="label">Sustained write load</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">2M/sec</div>
+          <div class="label">Peak burst (4x)</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">43B/day</div>
+          <div class="label">Events per day</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">21.6 TB/day</div>
+          <div class="label">Raw data volume</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">2.2 TB/day</div>
+          <div class="label">Compressed (10:1)</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">250 MB/sec</div>
+          <div class="label">Ingestion bandwidth</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">100:1</div>
+          <div class="label">Write-to-read ratio</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~$12K/mo</div>
+          <div class="label">Storage cost (all tiers)</div>
+        </div>
+      </div>
+
+      <h3>Storage Per Tier</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Tier</th><th>Duration</th><th>Daily</th><th>Total</th><th>Media</th><th>Est. Cost/Mo</th></tr></thead>
+          <tbody>
+            <tr><td><span class="hl-green">Hot</span></td><td>7 days</td><td>2.8 TB</td><td>~20 TB</td><td>NVMe SSD</td><td>~$3,000</td></tr>
+            <tr><td><span class="hl-accent">Warm</span></td><td>30 days</td><td>2.2 TB</td><td>~66 TB</td><td>HDD / EBS</td><td>~$3,300</td></tr>
+            <tr><td><span class="hl">Cold</span></td><td>365 days</td><td>2.2 TB</td><td>~800 TB</td><td>S3 / GCS</td><td>~$5,600</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Kafka Sizing</h3>
+      <div class="card">
+        <h4>Derivation</h4>
+        <p>At 250 MB/sec ingest, each broker handles ~100 MB/sec → <span class="hl">6 brokers minimum</span>. With 24h retention and replication factor 3: 21.6 TB × 3 = 64.8 TB total Kafka storage. ~200 partitions across the topic, partitioned by service name with overflow hashing for hot services. Three independent consumer groups: Indexer, Tail Service, Alert Evaluator.</p>
+      </div>
+
+      <h3>Indexer Sizing</h3>
+      <div class="card">
+        <h4>Derivation</h4>
+        <p>Each indexer instance handles ~75K events/sec (tokenization + index building). Sustained: 500K ÷ 75K = <span class="hl">7 instances minimum</span>. Peak capacity (2M/sec): 27 instances. Fleet sized at <span class="hl">30 indexers</span> with auto-scaling. Each flushes a segment every 30 seconds containing ~2.25M events (~112 MB compressed), producing ~20,000 segments/day requiring background compaction.</p>
+      </div>
+
+      <div class="callout">
+        <p><strong>Key insight:</strong> At 500K writes/sec, this system is an order of magnitude beyond what any single database can handle. The architecture isn't chosen by preference — it's forced by the numbers.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 04 · API DESIGN ═══════════════ -->
+    <div class="section" id="api">
+      <div class="section-number">04</div>
+      <h2>API Design</h2>
+
+      <p>Three core APIs serving three different personas: the log agent (machine, write-heavy), the debugging engineer (human, search-heavy), and the engineer watching live logs (human, streaming).</p>
+
+      <!-- Ingest API -->
+      <div class="code-label">POST /v1/ingest — Log Ingestion (The Firehose)</div>
+      <div class="code-block">
+        <code><pre>POST /v1/ingest
+Authorization: Bearer &lt;service-api-key&gt;
+Content-Type: application/json
+Content-Encoding: zstd
+
+{
+  "source": {
+    "service": "payment-service",
+    "host": "ip-10-0-3-42",
+    "region": "us-east-1",
+    "environment": "production"
+  },
+  "logs": [
+    {
+      "ts": "2025-06-15T14:23:01.123Z",
+      "level": "ERROR",
+      "msg": "Failed to charge card ending 4242: CARD_DECLINED",
+      "meta": {
+        "trace_id": "abc-123-def",
+        "user_id": "u_98765",
+        "error_code": "CARD_DECLINED",
+        "latency_ms": 342
+      }
+    }
+    // ... up to 1000 events per batch
+  ]
+}
+
+→ 202 Accepted
+{ "accepted": 1000, "failed": 0, "lag_hint": "normal" }</pre></code>
+      </div>
+
+      <div class="card-grid">
+        <div class="card">
+          <h4>Why 202 Accepted?</h4>
+          <p>Not 201 Created. The log is in Kafka (durable) but not yet searchable. 202 honestly communicates: "received and durably stored, but processing is ongoing."</p>
+        </div>
+        <div class="card">
+          <h4>Why Batch?</h4>
+          <p>At 500K events/sec, individual HTTP calls would mean 500K TCP connections/sec. Batching 1,000 events per call reduces this to 500 calls/sec — trivial.</p>
+        </div>
+        <div class="card">
+          <h4>Why Separate Source?</h4>
+          <p>All logs in a batch share the same source metadata. Extracting it saves ~100 bytes × 1,000 events = 100 KB per batch. At 500 batches/sec, that's 50 MB/sec saved.</p>
+        </div>
+        <div class="card">
+          <h4>Why lag_hint?</h4>
+          <p>Cooperative backpressure. When the system is under pressure, agents can increase batch sizes, reduce flush frequency, or drop DEBUG-level logs.</p>
+        </div>
+      </div>
+
+      <!-- Search API -->
+      <div class="code-label">POST /v1/search — Full-Text Search</div>
+      <div class="code-block">
+        <code><pre>POST /v1/search
+Authorization: Bearer &lt;user-token&gt;
+
+{
+  "query": "card declined timeout",
+  "filters": {
+    "service": ["payment-service", "checkout-service"],
+    "level": ["ERROR", "WARN"],
+    "meta.trace_id": "abc-123-def"
+  },
+  "time_range": {
+    "from": "2025-06-15T14:00:00Z",
+    "to": "2025-06-15T15:00:00Z"
+  },
+  "sort": "desc",
+  "limit": 100,
+  "cursor": null
+}
+
+→ 200 OK
+{
+  "hits": 847,
+  "scanned": 1240000,
+  "took_ms": 1230,
+  "logs": [ ... ],
+  "next_cursor": "eyJsYXN0X3RzIjoi..."
+}</pre></code>
+      </div>
+
+      <div class="card-grid">
+        <div class="card">
+          <h4>Why POST for search?</h4>
+          <p>Complex queries with nested filters and long query strings hit URL length limits. POST body has no practical size limit — same approach Elasticsearch uses.</p>
+        </div>
+        <div class="card">
+          <h4>Cursor-based pagination</h4>
+          <p>Offset pagination ("skip 5000 results") is wasteful at depth. Cursor pagination uses an opaque token to seek directly to the next position. Every page is equally fast.</p>
+        </div>
+      </div>
+
+      <!-- Aggregation API -->
+      <div class="code-label">POST /v1/aggregate — Dashboard Queries</div>
+      <div class="code-block">
+        <code><pre>POST /v1/aggregate
+{
+  "time_range": { "from": "...", "to": "..." },
+  "filters": { "environment": "production" },
+  "group_by": ["service", "level"],
+  "interval": "5m",
+  "metric": "count"
+}
+
+→ Buckets of counts per group per time interval</pre></code>
+      </div>
+      <p>Separate endpoint because execution is fundamentally different — aggregation reads only structured columns, never touching message bodies. Pre-computed rollup tables can answer these queries reading just a few hundred rows instead of scanning billions of events.</p>
+
+      <!-- Tail API -->
+      <div class="code-label">GET /v1/tail — Live Tail (SSE Stream)</div>
+      <div class="code-block">
+        <code><pre>GET /v1/tail?service=payment-service&level=ERROR
+Authorization: Bearer &lt;user-token&gt;
+Accept: text/event-stream
+
+→ Server-Sent Events stream:
+data: {"ts":"...","service":"payment-service","level":"ERROR","msg":"Failed to charge..."}
+data: {"ts":"...","service":"payment-service","level":"ERROR","msg":"Timeout connecting..."}
+: heartbeat</pre></code>
+      </div>
+
+      <div class="card">
+        <h4>Why SSE over WebSocket?</h4>
+        <p>Unidirectional (server pushes to client — no data sent back after connection). Auto-reconnection built into the spec. HTTP-native — works through all proxies and load balancers without special configuration. Heartbeats every 15 seconds keep connections alive.</p>
+      </div>
+
+      <!-- Alert API -->
+      <div class="code-label">POST /v1/alerts — Alert Rule Management</div>
+      <div class="code-block">
+        <code><pre>POST /v1/alerts
+{
+  "name": "Payment errors spike",
+  "condition": {
+    "filter": { "service": "payment-service", "level": "ERROR" },
+    "threshold": 100, "window": "5m", "comparison": "above"
+  },
+  "actions": [
+    { "type": "pagerduty", "severity": "critical" },
+    { "type": "slack", "channel": "#payments-oncall" }
+  ],
+  "cooldown": "15m"
+}
+
+Supporting: GET/PUT/DELETE /v1/alerts/{id}, POST /v1/alerts/{id}/mute</pre></code>
+      </div>
+
+      <h3>Authentication Model</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>API</th><th>Method</th><th>Pattern</th><th>Auth</th><th>Throughput</th></tr></thead>
+          <tbody>
+            <tr><td>Ingest</td><td>POST</td><td>Request/Response</td><td>API key (service)</td><td>500K events/sec</td></tr>
+            <tr><td>Search</td><td>POST</td><td>Request/Response</td><td>User token (OAuth)</td><td>500 queries/min</td></tr>
+            <tr><td>Aggregate</td><td>POST</td><td>Request/Response</td><td>User token</td><td>100 queries/min</td></tr>
+            <tr><td>Tail</td><td>GET</td><td>SSE stream</td><td>User token</td><td>200 connections</td></tr>
+            <tr><td>Alerts</td><td>CRUD</td><td>Request/Response</td><td>User token</td><td>Low</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <p><strong>Key insight:</strong> The ingestion API and search API are completely decoupled. They share no synchronous dependency. Kafka and the indexer are the asynchronous bridge between them.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 05 · HIGH-LEVEL ARCHITECTURE ═══════════════ -->
+    <div class="section" id="architecture">
+      <div class="section-number">05</div>
+      <h2>High-Level Architecture</h2>
+
+      <p>Every component exists because the numbers demanded it. The pipeline flows left-to-right: Agents → Kafka → Consumers (Indexer, Tail, Alerts) → Storage → Query Service → UI.</p>
+
+      <!-- ── Inline SVG Diagram ── -->
+      <div class="arch-diagram">
+        <svg viewBox="0 0 900 520" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="#ccc9c4"/>
+            </marker>
+          </defs>
+
+          <!-- Row 1: Ingestion Path -->
+          <g class="node" id="node-agents" onclick="hlNode('node-agents')">
+            <rect class="node-rect" x="10" y="200" width="100" height="60" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="60" y="224">Agents</text>
+            <text class="node-sublabel" x="60" y="242">100K hosts</text>
+          </g>
+
+          <g class="node" id="node-gateway" onclick="hlNode('node-gateway')">
+            <rect class="node-rect" x="155" y="200" width="110" height="60" fill="hsl(234,80%,94%)" stroke="hsl(234,60%,80%)"/>
+            <text class="node-label" x="210" y="224">Gateway</text>
+            <text class="node-sublabel" x="210" y="242">Validate + Route</text>
+          </g>
+
+          <g class="node" id="node-kafka" onclick="hlNode('node-kafka')">
+            <rect class="node-rect" x="310" y="190" width="130" height="80" fill="hsl(234,80%,94%)" stroke="hsl(234,60%,80%)"/>
+            <text class="node-label" x="375" y="220">Kafka</text>
+            <text class="node-sublabel" x="375" y="238">Durable Buffer</text>
+            <text class="node-sublabel" x="375" y="252">6 brokers, RF=3</text>
+          </g>
+
+          <!-- Consumers -->
+          <g class="node" id="node-indexer" onclick="hlNode('node-indexer')">
+            <rect class="node-rect" x="510" y="120" width="110" height="60" fill="hsl(234,80%,94%)" stroke="hsl(234,60%,80%)"/>
+            <text class="node-label" x="565" y="144">Indexer</text>
+            <text class="node-sublabel" x="565" y="162">30 workers</text>
+          </g>
+
+          <g class="node" id="node-tail" onclick="hlNode('node-tail')">
+            <rect class="node-rect" x="510" y="210" width="110" height="60" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="565" y="234">Tail Service</text>
+            <text class="node-sublabel" x="565" y="252">SSE → Clients</text>
+          </g>
+
+          <g class="node" id="node-alert" onclick="hlNode('node-alert')">
+            <rect class="node-rect" x="510" y="300" width="110" height="60" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="565" y="324">Alert Eval</text>
+            <text class="node-sublabel" x="565" y="342">Sliding windows</text>
+          </g>
+
+          <!-- Storage -->
+          <g class="node" id="node-hot" onclick="hlNode('node-hot')">
+            <rect class="node-rect" x="680" y="60" width="110" height="55" fill="hsl(145, 60%, 90%)" stroke="hsl(145,50%,70%)"/>
+            <text class="node-label" x="735" y="82">Hot Store</text>
+            <text class="node-sublabel" x="735" y="98">NVMe SSD, 7d</text>
+          </g>
+
+          <g class="node" id="node-warm" onclick="hlNode('node-warm')">
+            <rect class="node-rect" x="680" y="130" width="110" height="55" fill="hsl(38,80%,92%)" stroke="hsl(38,60%,75%)"/>
+            <text class="node-label" x="735" y="152">Warm Store</text>
+            <text class="node-sublabel" x="735" y="168">HDD, 30d</text>
+          </g>
+
+          <g class="node" id="node-cold" onclick="hlNode('node-cold')">
+            <rect class="node-rect" x="680" y="200" width="110" height="55" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="735" y="222">Cold Store</text>
+            <text class="node-sublabel" x="735" y="238">S3/GCS, 365d</text>
+          </g>
+
+          <!-- Query layer -->
+          <g class="node" id="node-query" onclick="hlNode('node-query')">
+            <rect class="node-rect" x="680" y="310" width="110" height="60" fill="hsl(234,80%,94%)" stroke="hsl(234,60%,80%)"/>
+            <text class="node-label" x="735" y="334">Query Service</text>
+            <text class="node-sublabel" x="735" y="352">Scatter-Gather</text>
+          </g>
+
+          <!-- Metadata DB -->
+          <g class="node" id="node-metadb" onclick="hlNode('node-metadb')">
+            <rect class="node-rect" x="680" y="400" width="110" height="55" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="735" y="422">Metadata DB</text>
+            <text class="node-sublabel" x="735" y="438">PostgreSQL</text>
+          </g>
+
+          <!-- Tier Manager -->
+          <g class="node" id="node-tier" onclick="hlNode('node-tier')">
+            <rect class="node-rect" x="510" y="400" width="110" height="55" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="565" y="422">Tier Manager</text>
+            <text class="node-sublabel" x="565" y="438">Compact + Move</text>
+          </g>
+
+          <!-- Edges -->
+          <line class="edge" x1="110" y1="230" x2="155" y2="230"/>
+          <line class="edge" x1="265" y1="230" x2="310" y2="230"/>
+          <line class="edge" x1="440" y1="210" x2="510" y2="155"/>
+          <line class="edge" x1="440" y1="230" x2="510" y2="240"/>
+          <line class="edge" x1="440" y1="250" x2="510" y2="325"/>
+          <line class="edge" x1="620" y1="140" x2="680" y2="85"/>
+          <line class="edge" x1="620" y1="155" x2="680" y2="155"/>
+          <line class="edge" x1="735" y1="115" x2="735" y2="130"/>
+          <line class="edge" x1="735" y1="185" x2="735" y2="200"/>
+          <line class="edge" x1="735" y1="255" x2="735" y2="310"/>
+          <line class="edge" x1="735" y1="370" x2="735" y2="400"/>
+          <line class="edge" x1="620" y1="430" x2="680" y2="430"/>
+
+          <!-- Edge Labels -->
+          <text class="edge-label" x="133" y="222">HTTP+zstd</text>
+          <text class="edge-label" x="288" y="222">Produce</text>
+          <text class="edge-label" x="468" y="175">Consume</text>
+          <text class="edge-label" x="468" y="225">Consume</text>
+          <text class="edge-label" x="468" y="290">Consume</text>
+          <text class="edge-label" x="648" y="105">Flush</text>
+          <text class="edge-label" x="760" y="122">Age out</text>
+          <text class="edge-label" x="760" y="195">Age out</text>
+          <text class="edge-label" x="770" y="288">Read</text>
+        </svg>
+      </div>
+
+      <h3>Component Roles</h3>
+      <div class="card-grid">
+        <div class="card">
+          <h4>Agents (100K hosts)</h4>
+          <p>Lightweight daemons on every host. Watch log files, batch events, compress with zstd, ship to gateway via HTTP. Buffer locally on disk during outages. Priority-based dropping when buffer is full (DEBUG first, ERROR last).</p>
+        </div>
+        <div class="card">
+          <h4>Ingestion Gateway</h4>
+          <p>Stateless HTTP service. Validates batches, normalizes timestamps, enforces per-tenant rate limits, publishes to Kafka. Shields Kafka from 100K direct agent connections.</p>
+        </div>
+        <div class="card">
+          <h4>Kafka (6+ brokers)</h4>
+          <p>The backbone. Decouples producers from consumers. 24-hour retention for replay. Three independent consumer groups: Indexer, Tail Service, Alert Evaluator. Partitioned by service name with overflow hashing.</p>
+        </div>
+        <div class="card">
+          <h4>Indexer (30 workers)</h4>
+          <p>Consumes from Kafka, tokenizes messages, builds inverted index segments with roaring bitmaps, compresses with zstd, flushes every 30 seconds. The most compute-intensive component.</p>
+        </div>
+        <div class="card">
+          <h4>Index Store (Hot/Warm/Cold)</h4>
+          <p>Hot: NVMe SSD with full inverted index (7 days). Warm: HDD with bloom filters only (30 days). Cold: S3 archive (365 days). Segments replicated to 2 nodes.</p>
+        </div>
+        <div class="card">
+          <h4>Query Service</h4>
+          <p>Stateless scatter-gather. Consults metadata DB to find relevant segments, prunes via bloom filters, fans out parallel sub-queries to index nodes, merges results. Hard timeout at 30 seconds.</p>
+        </div>
+        <div class="card">
+          <h4>Tail Service</h4>
+          <p>Reads directly from Kafka (bypasses index). Evaluates in-memory filters per connected client. Pushes matches via SSE. Compiled filter trees for efficient evaluation at 500K events/sec × 200 clients.</p>
+        </div>
+        <div class="card">
+          <h4>Alert Evaluator</h4>
+          <p>Another Kafka consumer. Maintains sliding window counters per alert rule (2.4 KB per rule). Fires notifications when thresholds are breached. Runs in hot-standby pair for HA.</p>
+        </div>
+      </div>
+
+      <!-- ── Flow Stepper ── -->
+      <div class="flow-stepper">
+        <div class="flow-stepper-header">
+          <span class="flow-stepper-title">Log Ingestion Flow — Step Through</span>
+          <div class="flow-stepper-controls">
+            <button class="flow-btn" onclick="resetFlow()" id="flow-reset" disabled>Reset</button>
+            <button class="flow-btn flow-btn-primary" onclick="runFlow()" id="flow-next">Next Step →</button>
+          </div>
+        </div>
+        <div class="flow-steps" id="flow-steps"></div>
+        <div class="flow-desc" id="flow-desc">Click <strong>Next Step</strong> to walk through the log ingestion flow.</div>
+        <div class="flow-counter" id="flow-counter"></div>
+      </div>
+
+      <h3>Failure Isolation</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Component Down</th><th>Impact</th><th>Why Contained</th></tr></thead>
+          <tbody>
+            <tr><td>One agent</td><td>That host's logs buffer locally</td><td>Agents are independent</td></tr>
+            <tr><td>Gateway instance</td><td>Agents retry, other instances serve</td><td>Stateless, load-balanced</td></tr>
+            <tr><td>One Kafka broker</td><td>Zero — replicas serve</td><td>RF=3, min.insync=2</td></tr>
+            <tr><td>Indexer fleet</td><td>Search shows stale data</td><td>Kafka buffers 24 hours</td></tr>
+            <tr><td>Index store node</td><td>Queries route to replica</td><td>Segments replicated 2x</td></tr>
+            <tr><td>Query service</td><td>Search down, ingestion fine</td><td>Completely separate path</td></tr>
+            <tr><td>Tail service</td><td>Live tail down, search fine</td><td>Independent consumer</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <p><strong>Core principle:</strong> No single component failure stops log ingestion. Kafka absorbs downstream failures. The worst case is stale search results, never data loss.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 06 · DEEP DIVE ═══════════════ -->
+    <div class="section" id="deep-dive">
+      <div class="section-number">06</div>
+      <h2>Deep Dive — Log Storage &amp; Indexing</h2>
+
+      <p>The single hardest problem: <strong>how do you store 43 billion log events per day and make any of them findable in seconds?</strong></p>
+
+      <h3>Why Naive Approaches Collapse</h3>
+      <div class="card-grid">
+        <div class="card">
+          <h4><span class="hl-red">PostgreSQL?</span></h4>
+          <p>~50K inserts/sec max per node. You'd need 50+ shards. And <span class="inline-code">LIKE '%connection refused%'</span> is a full table scan on 43B rows — hours per query.</p>
+        </div>
+        <div class="card">
+          <h4><span class="hl-red">Just grep files?</span></h4>
+          <p>Works for one service ("grep this 150 MB file" = 1.5 sec). But "find 'timeout' across ALL services" means grepping 3 TB of raw data. 30+ seconds even parallelized.</p>
+        </div>
+      </div>
+
+      <h3>The Inverted Index — Core Data Structure</h3>
+      <p>Instead of "for each log, list its words," flip it: <span class="hl-accent">for each word, list which logs contain it</span>.</p>
+
+      <div class="code-label">Building an inverted index from 4 log events</div>
+      <div class="code-block">
+        <code><pre>Event 0: "Payment failed: card declined by processor"
+Event 1: "Connection timeout to payment processor"
+Event 2: "User login successful from Dubai"
+Event 3: "Payment retry succeeded after card reauthorization"
+
+Inverted Index:
+  payment     → [0, 1, 3]    card       → [0, 3]
+  failed      → [0]          timeout    → [1]
+  processor   → [0, 1]       login      → [2]
+  connection  → [1]          dubai      → [2]
+
+Query: "payment card"
+  1. Look up "payment" → [0, 1, 3]
+  2. Look up "card"    → [0, 3]
+  3. Intersect (AND)   → [0, 3]  ← found without scanning any text!</pre></code>
+      </div>
+
+      <h3>The Segment Structure</h3>
+      <p>We don't build one giant index. Instead, we build many small <span class="hl-accent">self-contained segments</span>, each covering a 30-second time window from one indexer (~2.25M events, ~112 MB compressed).</p>
+
+      <div class="code-block">
+        <code><pre>segment-20250615-142300-idx07-0042/
+├── meta.json           ← time range, services, event count
+├── columns/
+│   ├── timestamp.col   ← delta-encoded sorted timestamps
+│   ├── service.col     ← dictionary-encoded service names
+│   └── level.col       ← dictionary-encoded levels
+├── index/
+│   ├── terms.fst       ← FST term dictionary (~200 KB)
+│   └── postings.dat    ← roaring bitmap posting lists
+├── bloom/
+│   ├── service.bloom   ← "contains payment-service?" (~60 KB)
+│   └── terms.bloom     ← "contains word 'timeout'?"
+└── raw/
+    └── messages.zst    ← block-addressable compressed messages</pre></code>
+      </div>
+
+      <h3>Key Data Structures</h3>
+      <div class="card">
+        <h4>FST (Finite State Transducer) — Term Dictionary</h4>
+        <p>Compressed trie mapping each term to its posting list offset. 50,000 terms in ~200 KB. Supports prefix queries ("pay*" → payment, payload, payee) at zero extra cost. Same structure used by Lucene/Elasticsearch.</p>
+      </div>
+      <div class="card">
+        <h4>Roaring Bitmaps — Posting Lists</h4>
+        <p>Compressed lists of event IDs per term. Divide ID space into 65,536-ID chunks, use optimal encoding per chunk (sorted array for sparse, bitmap for dense, run-length for consecutive). 5–20× compression over raw arrays. <span class="hl-green">AND/OR/NOT operations work directly on compressed form</span> — no decompression needed.</p>
+      </div>
+      <div class="card">
+        <h4>Block-Addressable Compression</h4>
+        <p>Raw messages compressed in ~10,000-event blocks. Each block decompressible independently. To fetch event 45,231, decompress only block 4 (~500 KB) instead of the entire 112 MB file.</p>
+      </div>
+      <div class="card">
+        <h4>Bloom Filters — First Line of Defense</h4>
+        <p>Probabilistic "does this segment contain X?" check. ~60 KB per segment. If bloom says "no," skip the entire segment. Eliminates 90%+ of segments before any real work. Zero false negatives.</p>
+      </div>
+
+      <!-- Mermaid Sequence Diagram -->
+      <h3>Query Execution — End to End</h3>
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+sequenceDiagram
+    participant E as Engineer
+    participant QS as Query Service
+    participant MD as Metadata DB
+    participant N1 as Index Node 1
+    participant N2 as Index Node 2
+    participant N3 as Index Node 3
+
+    E->>QS: POST /v1/search (payment-service, ERROR, "timeout", last 1h)
+    QS->>MD: Which segments cover 14:00-15:00?
+    MD-->>QS: 1,200 segments across 8 nodes
+
+    Note over QS: Bloom filter pruning: 1,200 → 40 segments (97% reduction)
+
+    par Parallel fan-out
+        QS->>N1: Search 12 segments
+        QS->>N2: Search 15 segments
+        QS->>N3: Search 13 segments
+    end
+
+    Note over N1,N3: Per segment: columnar filter → inverted index lookup → bitmap AND → fetch matches
+
+    N1-->>QS: 230 matching events
+    N2-->>QS: 412 matching events
+    N3-->>QS: 205 matching events
+
+    Note over QS: Merge-sort by timestamp, return top 100
+
+    QS-->>E: 847 hits, 1,230ms, paginated results
+        </div>
+      </div>
+
+      <h3>The Three Schools — Compared</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Dimension</th><th>Elasticsearch</th><th>Grafana Loki</th><th>ClickHouse</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Philosophy</strong></td><td>Index every word</td><td>Index only labels, grep content</td><td>Columnar + bloom filters</td></tr>
+            <tr><td>Full-text speed</td><td><span class="hl-green">Excellent (ms)</span></td><td><span class="hl-red">Poor (seconds)</span></td><td>Good (sub-second)</td></tr>
+            <tr><td>Structured filters</td><td>Good</td><td><span class="hl-green">Excellent</span></td><td><span class="hl-green">Excellent</span></td></tr>
+            <tr><td>Write throughput</td><td>~100K/sec/node</td><td><span class="hl-green">~500K/sec/node</span></td><td>~300K/sec/node</td></tr>
+            <tr><td>Storage cost</td><td><span class="hl-red">High (index overhead)</span></td><td><span class="hl-green">Very low</span></td><td>Low</td></tr>
+            <tr><td>Aggregation</td><td>Moderate</td><td><span class="hl-red">Poor</span></td><td><span class="hl-green">Excellent</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Our Choice: The Hybrid Approach</h3>
+      <div class="callout">
+        <p><strong>Hot tier (7 days):</strong> Full inverted index. 95% of queries hit recent data — sub-second full-text search.<br/>
+        <strong>Warm/Cold tier:</strong> Label index + bloom filters + chunk scan (Loki-style). Slower (5–30s) but dramatically cheaper. Queries on old data are rare and less urgent.</p>
+      </div>
+
+      <h3>Segment Lifecycle</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Phase</th><th>Age</th><th>Index Type</th><th>Search Speed</th><th>Action</th></tr></thead>
+          <tbody>
+            <tr><td><span class="hl-green">Birth</span></td><td>T=0</td><td>Full inverted + columnar</td><td>&lt;1s</td><td>Indexer flushes to hot NVMe</td></tr>
+            <tr><td><span class="hl-green">Hot</span></td><td>0–7d</td><td>Full inverted + columnar</td><td>&lt;1s</td><td>Serves most queries</td></tr>
+            <tr><td><span class="hl-accent">Compaction</span></td><td>7d</td><td>Stripped to bloom only</td><td>&lt;30s</td><td>Merge 60 segments → 1, move to warm</td></tr>
+            <tr><td><span class="hl">Warm</span></td><td>7–30d</td><td>Bloom + label index</td><td>&lt;30s</td><td>Larger compacted segments on HDD</td></tr>
+            <tr><td>Cold</td><td>30–365d</td><td>Metadata only</td><td>Minutes</td><td>Upload to S3, on-demand download</td></tr>
+            <tr><td><span class="hl-red">Delete</span></td><td>&gt;365d</td><td>—</td><td>—</td><td>Purge from S3 + metadata DB</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h4>Compaction — Why It Matters</h4>
+        <p>Hot tier produces ~20,000 segments/day. Without merging, queries would fan out across thousands of tiny files. Compaction merges segments within time windows: Level 0 (raw, 30s) → Level 1 (10 min) → Level 2 (1 hour) → Level 3 (1 day for warm). Same concept as LSM-tree compaction in LevelDB/RocksDB.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 07 · TRADEOFFS ═══════════════ -->
+    <div class="section" id="tradeoffs">
+      <div class="section-number">07</div>
+      <h2>Key Design Decisions &amp; Tradeoffs</h2>
+
+      <!-- Tradeoff 1 -->
+      <h3>Push vs Pull Collection</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Push (Agents Send)</h4>
+          <p>Agents batch, compress, and push logs to the gateway. Near-instant latency. Adding new hosts requires zero central configuration. Agents handle local buffering and backpressure.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Pull (System Scrapes)</h4>
+          <p>Central collector polls 100K hosts. Inherent polling delay. 50K poll requests/sec just for discovery. Each host needs read-cursor state. Breaks down at log scale (works for Prometheus metrics because volumes are lower).</p>
+        </div>
+      </div>
+
+      <!-- Tradeoff 2 -->
+      <h3>Kafka Buffer vs Direct-to-Store</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Kafka Intermediate Buffer</h4>
+          <p>Decouples ingestion from indexing. If indexer is down, zero logs lost (Kafka buffers 24h). Enables multiple independent consumers (indexer, tail, alerts). Supports replay for re-indexing.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Direct-to-Store</h4>
+          <p>Fewer components, ~10ms less latency. But gateway becomes coupled to indexer speed. No multiple consumers. No replay. A slow indexer blocks ingestion, which blocks agents, which drops logs.</p>
+        </div>
+      </div>
+
+      <!-- Tradeoff 3 -->
+      <h3>Indexing Depth — The Big Decision</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Hybrid: Full Index (Hot) + Bloom (Warm/Cold)</h4>
+          <p>Full inverted index on 7-day hot tier covers 95% of queries with sub-second search. Warm/cold uses cheap bloom+scan. Saves ~600 GB/day of index storage compared to indexing everything. Best balance of speed and cost.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternatives</div>
+          <h4>Full Index Everywhere / No Index</h4>
+          <p>Full index everywhere: 3–6 TB/day of index overhead, massive cost. No index (Loki-style): 10x cheaper but broad full-text search takes 30+ seconds. Both extremes have significant downsides.</p>
+        </div>
+      </div>
+
+      <!-- Tradeoff 4 -->
+      <h3>Partitioning: Time-First vs Service-First</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Time-First Partitioning</h4>
+          <p>Almost every query includes a time range — "last hour" immediately narrows to ~1,200 segments. Retention is time-based (delete all before date X = trivial). Compaction is natural by time window.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Service-First Partitioning</h4>
+          <p>Optimal for single-service queries. But cross-service queries (trace_id=abc) require scanning every service partition. Complicates retention and compaction. Bloom filters mitigate the per-service pruning gap.</p>
+        </div>
+      </div>
+
+      <!-- Tradeoff 5 -->
+      <h3>SSE vs WebSocket for Live Tail</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Server-Sent Events (SSE)</h4>
+          <p>Unidirectional (server → client). Auto-reconnection built into spec. HTTP-native — works through all proxies. Simpler server-side, fewer failure modes. Heartbeats keep connections alive.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>WebSocket</h4>
+          <p>Full-duplex, allows dynamic filter updates without reconnecting. But adds WebSocket upgrade complexity, manual reconnect logic, proxy compatibility issues — all for a feature (dynamic filters) that's rarely used.</p>
+        </div>
+      </div>
+
+      <!-- Tradeoff 6 -->
+      <h3>Sync vs Async Indexing</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Async Indexing (~30s Lag)</h4>
+          <p>Ingestion layer is simple and fast (accept, validate, Kafka). Indexer batch-processes 2.25M events per segment — far more efficient than one-at-a-time. If indexer crashes, ingestion continues unaffected.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Synchronous Indexing</h4>
+          <p>Logs searchable within 1 second. But requires massive Elasticsearch clusters at 500K events/sec. Refresh operations become bottlenecks during bursts. In-memory buffer increases data loss risk on crash.</p>
+        </div>
+      </div>
+
+      <!-- Tradeoff 7 -->
+      <h3>Compression Algorithm</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Zstd (Dictionary-Trained)</h4>
+          <p>10–15:1 compression on logs at 200 MB/sec compress speed. Dictionary trained on log patterns learns common phrases, timestamp formats, field names. Best balance of ratio and speed.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternatives</div>
+          <h4>LZ4 / Gzip</h4>
+          <p>LZ4: faster (500 MB/sec) but only 3–4:1 — adds 3.2 TB/day extra storage. Gzip: good ratio (5–6:1) but painfully slow (50 MB/sec) — 70% of indexer CPU on compression alone.</p>
+        </div>
+      </div>
+
+      <!-- Tradeoff 8 -->
+      <h3>Shared vs Isolated Multi-Tenancy</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Shared Storage + Logical Isolation</h4>
+          <p>One Kafka cluster, one indexer fleet, one index store. Resource-efficient (unused capacity available to all). Simpler operations (1 cluster, not N). Enables cross-tenant queries for platform teams.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Physical Isolation Per Tenant</h4>
+          <p>Perfect blast-radius isolation. A noisy tenant can never impact another. But N× operational burden. Unused capacity per tenant is wasted. Cross-tenant queries require fan-out across clusters.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 08 · FAILURE SCENARIOS ═══════════════ -->
+    <div class="section" id="failures">
+      <div class="section-number">08</div>
+      <h2>What Can Go Wrong</h2>
+
+      <div class="card">
+        <h4>Kafka Consumer Lag — Indexer Falls Behind</h4>
+        <p><strong>Cause:</strong> Write burst (bad deploy), indexer crash, slow storage. <strong>Impact:</strong> Logs appear in live tail (reads from Kafka) but not in search — confusing and erodes trust. <strong>Detection:</strong> Monitor <span class="inline-code">kafka_consumer_lag_seconds</span>, alert if &gt;60s for &gt;5min. <strong>Handling:</strong> Short-term: Kafka buffers 24h, indexer auto-catches up. Medium: auto-scale indexer fleet (Kafka rebalances partitions). Nuclear: enter degraded mode — skip inverted index, build only label indexes (3× throughput at reduced search quality).</p>
+      </div>
+
+      <div class="card">
+        <h4>Agent Disk Buffer Full — Silent Log Loss</h4>
+        <p><strong>Cause:</strong> Network partition, all gateways down. Agent buffers to local disk (1 GB cap). <strong>Impact:</strong> Most dangerous failure — logs silently disappear. No error in the logging UI. <strong>Detection:</strong> Agent heartbeats every 30s to separate health-check endpoint. Gap detection (if payment-service drops from 1K/sec to 0, something's wrong). On recovery, agent reports dropped count. <strong>Mitigation:</strong> Priority-based dropping — DEBUG first, then INFO, keep ERROR as long as possible.</p>
+      </div>
+
+      <div class="card">
+        <h4>Index Store Node Failure</h4>
+        <p><strong>Cause:</strong> Hardware failure, OOM kill, disk corruption. <strong>Impact:</strong> With replication factor 2, queries route to replica seamlessly — user doesn't notice. <strong>Recovery:</strong> Re-sync when node returns. If permanently lost, copy segments from surviving replicas. Worst case (both replicas lost): rebuild from Kafka (if within 24h) or cold storage.</p>
+      </div>
+
+      <div class="card">
+        <h4>Query of Death — Pathological Query Takes Down Query Layer</h4>
+        <p><strong>Cause:</strong> Broad unfiltered query ("search *.* for last 7 days"), misconfigured dashboard widget, automated script. <strong>Impact:</strong> All search queries slow down — logging UI unresponsive during incidents when it's needed most. <strong>Handling:</strong> 5 layers of defense: (1) query admission control (reject if &gt;10K segments), (2) per-query resource limits (30s timeout, 4 GB memory, 10M events max), (3) per-user concurrency limits (max 10 concurrent), (4) circuit breaker (shed load at high error rate), (5) query quarantine (block known-bad patterns).</p>
+      </div>
+
+      <div class="card">
+        <h4>Kafka Cluster Failure — The Worst Case</h4>
+        <p><strong>Impact:</strong> Entire pipeline stops. Agents buffer locally, no new data in search, tail goes silent, alerts stop. <strong>Prevention:</strong> Brokers across 3+ AZs with rack-aware replication. Rolling upgrades one broker at a time. N+2 capacity. <strong>Recovery:</strong> Agents drain local buffers when Kafka recovers. Indexer catches up from committed offsets. Full recovery is automatic. <strong>DR option:</strong> Secondary Kafka cluster via MirrorMaker 2 in different region.</p>
+      </div>
+
+      <div class="card">
+        <h4>Hot Storage Full — Indexer Stalls</h4>
+        <p><strong>Cause:</strong> Unexpected volume spike, tier manager failed silently, retention policy misconfigured. <strong>Detection:</strong> Monitor <span class="inline-code">hot_storage_used_pct</span> — warn at 80%, critical at 90%, page at 95%. <strong>Handling:</strong> Auto: accelerate migration (move segments older than 5 days early). Emergency: force-migrate to 3 days, disable inverted index (5× less space), alert ops to provision storage.</p>
+      </div>
+
+      <div class="card">
+        <h4>Cascading Self-Logging — Feedback Loop</h4>
+        <p><strong>Cause:</strong> The logging system's own components emit error logs, which flow through the pipeline, increasing load, generating more errors. <strong>Handling:</strong> (1) Separate monitoring stack for logging infrastructure (Prometheus + Grafana, not itself). (2) Rate limit internal log sources (100 events/sec cap). (3) Circuit breakers on error logging — log once, then count: "Connection refused (12,847 occurrences in 60s)."</p>
+      </div>
+
+      <div class="card">
+        <h4>Clock Skew — Events With Wrong Timestamps</h4>
+        <p><strong>Impact:</strong> Events land in wrong time partitions. Correlation across services breaks (response appears before request). <strong>Handling:</strong> Dual timestamps — <span class="inline-code">event_ts</span> (from app, potentially skewed) and <span class="inline-code">ingest_ts</span> (from gateway, NTP-synced). Partition by ingest_ts, display event_ts. Flag events with |skew| &gt; 30s. Pad query time ranges by ±60s internally.</p>
+      </div>
+
+      <div class="callout-danger callout">
+        <p><strong>Overarching principle:</strong> Every failure has a blast radius, and the architecture contains it. Kafka absorbs ingestion failures. Replication absorbs storage failures. Query limits absorb query failures. No single failure cascades to total system outage.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 09 · INTERVIEW TIPS ═══════════════ -->
+    <div class="section" id="interview-tips">
+      <div class="section-number">09</div>
+      <h2>Interview Tips</h2>
+
+      <div class="tip-card">
+        <span class="tip-icon">💡</span>
+        <div class="tip-content">
+          <strong>Start with the single-server baseline.</strong><br/>
+          Begin with <span class="inline-code">tail -f /var/log/app.log</span>. Then explain what breaks at scale: ephemeral containers, no correlation, no alerting. This shows you think from first principles, not pattern-match from a memorized design.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">⚡</span>
+        <div class="tip-content">
+          <strong>Lead with the write-to-read ratio.</strong><br/>
+          Say "This is a 100:1 write-to-read system" early. This single fact drives every architectural choice — async indexing, append-only storage, Kafka buffering. It shows you understand the dominant access pattern, not just the components.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🎯</span>
+        <div class="tip-content">
+          <strong>Derive the numbers, don't memorize them.</strong><br/>
+          Walk through: "2,000 services × 50 instances × 5 logs/sec = 500K events/sec. At 500 bytes each, that's 250 MB/sec..." Interviewers care about the derivation methodology, not the exact number.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🔑</span>
+        <div class="tip-content">
+          <strong>Explain why Kafka, not just that Kafka.</strong><br/>
+          Don't just draw Kafka in the diagram. Explain the three reasons it's here: decoupling (indexer can crash without losing data), multiple consumers (indexer + tail + alerts from one stream), replay (re-index if something goes wrong). This turns "I know Kafka" into "I understand distributed system design."
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">💰</span>
+        <div class="tip-content">
+          <strong>Make the cost argument for tiered storage.</strong><br/>
+          "Full inverted index on all data = 3–6 TB/day of index overhead. At $0.10/GB/month on SSD, that's $18K/month just for index storage. Tiered approach drops this to $3K/month by indexing only the hot tier." Interviewers love when candidates think about cost — it shows real-world awareness.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">⚠️</span>
+        <div class="tip-content">
+          <strong>Know the Elasticsearch vs Loki tradeoff cold.</strong><br/>
+          If the interviewer asks "why not just use Elasticsearch?" — explain: it indexes everything (great for search, expensive at scale). Loki indexes only labels (cheap, but full-text search is slow). Your hybrid approach takes the best of both. This shows you understand the design space, not just one tool.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🧩</span>
+        <div class="tip-content">
+          <strong>Separate the live tail path from the search path.</strong><br/>
+          Many candidates forget that live tail can't go through the index (30-second lag). It needs a direct Kafka consumer path. Mentioning this unprompted demonstrates architectural depth and awareness of real-time requirements.
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 10 · SIMILAR PROBLEMS ═══════════════ -->
+    <div class="section" id="similar">
+      <div class="section-number">10</div>
+      <h2>Similar Problems</h2>
+
+      <div class="similar-grid">
+        <a href="../kafka/index.html" class="similar-card">
+          <h4>Distributed Message Queue (Kafka)</h4>
+          <p>Kafka is the backbone of our design. Deep-dive into partitioning, replication, consumer groups, and exactly-once semantics.</p>
+        </a>
+        <a href="../notification-system/index.html" class="similar-card">
+          <h4>Notification System</h4>
+          <p>Similar fan-out pattern (one event, many consumers). Shared concepts: delivery guarantees, prioritization, rate limiting.</p>
+        </a>
+        <a href="../search-autocomplete/index.html" class="similar-card">
+          <h4>Search Autocomplete</h4>
+          <p>Shares the inverted index and trie-based data structures. Both optimize for prefix matching and ranked results over large text corpora.</p>
+        </a>
+        <a href="../rate-limiter/index.html" class="similar-card">
+          <h4>Rate Limiter</h4>
+          <p>Rate limiting appears at ingestion (per-tenant quotas) and querying (per-user concurrency). Sliding window counters power the alert evaluator.</p>
+        </a>
+        <a href="../web-crawler/index.html" class="similar-card">
+          <h4>Web Crawler</h4>
+          <p>Both are high-throughput ingestion systems. Shared concerns: deduplication, politeness/backpressure, distributed work queues, and append-only storage.</p>
+        </a>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 11 · EVOLUTION ═══════════════ -->
+    <div class="section" id="evolution">
+      <div class="section-number">11</div>
+      <h2>Evolution</h2>
+      <p>How this design grows from MVP to planet-scale.</p>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">1</div>
+        <div class="evolution-content">
+          <h4>MVP — Single Node, Files + Grep</h4>
+          <p>One server. Agents send logs via HTTP. Append to time-partitioned files. Search = grep. Works for a small team with &lt;5,000 events/sec. No indexing, no replication, no tiering. Ship fast, validate the product.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">2</div>
+        <div class="evolution-content">
+          <h4>Growth — Kafka + Basic Indexing</h4>
+          <p>Add Kafka as the ingestion buffer to decouple producers from consumers. Introduce a simple indexer that builds label-based indexes (service, level, time). Search by structured filters is fast; full-text still requires scanning. Add basic alerting as a Kafka consumer. Handles ~50K events/sec.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">3</div>
+        <div class="evolution-content">
+          <h4>Scale — Inverted Index + Tiered Storage</h4>
+          <p>Build inverted index on hot tier for full-text search. Introduce segment-based storage with roaring bitmaps and bloom filters. Add warm tier (HDD) and cold tier (S3) with automatic tiering via the Tier Manager. Segment compaction. Handles 500K events/sec.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">4</div>
+        <div class="evolution-content">
+          <h4>Enterprise — Multi-Tenancy + Advanced Query</h4>
+          <p>Per-tenant quotas and isolation at ingestion and query layers. Rich query DSL (boolean operators, regex, numeric ranges). Pre-computed rollup tables for dashboard aggregations. Query cost estimation and admission control. Live tail with compiled filter trees.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">5</div>
+        <div class="evolution-content">
+          <h4>Planet-Scale — Multi-Region + ML</h4>
+          <p>Cross-region replication via MirrorMaker 2 for disaster recovery. Region-local ingestion with global query federation. ML-powered anomaly detection on the alert evaluator stream. Log pattern clustering to auto-discover new error types. Cost: $500K+/month in infrastructure, but logging is now a competitive advantage.</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SCRIPTS
+     ═══════════════════════════════════════════════════════ -->
+<script>
+  // ── Mermaid Init ──
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: 'hsl(234, 80%, 94%)',
+      primaryTextColor: '#111110',
+      primaryBorderColor: 'hsl(234, 60%, 80%)',
+      lineColor: '#ccc9c4',
+      secondaryColor: '#f7f7f5',
+      tertiaryColor: '#f0eeeb',
+      fontFamily: 'Geist, system-ui, sans-serif',
+      fontSize: '13px'
+    }
+  });
+
+  // ── Sidebar Scroll Observer ──
+  (function() {
+    const sections = document.querySelectorAll('.section[id]');
+    const navLinks = document.querySelectorAll('#sidebar-nav a');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+          navLinks.forEach(link => {
+            link.classList.toggle('active', link.getAttribute('href') === '#' + id);
+          });
+        }
+      });
+    }, { rootMargin: '-80px 0px -60% 0px', threshold: 0 });
+    sections.forEach(s => observer.observe(s));
+  })();
+
+  // ── Architecture Node Highlight ──
+  let highlightedNode = null;
+  function hlNode(id) {
+    if (highlightedNode) {
+      document.getElementById(highlightedNode).classList.remove('node-highlight');
+    }
+    if (highlightedNode === id) { highlightedNode = null; return; }
+    document.getElementById(id).classList.add('node-highlight');
+    highlightedNode = id;
+  }
+
+  // ── Flow Stepper ──
+  const FLOW_NODES = [
+    'App (stdout)',
+    'Agent',
+    'Gateway',
+    'Kafka',
+    'Indexer',
+    'Index Store',
+    'Query Service',
+    'Engineer'
+  ];
+
+  const FLOW_DESCS = [
+    'The application writes a log line to stdout or a local file. It has no knowledge of the logging infrastructure — zero coupling.',
+    'The agent (Fluentd/Filebeat) on the host watches the log file via inotify, parses the line, adds host metadata (IP, region, container ID), and accumulates it into a batch.',
+    'When the batch reaches 1,000 events or 5 seconds (whichever first), the agent compresses it with zstd and sends it via HTTP POST to the Ingestion Gateway. The gateway validates, enforces rate limits, and publishes to Kafka.',
+    'Kafka durably stores the event (replicated to 3 brokers, acks=all). Three independent consumer groups will read it: the Indexer, the Tail Service, and the Alert Evaluator.',
+    'The Indexer consumes the event, tokenizes the message ("Failed", "charge", "card", "4242"), builds an in-memory inverted index segment. Every 30 seconds, it flushes the segment (~2.25M events, ~112 MB compressed) to the Index Store.',
+    'The segment lands on NVMe SSD in the hot tier — complete with inverted index, roaring bitmap posting lists, bloom filters, and block-addressable compressed messages. It is now searchable.',
+    'When an engineer searches, the Query Service consults the metadata DB to find relevant segments, prunes 90%+ via bloom filters, fans out parallel sub-queries to index nodes, and merges results via scatter-gather.',
+    'The engineer sees search results in &lt;5 seconds — 847 matching events out of 1.8 billion in the 1-hour window, with keyword highlights and pagination. Total time from log emission to searchable: ~30 seconds.'
+  ];
+
+  let flowStep = -1;
+  const flowStepsEl = document.getElementById('flow-steps');
+  const flowDescEl  = document.getElementById('flow-desc');
+  const flowCounter = document.getElementById('flow-counter');
+  const flowNextBtn = document.getElementById('flow-next');
+  const flowResetBtn = document.getElementById('flow-reset');
+
+  FLOW_NODES.forEach((name, i) => {
+    if (i > 0) {
+      const arrow = document.createElement('span');
+      arrow.className = 'flow-arrow';
+      arrow.textContent = '→';
+      flowStepsEl.appendChild(arrow);
+    }
+    const node = document.createElement('span');
+    node.className = 'flow-node';
+    node.id = 'fnode-' + i;
+    node.textContent = name;
+    flowStepsEl.appendChild(node);
+  });
+
+  function runFlow() {
+    flowStep++;
+    if (flowStep >= FLOW_NODES.length) {
+      flowNextBtn.disabled = true;
+      flowDescEl.innerHTML = '<strong>✓ Flow complete.</strong> From application stdout to searchable result in ~30 seconds. Click Reset to start over.';
+      return;
+    }
+    flowResetBtn.disabled = false;
+    for (let i = 0; i < flowStep; i++) {
+      document.getElementById('fnode-' + i).classList.remove('active');
+      document.getElementById('fnode-' + i).classList.add('done');
+    }
+    document.getElementById('fnode-' + flowStep).classList.add('active');
+    document.getElementById('fnode-' + flowStep).scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    flowDescEl.innerHTML = FLOW_DESCS[flowStep];
+    flowCounter.textContent = `Step ${flowStep + 1} of ${FLOW_NODES.length}`;
+    if (flowStep === FLOW_NODES.length - 1) { flowNextBtn.textContent = 'Finish ✓'; }
+  }
+
+  function resetFlow() {
+    flowStep = -1;
+    FLOW_NODES.forEach((_, i) => {
+      const el = document.getElementById('fnode-' + i);
+      el.classList.remove('active', 'done');
+    });
+    flowDescEl.innerHTML = 'Click <strong>Next Step</strong> to walk through the log ingestion flow.';
+    flowCounter.textContent = '';
+    flowNextBtn.disabled = false;
+    flowNextBtn.textContent = 'Next Step →';
+    flowResetBtn.disabled = true;
+  }
+</script>
+
+</body>
+</html>

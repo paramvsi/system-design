@@ -1,0 +1,65 @@
+{
+  "slug": "memory-mapped-files",
+  "title": "Memory-Mapped Files (mmap)",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 250,
+    "s": 55,
+    "l": 48
+  },
+  "category": "Data Structures",
+  "blurb": "Reading a 100 GB file the normal way: read() in chunks, copy from kernel buffer to user buffer, process. Two copies per byte. Slow at scale. mmap maps the file's bytes directly into your process's virtual memory — access",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>Reading a 100 GB file the normal way: <code>read()</code> in chunks, copy from kernel buffer to user buffer, process. Two copies per byte. Slow at scale. <strong>mmap</strong> maps the file's bytes directly into your process's virtual memory — accessing them is just pointer dereference, the OS pages in data on demand. <span class=\"hl\">Zero copies</span>, the OS page cache becomes your cache, and reads are limited only by disk bandwidth.</p>\n      <p>It's the reason Kafka serves 500k msgs/sec per broker, why SQLite's read path is fast, and how LMDB / RocksDB's bbolt achieves microsecond reads on multi-GB datasets.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "How mmap works",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">How mmap works</h2></div>\n    <div class=\"prose\">\n      <p>You ask the kernel: \"map this file into my address space.\" Kernel allocates virtual address ranges; sets up page-table entries that point to <em>nothing yet</em>. When you access an address, a page fault triggers the kernel to read the relevant 4 KB page from disk into RAM, then fix up the page table. Subsequent accesses to the same page are pure memory reads — fast.</p>\n      <p>Three wins:</p>\n      <ul>\n        <li><strong>Zero copies</strong>. No buffer-to-buffer shuffling. Application code reads file data directly from the page cache.</li>\n        <li><strong>Lazy loading</strong>. Map a 100 GB file, read only the bytes you need; the rest never touches RAM.</li>\n        <li><strong>Shared cache</strong>. Two processes mapping the same file share the same physical pages. Memory-efficient.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "Sendfile — the writes-to-network sibling",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Sendfile — the writes-to-network sibling</h2></div>\n    <div class=\"prose\">\n      <p>Kafka's other zero-copy trick. Normally, sending a file over a socket goes: disk → kernel buffer → user buffer → socket buffer → NIC. Four copies. <code>sendfile(socket, file, offset, length)</code> tells the kernel: \"send these file bytes directly to that socket.\" Kernel does it in one DMA transfer, bypassing user space entirely.</p>\n      <p>Kafka brokers serve fetch requests this way — file segment bytes go straight from disk to network without ever entering Kafka's process memory. CPU isn't touched per byte. Throughput limited only by NIC bandwidth.</p>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "When mmap is wrong",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">When mmap is wrong</h2></div>\n    <div class=\"prose\">\n      <p>mmap is brilliant for read-heavy access to large files. Less great for:</p>\n      <ul>\n        <li><strong>Heavy writes.</strong> A page fault on dirty data triggers a write-back. Random writes thrash the page cache. Use direct I/O or buffered <code>write()</code> for write-dominated paths.</li>\n        <li><strong>Tiny files.</strong> Setup overhead (page table entries, syscalls) outweighs benefits.</li>\n        <li><strong>Network filesystems.</strong> mmap over NFS is a minefield of consistency surprises.</li>\n        <li><strong>32-bit address spaces.</strong> Mapping &gt; 2 GB doesn't fit. Mostly historical now.</li>\n        <li><strong>Predictable latency requirements.</strong> Page faults are unpredictable — a \"fast\" memory access can take 10 ms if it triggers disk I/O. Latency-critical paths use explicit I/O.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — Kafka's sequential mmap pattern",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — Kafka's sequential mmap pattern</h2></div>\n    <div class=\"prose\">\n      <p>Kafka stores each topic-partition as a series of segment files (~1 GB each). Brokers <code>mmap</code> the index files but use plain sequential read+sendfile for the data segments. Why?</p>\n      <ul>\n        <li><strong>Indexes are small + random-access.</strong> Look up \"offset 12345 → file position 4567.\" Index is ~10 MB, fits in RAM, mmap is perfect.</li>\n        <li><strong>Data segments are huge + sequential.</strong> Read from offset 4567 to end. Sequential read is already kernel-optimized; mmap adds no benefit and costs page-table entries.</li>\n      </ul>\n      <p>Combined with sendfile to the network: the broker's CPU is barely involved. A modern Kafka broker bottlenecks on NIC bandwidth, not on CPU or memory bandwidth — exactly what you want for a log-streaming server. This is what the \"Kafka uses the OS\" mantra means: every storage trick the kernel offers, Kafka exploits.</p>\n      <div class=\"callout\">\n        <div class=\"callout-label\">Interview one-liner</div>\n        <p>\"For sequential append-and-read workloads, mmap + sendfile let you serve at line-rate without copying bytes through user space. Kafka's throughput comes from this — not from clever data structures, but from getting out of the kernel's way.\"</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Kafka</div><h4>mmap + sendfile</h4><p>Serves fetch requests at multi-GB/s per broker without copying bytes to user space.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">LMDB / bbolt</div><h4>Entire DB is mmap-ed</h4><p>Read path is pointer arithmetic. ETCD's storage layer is bbolt; lookups are nanoseconds.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">SQLite</div><h4>Optional mmap mode</h4><p>Set <code>PRAGMA mmap_size=...</code> to map the whole DB. Read-heavy workloads see 2–3× speedup.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Redis RDB / fork-copy</div><h4>Copy-on-write snapshots</h4><p>Redis's BGSAVE forks; child sees the entire memory map; only modified pages copy. Snapshot a 50 GB Redis with seconds of fork overhead.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Distributed logging uses mmap + sendfile under the hood (Kafka). YouTube/Netflix CDN edges use sendfile to serve video chunks at line-rate. Google Drive's chunk-server reads use mmap for hot chunks.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

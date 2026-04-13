@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Twitter Trending — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+
+    :root { --accent-h: 200; --accent-s: 80%; --accent-l: 50%;
+      --accent: hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light: hsl(var(--accent-h), 80%, 94%);
+      --accent-mid: hsl(var(--accent-h), 70%, 88%);
+      --accent-text: hsl(var(--accent-h), var(--accent-s), 32%);
+      --accent-border: hsl(var(--accent-h), 60%, 78%);
+      --hl-yellow:#fff0a0; --hl-yellow-dark:#a07a00;
+      --hl-accent: hsl(var(--accent-h), 90%, 88%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 30%);
+      --bg:#fff; --bg-subtle:#f7f7f5; --bg-raised:#f0eeeb; --bg-code:#f4f3f0;
+      --border:#e4e2de; --border-strong:#ccc9c4;
+      --text-primary:#111110; --text-secondary:#4a4845; --text-muted:#878480;
+      --font-serif:'Instrument Serif',Georgia,serif;
+      --font-sans:'Geist',system-ui,sans-serif;
+      --font-mono:'JetBrains Mono','Fira Code',monospace;
+      --radius-sm:4px; --radius-md:8px; --radius-lg:12px;
+    }
+    .req-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px; }
+    .req-box { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 20px; }
+    .req-box-head { display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size: 12px; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent-text); margin-bottom:10px; font-weight:500; }
+    .req-box-head.nonfunc { color:hsl(38,80%,30%); }
+    .req-list { padding-left:20px; font-size: 15px; color:var(--text-secondary); }
+    .req-list li { margin-bottom:6px; }
+    .endpoint { background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px 18px; margin-bottom:10px; }
+    .endpoint-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+    .method { font-family:var(--font-mono); font-size: 11px; font-weight:600; padding:2px 8px; border-radius:3px; letter-spacing:0.05em; }
+    .method.get { background:hsl(190,70%,90%); color:hsl(190,70%,28%); }
+    .method.post { background:hsl(145,55%,90%); color:hsl(145,55%,28%); }
+    .method.delete { background:hsl(0,70%,92%); color:hsl(0,70%,38%); }
+    .ep-path { font-family:var(--font-mono); font-size: 15px; color:var(--text-primary); font-weight:500; }
+    .ep-desc { font-size: 15px; color:var(--text-secondary); margin:6px 0 0; }
+    .failure { display:flex; gap:14px; padding:14px 18px; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); margin-bottom:10px; }
+    .failure-icon { font-size:18px; flex-shrink:0; margin-top:2px; }
+    .failure-title { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .failure-desc { font-size: 15px; color:var(--text-secondary); margin-bottom:4px; }
+    .mitigation { font-family:var(--font-mono); font-size: 12px; color:hsl(145,55%,28%); }
+    .similar-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+    .similar-card { display:block; text-decoration:none; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 18px; transition:all 0.15s; }
+    .similar-card:hover { border-color:var(--accent-border); background:var(--accent-light); }
+    .similar-card h4 { font-size: 16px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .similar-card p { font-size: 13.5px; color:var(--text-muted); margin:0; }
+    .evolution-step { display:flex; gap:14px; margin-bottom:18px; }
+    .evolution-marker { width:32px; height:32px; border-radius:50%; background:var(--accent-light); border:2px solid var(--accent-border); display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size: 12px; font-weight:600; color:var(--accent-text); flex-shrink:0; }
+    .evolution-content h4 { font-size: 16px; font-weight:600; margin-bottom:4px; }
+    .evolution-content p { font-size: 15px; color:var(--text-secondary); margin:0; }
+  </style>
+</head>
+<body>
+
+<main>
+
+  <div class="hero" id="problem">
+    <div class="hero-kicker">System Design — Streaming Top-K at Scale</div>
+    <h1 class="hero-title">Design <em>Twitter Trending</em></h1>
+    <p class="hero-desc">
+      Surface the top-10 trending topics — hashtags, phrases, named entities — from the firehose of all tweets, refreshed every few minutes, per geo and per user. The hard parts:
+      <span class="hl">approximate top-K</span> over a high-velocity stream where storing exact counts for every term is impossible;
+      <span class="hl-accent">distinguishing a trend from steady background noise</span> (#love is always common, so it's not trending);
+      and <span class="hl-accent">filtering spam + bot amplification</span> before a coordinated campaign games the list.
+      X/Twitter does ~500M tweets/day, ~6K/sec; trending updates for 400+ geos every ~5 minutes.
+    </p>
+    <div class="hero-tags">
+      <span class="tag accent">⚡ Core: Stream Top-K + Novelty + Anti-Spam</span>
+      <span class="tag">~6K tweets/sec</span>
+      <span class="tag">500M tweets/day</span>
+      <span class="tag">400+ geo scopes</span>
+      <span class="tag">5-min refresh</span>
+    </div>
+  </div>
+
+  <section class="section" id="requirements">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Requirements</h2></div>
+    <div class="req-grid">
+      <div class="req-box">
+        <div class="req-box-head">Functional</div>
+        <ul class="req-list">
+          <li>Identify <span class="hl-accent">trending terms</span> — hashtags, bigrams, named entities — from all tweets</li>
+          <li>Ranking by "trending-ness": how much more frequent NOW than baseline</li>
+          <li>Per-geo trends (country, city), per-language</li>
+          <li><span class="hl-accent">Personalized trends</span> based on user's follow graph + interests</li>
+          <li>Top-10 list refreshed every <span class="hl-accent">~5 min</span> per scope</li>
+          <li>Attach a tweet / summary preview to each trend (what's the story)</li>
+        </ul>
+      </div>
+      <div class="req-box">
+        <div class="req-box-head nonfunc">Non-Functional</div>
+        <ul class="req-list">
+          <li>End-to-end latency from tweet → trends recompute: &lt; <span class="hl">1 min</span></li>
+          <li>Scale to ~6K tweets/sec sustained; peaks 20K+ for major events</li>
+          <li>400+ geo scopes × ~10 languages × personalization → millions of trend lists</li>
+          <li>Resilient to coordinated manipulation (bot rings, hashtag hijacking)</li>
+          <li>Memory-efficient: can't keep exact counts for every term (billions of unique terms)</li>
+          <li>Eventually consistent; approximations are fine if close to truth</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="scale">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Scale Estimation</h2></div>
+    <div class="kv-grid">
+      <div class="kv-card">
+        <div class="kv-k">Tweets / sec (avg)</div>
+        <div class="kv-v">~6K</div>
+        <div class="kv-sub">500M/day ÷ 86,400; peaks 20K during live events</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Tokens / tweet</div>
+        <div class="kv-v">~15</div>
+        <div class="kv-sub">words + hashtags + bigrams after extraction; ~90K token events/sec</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Unique terms / day</div>
+        <div class="kv-v">~50M</div>
+        <div class="kv-sub">most appear &lt;10 times; exact-count table would be ~50 GB/day minimum</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Top-K size</div>
+        <div class="kv-v">K = 10</div>
+        <div class="kv-sub">users see top-10 per list; compute top-100 internally for ranking + dedup</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Refresh interval</div>
+        <div class="kv-v">5 min</div>
+        <div class="kv-sub">trends don't need to flicker every second; 5-min is good UX</div>
+      </div>
+      <div class="kv-card">
+        <div class="kv-k">Geo scopes</div>
+        <div class="kv-v">~450</div>
+        <div class="kv-sub">countries + major cities; each gets its own trends computation</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="api">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">API Design</h2></div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/trends?woeid=23424977</span></div>
+      <p class="ep-desc">Get trends for a Where-On-Earth ID (geo code). Returns <code>{as_of, trends: [{name, volume, preview_tweet_id, url}], locations: [{country, ...}]}</code>. Served from pre-computed cache; &lt; 50 ms response.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/trends/personalized</span></div>
+      <p class="ep-desc">Returns trends ranked by what's relevant to the caller's graph + interests. Requires auth; combines global trending with follow-graph signal.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/search?q=TREND&amp;type=top</span></div>
+      <p class="ep-desc">When user taps a trend: search for that term. Top tweets attached to the trend list come from this search run at trend-refresh time.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/trends/admin/block-term</span> <span style="font-size:10px;color:#888">internal</span></div>
+      <p class="ep-desc">Manually block a term from trending (policy violations, hate speech, spam). Small escape hatch layered on top of ML-based filtering.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/trends/available</span></div>
+      <p class="ep-desc">List all WOEID locations that have trend data. Used by clients to populate the geo picker.</p>
+    </div>
+  </section>
+
+  <section class="section" id="architecture">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Architecture</h2></div>
+    <div class="prose">
+      <p>A streaming pipeline. Tweets flow through Kafka; a <strong>feature extractor</strong> emits term events; a <strong>sketch service</strong> maintains approximate counts per (term, geo, window); a <strong>trend ranker</strong> runs every few minutes to compute top-K per geo, filter spam, pick a preview tweet, and write to the <strong>serving cache</strong>. Clients read from the cache only — no expensive queries on the hot path.</p>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Streaming Pipeline — Firehose to Trends</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 840 470" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Twitter trending architecture">
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="hsl(200,30%,40%)"/>
+            </marker>
+          </defs>
+          <style>
+/* ux-v2-bumped */
+
+            .lbl { font-family:'Geist',sans-serif; font-size: 12px; fill:#111; }
+            .sub { font-family:'JetBrains Mono',monospace; font-size: 10.5px; fill:#555; }
+            .box { fill:#fff; stroke:hsl(200,40%,72%); stroke-width:1.2; rx:6; }
+            .box-accent { fill:hsl(200,80%,94%); stroke:hsl(200,80%,50%); stroke-width:1.5; rx:6; }
+            .box-data { fill:hsl(38,70%,94%); stroke:hsl(38,60%,60%); stroke-width:1.2; rx:6; }
+            .box-kafka { fill:hsl(270,60%,94%); stroke:hsl(270,60%,55%); stroke-width:1.4; rx:6; }
+            .edge { stroke:hsl(200,30%,40%); stroke-width:1.2; fill:none; }
+          </style>
+
+          <rect x="20" y="30" width="110" height="50" class="box"/>
+          <text x="75" y="52" text-anchor="middle" class="lbl">Tweet svc</text>
+          <text x="75" y="67" text-anchor="middle" class="sub">firehose source</text>
+
+          <rect x="160" y="30" width="110" height="50" class="box-kafka"/>
+          <text x="215" y="52" text-anchor="middle" class="lbl">Kafka: tweets</text>
+          <text x="215" y="67" text-anchor="middle" class="sub">~6K/sec</text>
+
+          <rect x="300" y="30" width="130" height="50" class="box-accent"/>
+          <text x="365" y="52" text-anchor="middle" class="lbl">Feature extractor</text>
+          <text x="365" y="67" text-anchor="middle" class="sub">tokens + entities</text>
+
+          <rect x="460" y="30" width="110" height="50" class="box-kafka"/>
+          <text x="515" y="52" text-anchor="middle" class="lbl">Kafka: terms</text>
+          <text x="515" y="67" text-anchor="middle" class="sub">~90K/sec</text>
+
+          <rect x="600" y="30" width="110" height="50" class="box-accent"/>
+          <text x="655" y="52" text-anchor="middle" class="lbl">Spam filter</text>
+          <text x="655" y="67" text-anchor="middle" class="sub">ML scorer</text>
+
+          <rect x="740" y="30" width="80" height="50" class="box-data"/>
+          <text x="780" y="52" text-anchor="middle" class="lbl">User reps</text>
+          <text x="780" y="67" text-anchor="middle" class="sub">bot scores</text>
+
+          <rect x="300" y="120" width="130" height="60" class="box-accent"/>
+          <text x="365" y="142" text-anchor="middle" class="lbl">Sketch svc</text>
+          <text x="365" y="158" text-anchor="middle" class="sub">CountMin + TopK</text>
+          <text x="365" y="172" text-anchor="middle" class="sub">per (term, geo, window)</text>
+
+          <rect x="460" y="120" width="130" height="60" class="box-data"/>
+          <text x="525" y="142" text-anchor="middle" class="lbl">Redis / in-mem</text>
+          <text x="525" y="158" text-anchor="middle" class="sub">sketches 5-min windows</text>
+
+          <rect x="620" y="120" width="130" height="60" class="box-accent"/>
+          <text x="685" y="142" text-anchor="middle" class="lbl">Trend ranker</text>
+          <text x="685" y="158" text-anchor="middle" class="sub">score + dedup + LLM</text>
+          <text x="685" y="172" text-anchor="middle" class="sub">runs every 5 min</text>
+
+          <rect x="20" y="220" width="130" height="50" class="box"/>
+          <text x="85" y="242" text-anchor="middle" class="lbl">Historical baseline</text>
+          <text x="85" y="257" text-anchor="middle" class="sub">EMA of past 7 days</text>
+
+          <rect x="180" y="220" width="130" height="50" class="box-data"/>
+          <text x="245" y="242" text-anchor="middle" class="lbl">Cassandra</text>
+          <text x="245" y="257" text-anchor="middle" class="sub">term history</text>
+
+          <rect x="340" y="220" width="130" height="50" class="box-accent"/>
+          <text x="405" y="242" text-anchor="middle" class="lbl">Preview picker</text>
+          <text x="405" y="257" text-anchor="middle" class="sub">pick tweet / LLM desc</text>
+
+          <rect x="500" y="220" width="130" height="50" class="box-data"/>
+          <text x="565" y="242" text-anchor="middle" class="lbl">Trend cache</text>
+          <text x="565" y="257" text-anchor="middle" class="sub">Redis: top-K per geo</text>
+
+          <rect x="660" y="220" width="160" height="50" class="box-accent"/>
+          <text x="740" y="242" text-anchor="middle" class="lbl">Personalization svc</text>
+          <text x="740" y="257" text-anchor="middle" class="sub">rerank per user</text>
+
+          <rect x="20" y="310" width="110" height="50" class="box"/>
+          <text x="75" y="332" text-anchor="middle" class="lbl">Client</text>
+          <text x="75" y="347" text-anchor="middle" class="sub">GET /trends</text>
+
+          <rect x="160" y="310" width="110" height="50" class="box-accent"/>
+          <text x="215" y="332" text-anchor="middle" class="lbl">API gateway</text>
+          <text x="215" y="347" text-anchor="middle" class="sub">geo detect</text>
+
+          <rect x="300" y="310" width="110" height="50" class="box"/>
+          <text x="355" y="332" text-anchor="middle" class="lbl">Trends svc</text>
+          <text x="355" y="347" text-anchor="middle" class="sub">cache reader</text>
+
+          <path class="edge" d="M130,55 L160,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M270,55 L300,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M430,55 L460,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M570,55 L600,55" marker-end="url(#arr)"/>
+          <path class="edge" d="M740,55 L655,80" marker-end="url(#arr)"/>
+          <path class="edge" d="M655,80 L365,120" marker-end="url(#arr)"/>
+          <path class="edge" d="M430,150 L460,150" marker-end="url(#arr)"/>
+          <path class="edge" d="M590,150 L620,150" marker-end="url(#arr)"/>
+          <path class="edge" d="M245,220 L685,185" marker-end="url(#arr)"/>
+          <path class="edge" d="M150,245 L180,245" marker-end="url(#arr)"/>
+          <path class="edge" d="M685,180 L405,220" marker-end="url(#arr)"/>
+          <path class="edge" d="M470,245 L500,245" marker-end="url(#arr)"/>
+          <path class="edge" d="M630,245 L660,245" marker-end="url(#arr)"/>
+          <path class="edge" d="M130,335 L160,335" marker-end="url(#arr)"/>
+          <path class="edge" d="M270,335 L300,335" marker-end="url(#arr)"/>
+          <path class="edge" d="M410,335 L500,285" marker-end="url(#arr)"/>
+          <path class="edge" d="M410,335 L660,280" marker-end="url(#arr)"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Deep Dive — Top-K on a Firehose + "Trending" as Deviation</h2></div>
+    <div class="prose">
+      <p>Naive top-K: keep a dict term→count; at refresh time, sort and take top 10. Breaks immediately — at 90K term-events/sec, the dict is 50M+ unique keys/day; sorting 50M entries per geo per minute is untenable.</p>
+
+      <p><strong>Count-Min Sketch + heavy-hitter tracker.</strong> A Count-Min Sketch is a probabilistic counter: constant memory, approximate counts with small over-estimation bias. Paired with a bounded min-heap of top-K heavy hitters, it gives us top-K in fixed memory.</p>
+
+      <ul>
+        <li><strong>On each term event:</strong> increment CMS for (term, geo, window) → get approximate count. If count &gt; current min-heap threshold, add/update in heap.</li>
+        <li><strong>Memory footprint:</strong> a CMS with 4 hash functions × 1M counters ≈ 16 MB per (geo, window). Acceptable for hundreds of geos.</li>
+        <li><strong>Window management:</strong> sliding 5-minute window. Old sketches age out as new ones accumulate.</li>
+      </ul>
+
+      <p><strong>"Trending" means deviation from baseline, not raw volume.</strong> #love is frequent every day — it's not news. A new spike of a previously-rare term IS news. Rank by:</p>
+      <div class="callout">
+        <p><strong>trend_score(term, geo) = current_rate(term, geo) / ema_7day_rate(term, geo)</strong></p>
+      </div>
+      <p>This EMA (exponentially-weighted moving average) is the baseline — cached per (term, geo) for frequent terms, defaulted for never-before-seen ones. The ratio metric surfaces true spikes, not the ambient background.</p>
+
+      <div class="diagram-wrap">
+        <div class="diagram-head">
+          <span class="diagram-label">Trending Score Computation</span>
+          <span class="diagram-type">Mermaid</span>
+        </div>
+        <div class="diagram-body">
+          <div class="mermaid">
+flowchart LR
+    T[Tweet] --> X[Extractor<br/>tokens+entities]
+    X --> S[Spam filter<br/>bot score]
+    S -->|pass| C[CMS counter<br/>5-min window]
+    C --> H[Heavy-hitter<br/>min-heap]
+    H --> R[Ranker<br/>current/baseline]
+    B[Baseline EMA<br/>past 7 days] --> R
+    R --> D[Dedup & filter<br/>policy block]
+    D --> P[Preview picker<br/>top tweet / LLM]
+    P --> K[Trend cache<br/>Redis per geo]
+          </div>
+        </div>
+      </div>
+
+      <p><strong>Spam / bot filtering.</strong> Bots can trivially game raw counts. Each user has a <em>user reputation score</em> (follower ratio, age, engagement authenticity signals); a tweet's contribution is weighted. Additionally, term events are deduped by near-hash (prevent copy-paste spam) and clustered by author — if 100 tweets come from 10 accounts with follow-overlap = 1.0, that's a bot ring; down-weight drastically.</p>
+
+      <p><strong>Dedup + entity resolution.</strong> "#BarackObama", "#Obama", "Barack Obama" should merge. Entity resolution via a lightweight NLP pipeline (knowledge-graph lookup + fuzzy matching) clusters surface forms into canonical trends. Otherwise the top-10 is noisy and overlapping.</p>
+
+      <p><strong>Preview pick.</strong> Once ranker decides a term is trending, it runs a quick search for recent high-engagement tweets matching that term; picks one as the preview. Modern systems (2024+) use an LLM to write a 1-line summary ("Markets tumbled after the Fed's rate announcement") instead of just picking a tweet.</p>
+
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"Firehose of tweets → Kafka. A feature extractor emits per-term events into a second topic. Each event hits a Count-Min Sketch per (term, geo, 5-min window) with a min-heap tracking top-100 heavy hitters. Every 5 min, a ranker computes <em>trending score = current_rate / 7-day EMA baseline</em>, filters spam via weighted user reputation, dedupes entity surface forms, picks a preview tweet (or LLM summary), and writes top-10 per geo to a Redis cache. Clients read from cache only."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Tradeoffs &amp; Design Choices</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Approximate (CMS) vs exact counts.</strong> Exact counts require 10–100× more memory for no meaningful accuracy gain in top-K. CMS's 1–5% over-estimation is invisible at top-K granularity.</li>
+        <li><strong>Raw frequency vs deviation ranking.</strong> Raw frequency = "#love always wins." Deviation (current / baseline) is what makes trends feel like news. But deviation is noisy for low-count terms; floor the rate to avoid "brand new term with 10 tweets beats viral trend with 100K" false positives.</li>
+        <li><strong>5-min windows vs 1-min or 1-hour.</strong> 5 min is the UX sweet spot: responsive but stable. 1 min causes flicker; 1 hour misses breaking news. Keep multiple window sizes if needed for different products.</li>
+        <li><strong>Geo detection.</strong> IP-geo for anonymous users; profile location for logged-in. Both are unreliable. Mitigation: use multiple signals + cluster by language; don't show "#MelbourneCupDay" globally.</li>
+        <li><strong>Centralized ranker vs distributed.</strong> Ranking every geo from one process is simpler; distributing by geo shards is necessary at planet scale. Each geo computes its own top-K; a thin aggregator handles global/cross-geo "world" trends.</li>
+        <li><strong>Human-in-the-loop.</strong> ML alone isn't enough. Teams maintain deny-lists for slurs, false positives, obvious manipulation. Be explicit about this in interviews — pretending ML solves content safety is naive.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="failures">
+    <div class="section-head"><span class="section-n">08</span><h2 class="section-title">Failure Modes</h2></div>
+    <div class="failure">
+      <div class="failure-icon">🤖</div>
+      <div>
+        <div class="failure-title">Coordinated hashtag campaign</div>
+        <div class="failure-desc">Bot ring pushes #FakeOutrage to trending with 10K tweets from 50 bot accounts over 10 min.</div>
+        <div class="mitigation">→ Mitigation: author-diversity metric — require trend to have &gt;N unique non-correlated authors. Low-reputation accounts weighted 10× less. Suspected coordinated accounts clustered by graph embedding.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">📉</div>
+      <div>
+        <div class="failure-title">Trend-ranker pipeline falls behind</div>
+        <div class="failure-desc">Kafka consumer lag grows during a major event (World Cup goal). Trends show 30 min stale.</div>
+        <div class="mitigation">→ Mitigation: horizontally scale consumer workers; partition by geo so no single partition bottlenecks; alerting on pipeline lag triggers auto-scale.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🔄</div>
+      <div>
+        <div class="failure-title">Zombie trends from EMA staleness</div>
+        <div class="failure-desc">A term spikes, baseline EMA catches up, trend_score → 1, but term is still in top-K because current rate is still high.</div>
+        <div class="mitigation">→ Mitigation: momentum decay — subtract penalty for trends already shown &gt;N minutes. Short-circuit trends with no growth (d/dt current_rate &lt; 0) after some time.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🧹</div>
+      <div>
+        <div class="failure-title">Slur or policy-violation term trends</div>
+        <div class="failure-desc">A horrific term trends due to news coverage or targeted campaign. Platform liability + safety problem.</div>
+        <div class="mitigation">→ Mitigation: admin deny-list; ML classifier for hate/violence/etc; trend results always pass through a safety filter before cache write; ops team on-call to manually block edge cases.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">🌍</div>
+      <div>
+        <div class="failure-title">Geo mis-attribution</div>
+        <div class="failure-desc">Most tweets lack precise geo. IP-based detection is wrong for VPN users. Mumbai-specific trend shows up in Bangalore.</div>
+        <div class="mitigation">→ Mitigation: combine IP + user-profile location + language heuristics; default to country-level when city confidence is low; show "Country trends" when precise geo is unknown.</div>
+      </div>
+    </div>
+    <div class="failure">
+      <div class="failure-icon">📸</div>
+      <div>
+        <div class="failure-title">Preview tweet becomes inappropriate</div>
+        <div class="failure-desc">Chosen preview tweet later violates policy (edited, deleted, reported). Users see a now-stale or offensive snippet.</div>
+        <div class="mitigation">→ Mitigation: preview has TTL; regenerated at next refresh; deletion events invalidate cache immediately. Fallback to LLM-generated neutral summary when no high-quality tweet found.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="interview-tips">
+    <div class="section-head"><span class="section-n">09</span><h2 class="section-title">Interview Tips</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>Lead with streaming top-K + CMS.</strong> Candidates who say "store counts in a DB and sort" fail here. The probabilistic data structure answer is expected.</li>
+        <li><strong>Clarify "trending" early.</strong> Deviation from baseline, not raw volume. This single sentence separates good from great answers.</li>
+        <li><strong>Anti-spam / anti-bot is load-bearing.</strong> Often skipped. Mention user-reputation weighting + author-diversity constraint.</li>
+        <li><strong>Geo scoping + personalization are separate concerns.</strong> Geo is pre-compute; personalization is runtime-rerank on top of geo's top-K. Don't mush them together.</li>
+        <li><strong>LLM-generated trend summaries is modern.</strong> Shows you know the 2024+ state of the art; a generic trend-picking design sounds dated.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="similar">
+    <div class="section-head"><span class="section-n">10</span><h2 class="section-title">Similar Problems</h2></div>
+    <div class="similar-grid">
+      <a href="../002-news-feed/index.html" class="similar-card"><h4>Twitter / News Feed</h4><p>Same firehose as input; different output product</p></a>
+      <a href="../leaderboard/index.html" class="similar-card"><h4>Leaderboard</h4><p>Top-K ranking with different score function</p></a>
+      <a href="../count-active-users/index.html" class="similar-card"><h4>Count Active Users</h4><p>Streaming cardinality with HLL (cousin of CMS)</p></a>
+      <a href="../recommendation-algorithm/index.html" class="similar-card"><h4>Recommendation Algorithm</h4><p>Personalization layer on top of popularity</p></a>
+      <a href="../search-engine/index.html" class="similar-card"><h4>Search Engine</h4><p>Query-log heavy-hitter analytics</p></a>
+    </div>
+  </section>
+
+  <section class="section" id="evolution">
+    <div class="section-head"><span class="section-n">11</span><h2 class="section-title">Evolution</h2></div>
+    <div class="evolution-step">
+      <div class="evolution-marker">1</div>
+      <div class="evolution-content">
+        <h4>MVP — exact counts in Redis</h4>
+        <p>Hashmap of term → count with per-minute buckets. Sort + take top 10. Works to ~10M tweets/day.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">2</div>
+      <div class="evolution-content">
+        <h4>Count-Min Sketch + top-K heap</h4>
+        <p>Switch to probabilistic counts. Handle ~100M+ unique terms/day in fixed memory. Per-geo sketches.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">3</div>
+      <div class="evolution-content">
+        <h4>Deviation-based ranking + EMA baseline</h4>
+        <p>"Trending" = current / baseline. No more "#love tops every day." 7-day EMA cached per (term, geo).</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">4</div>
+      <div class="evolution-content">
+        <h4>Spam filtering + entity resolution</h4>
+        <p>User-reputation-weighted counts. Bot-ring detection via graph clustering. Entity merging for surface-form variants.</p>
+      </div>
+    </div>
+    <div class="evolution-step">
+      <div class="evolution-marker">5</div>
+      <div class="evolution-content">
+        <h4>Personalized + LLM summaries</h4>
+        <p>Trends reranked per user based on follow graph and interests. LLM generates 1-line description per trend ("Markets tumbled after Fed rate cut"). Modern X Explore tab.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const FLOW_NODES = [
+  { label: 'Firehose',      sub: 'all tweets' },
+  { label: 'Extractor',     sub: 'tokens + entities' },
+  { label: 'Spam filter',   sub: 'bot-score weight' },
+  { label: 'CMS + top-K',   sub: 'per (term,geo,win)' },
+  { label: 'EMA baseline',  sub: 'past 7d' },
+  { label: 'Ranker',        sub: 'current/baseline' },
+  { label: 'Cache',         sub: 'top-10 per geo' },
+];
+const FLOW_DESCS = [
+  'Every tweet flows through Kafka firehose at ~6K/sec (20K peak)',
+  'Extractor emits (term, geo, author_id, ts) events; ~90K/sec',
+  'Low-reputation authors weighted 10× less; author-diversity enforced',
+  'CMS increments per term in 5-min window; top-100 tracked in min-heap',
+  '7-day EMA baseline rate fetched per (term, geo) for novelty math',
+  'trend_score = current_rate / baseline_rate; filter low-count floor',
+  'Top-10 per geo + preview tweet written to Redis; clients read only from here',
+];
+</script>
+
+</body>
+</html>

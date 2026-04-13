@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Request Hedging — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 280; --accent-s: 60%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Your service makes 5 backend calls per user request. Each call has a P99 of 50ms — sounds great. But the <em>combined</em> P99 is much worse: even one slow call ruins the request. With 5 calls, the chance of <em>at least one</em> being a P99 outlier is roughly 5%. <strong>Tail latency dominates user experience</strong>, and reducing it is mathematically harder than reducing average latency.</p>
+      <p><strong>Request hedging</strong> (Jeff Dean, "The Tail at Scale", 2013) is the elegant trick: send the same request to <em>two</em> replicas; take whichever responds first; cancel the other. Tail latency drops dramatically because one slow replica no longer slows you.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The math</h2></div>
+    <div class="prose">
+      <p>Replica P99 = 50ms means 1% of requests take ≥ 50ms. Send to 2 independent replicas; both must be slow for you to be slow. P[both slow] = 0.01 × 0.01 = 0.0001. <strong>Hedged P99 ≈ replica P99.99</strong> — two orders of magnitude tighter.</p>
+      <p>For 3 replicas, the chance both/all are slow drops to 10⁻⁶. Diminishing returns kick in fast — most systems use 2-way hedging.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">How to hedge without 2× cost</h2></div>
+    <div class="prose">
+      <p>Naive hedging doubles backend traffic. Server-side load doubles. Defeats the purpose of having multiple replicas.</p>
+      <p><strong>Tied requests</strong> (Google's variant): send the request to replica A. Wait a short delay (e.g., 95th-percentile latency = 25ms). If no response yet, send to replica B with a "this is hedged" flag. Replicas coordinate: when one starts processing, it notifies the other to abort.</p>
+      <p>Result: under normal conditions, only one request runs. The hedged second request only fires when the first is unusually slow — covering the slow tail without doubling load.</p>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head"><span class="diagram-label">Hedged Request Timing</span><span class="diagram-type">Mermaid</span></div>
+      <div class="diagram-body">
+        <div class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant A as Replica A
+    participant B as Replica B
+
+    C->>A: request (t=0)
+    Note over C: Wait ≤ 25ms (P95)
+    Note over A: A is slow today (GC pause)
+    C->>B: hedged request (t=25ms)
+    A-->>B: cancel signal
+    B->>B: process
+    B-->>C: response (t=40ms)
+    Note over C: Saved ~10ms — A might have taken 80ms
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">When hedging works (and doesn't)</h2></div>
+    <div class="prose">
+      <p><strong>Works for:</strong></p>
+      <ul>
+        <li>Idempotent reads — re-asking is safe.</li>
+        <li>Fan-out queries (search, recommendation) — already querying many replicas.</li>
+        <li>Latency-critical paths — where saving tail latency justifies coordination cost.</li>
+      </ul>
+      <p><strong>Don't hedge:</strong></p>
+      <ul>
+        <li><strong>Mutations</strong> (POST/PUT/DELETE) — would execute twice. Use <a href="/concepts/idempotency">idempotency keys</a> if you must.</li>
+        <li><strong>Expensive operations</strong> — running a 10-second analytics query twice eats 20 seconds of CPU; the hedge isn't free.</li>
+        <li><strong>When all replicas are correlated</strong> — if they're all slow due to a common cause (overloaded shared dependency), hedging multiplies the load on the bottleneck.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — Google's tail-at-scale techniques</h2></div>
+    <div class="prose">
+      <p>Jeff Dean's 2013 paper "The Tail at Scale" laid out a family of related techniques to fight tail latency:</p>
+      <ul>
+        <li><strong>Hedged requests</strong> — described above.</li>
+        <li><strong>Tied requests</strong> — hedging variant where replicas cancel each other; near-zero overhead in the common case.</li>
+        <li><strong>Probing for free capacity</strong> — instead of hedging, route around busy replicas by querying load before sending. Avoids hedge entirely.</li>
+        <li><strong>Micro-partitioning</strong> — make each shard small enough that one node can hold dozens; failure is fine-grained, not catastrophic.</li>
+        <li><strong>Selective replication</strong> — keep extra replicas of "hot" data so reads have many sources to choose from.</li>
+        <li><strong>Late-binding</strong> — defer the choice of which replica to query until the last moment, so you can pick the fastest.</li>
+      </ul>
+      <p>Google search's sub-200ms latency is built on these techniques layered. Without them, querying 1000 shards across hundreds of machines would have a tail latency in the seconds.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">Interview cite</div>
+        <p>"For tail-sensitive reads — autocomplete, search, recommendations — we use tied hedged requests. Wait until P95, then dispatch a backup; replicas coordinate to cancel the loser. P99 latency drops to roughly the replica's P99.99."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Google search</div><h4>Hedging at every layer</h4><p>Search is a planet-scale fan-out across thousands of replicas. Hedging is not optional — without it, tail latency would dominate.</p></div>
+      <div class="rw-card"><div class="rw-name">Cassandra speculative retry</div><h4>Built-in</h4><p>Configurable per table. After P95, query an additional replica. Same idea, baked into the DB.</p></div>
+      <div class="rw-card"><div class="rw-name">gRPC retries with backoff</div><h4>Spec-level support</h4><p>gRPC's retry policy allows hedging — multiple parallel attempts with deadline coordination.</p></div>
+      <div class="rw-card"><div class="rw-name">Envoy</div><h4>Hedge policies</h4><p>Configure per-route: number of hedge requests, delay before triggering, max attempts. No app changes.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Typeahead suggestions hedges across replica caches to keep P99 under 100ms. Yelp / Google Places hedges location-shard queries. News feed hedges fan-out reads. Stock trading hedges quote lookups across redundant matchers.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

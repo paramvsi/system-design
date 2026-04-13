@@ -1,0 +1,65 @@
+{
+  "slug": "api-protocols-rest-graphql-grpc",
+  "title": "REST vs GraphQL vs gRPC",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 330,
+    "s": 60,
+    "l": 50
+  },
+  "category": "Networking & Delivery",
+  "blurb": "Picking an API protocol shapes your client experience, your throughput, your tooling, and your caching story for years. \"We'll use REST\" is the lazy default, often the wrong one. gRPC is 7× faster but kills browser usabi",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>Picking an API protocol shapes your client experience, your throughput, your tooling, and your caching story for years. \"We'll use REST\" is the lazy default, often the wrong one. gRPC is 7× faster but kills browser usability. GraphQL solves over-fetching but introduces N+1 query problems. Each protocol was designed to solve a specific pain — know which pain you have.</p>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "The three at a glance",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The three at a glance</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Protocol</th><th>Encoding</th><th>Schema</th><th>Ideal use</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">REST</td><td>JSON over HTTP/1.1 or /2</td><td>Optional (OpenAPI / Swagger)</td><td>Public APIs, CRUD, browser clients</td></tr>\n        <tr><td class=\"algo-name\">GraphQL</td><td>JSON over HTTP (usually POST /graphql)</td><td>Required (typed schema)</td><td>Client-flexible queries, mobile data-saving, aggregation layer</td></tr>\n        <tr><td class=\"algo-name\">gRPC</td><td>Protobuf over HTTP/2</td><td>Required (<code>.proto</code> file)</td><td>Internal service-to-service, high-throughput, streaming</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "REST — and its limits",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">REST — and its limits</h2></div>\n    <div class=\"prose\">\n      <p>Resources addressed by URL, verbs (GET/POST/PUT/DELETE) as operations. Stateless, cacheable, human-readable.</p>\n      <p><strong>Strengths:</strong> every developer knows it. HTTP caching works out of the box. Browsers handle it natively. Tools (curl, Postman, jq) just work.</p>\n      <p><strong>Weaknesses:</strong></p>\n      <ul>\n        <li><strong>Over-fetching</strong> — you wanted the user's name; you got their entire profile + preferences + metadata. Mobile clients pay for bytes they don't use.</li>\n        <li><strong>Under-fetching</strong> — your screen needs 3 resources; client makes 3 round-trips. Common fix: build a BFF (<a href=\"/concepts/api-gateway\">backend-for-frontend</a>) that aggregates.</li>\n        <li><strong>No schema enforcement by default</strong> — typo in a field name = runtime bug. OpenAPI helps but isn't universal.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "GraphQL — ask for exactly what you need",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">GraphQL — ask for exactly what you need</h2></div>\n    <div class=\"prose\">\n      <p>One endpoint. Client sends a query specifying exactly which fields of which types it wants. Server returns exactly that — no more, no less.</p>\n      <pre style=\"background:#f4f3f0;padding:12px;border-radius:6px;font-size:12px;font-family:var(--font-mono);overflow-x:auto\">{\n  user(id: 42) {\n    name\n    posts(limit: 5) {\n      title\n      comments { author, text }\n    }\n  }\n}</pre>\n      <p>One round-trip replaces 3-5. Mobile clients ship far fewer bytes. Backend can evolve fields freely — adding a field doesn't break old clients because they don't ask for it.</p>\n      <p><strong>Catches:</strong></p>\n      <ul>\n        <li><strong>N+1 query problem</strong> — \"posts + comments\" can turn into 1 + N + M DB queries. Requires <code>DataLoader</code>-style batching.</li>\n        <li><strong>Caching is hard</strong> — GET-cacheable only via persisted queries. Browsers/CDNs don't natively cache POSTs.</li>\n        <li><strong>Rate limiting is hard</strong> — cost can't be determined by path; needs query complexity analysis.</li>\n        <li><strong>Authorization is field-level</strong> — every field needs permission checks. More complex than REST's endpoint-level model.</li>\n      </ul>\n      <p>Best for: client-flexible data (mobile apps), aggregator layers over multiple microservices, internal dashboards. Shopify, GitHub, Facebook expose GraphQL APIs.</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — gRPC, the performance choice",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — gRPC, the performance choice</h2></div>\n    <div class=\"prose\">\n      <p>gRPC uses Protocol Buffers (binary, schema-defined) over HTTP/2. Compared to REST+JSON:</p>\n      <ul>\n        <li><strong>~5–7× smaller payloads</strong> (binary vs text).</li>\n        <li><strong>~3–5× faster to serialize/parse</strong> (native-typed decoding vs JSON tree walking).</li>\n        <li><strong>Multiplexed over HTTP/2</strong> — 100 concurrent calls on one TCP connection.</li>\n        <li><strong>Bidirectional streaming</strong> — <code>stream Request</code> → <code>stream Response</code>. Essential for server-push APIs.</li>\n        <li><strong>Code generation</strong> from <code>.proto</code> for every major language. Typed client in seconds.</li>\n      </ul>\n      <p><strong>But:</strong> it doesn't work in browsers natively (needs gRPC-Web proxy). Intermediaries (LBs, debuggers, humans) can't read requests without protoc. HTTP caching doesn't apply. So gRPC's sweet spot is <strong>internal, high-RPS service-to-service</strong>. External APIs usually stay REST or GraphQL.</p>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">The modern stack</div>\n        <p>REST for public APIs. GraphQL as the aggregation layer for mobile + SPA clients. gRPC between internal services. Each tool plays to its strength; hybrid stacks are normal at scale.</p>\n      </div>\n    </div>\n\n    <div class=\"diagram-wrap\">\n      <div class=\"diagram-head\">\n        <span class=\"diagram-label\">Benchmark — Same Payload, Different Protocols</span>\n        <span class=\"diagram-type\">Real-world numbers</span>\n      </div>\n      <div class=\"diagram-body\">\n        <table class=\"algo-table\" style=\"margin:0\">\n          <thead><tr><th>Metric</th><th>REST + JSON</th><th>GraphQL + JSON</th><th>gRPC + Protobuf</th></tr></thead>\n          <tbody>\n            <tr><td class=\"algo-name\">Payload size (1 user obj)</td><td>~450 B</td><td>~280 B (only requested fields)</td><td>~80 B</td></tr>\n            <tr><td class=\"algo-name\">Serialize CPU</td><td>~3 μs</td><td>~3 μs</td><td>~0.5 μs</td></tr>\n            <tr><td class=\"algo-name\">P50 latency (intra-DC)</td><td>~1.2 ms</td><td>~1.5 ms</td><td>~0.3 ms</td></tr>\n            <tr><td class=\"algo-name\">Throughput per core</td><td>~25k RPS</td><td>~18k RPS</td><td>~80k RPS</td></tr>\n            <tr><td class=\"algo-name\">Browser support</td><td>Native</td><td>Native (via fetch)</td><td>gRPC-Web proxy required</td></tr>\n            <tr><td class=\"algo-name\">Streaming</td><td>SSE bolt-on</td><td>Subscriptions (WS)</td><td>Native bidirectional</td></tr>\n            <tr><td class=\"algo-name\">Tooling maturity</td><td>Excellent (curl, Postman)</td><td>Good (GraphiQL)</td><td>Hard to inspect (binary)</td></tr>\n          </tbody>\n        </table>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Stripe</div><h4>REST + OpenAPI</h4><p>Every Stripe API is REST. Strict versioning, webhooks. The gold standard for public REST APIs.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">GitHub</div><h4>REST v3 + GraphQL v4</h4><p>Both supported. GraphQL endpoint lets third-party clients fetch exactly the fields they need.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Shopify Storefront</div><h4>GraphQL</h4><p>Their public API is GraphQL-first — allows themes and headless storefronts to query what they need.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Google / Netflix internal</div><h4>gRPC</h4><p>Inside both, almost every service call is gRPC. Public-facing APIs are usually REST with an internal gRPC implementation.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>News feed backend uses gRPC between microservices; exposes REST/GraphQL to mobile clients. E-commerce uses REST publicly + gRPC internally. Uber uses gRPC for driver app ↔ dispatch (low-latency streaming).</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

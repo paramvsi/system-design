@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Autoscaling — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 140; --accent-s: 60%; --accent-l: 42%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Traffic is spiky. Your e-commerce site does 1000 RPS on a Tuesday afternoon and 15,000 RPS during Black Friday. Static provisioning is wasteful (pay for peak capacity 24/7) or risky (provision for average, die during spikes). <strong>Autoscaling</strong> — adding/removing instances based on live load — is the ops problem that replaces "capacity planning" with "set up the metric and walk away."</p>
+      <p>It looks simple ("scale when CPU &gt; 70%"). It isn't. Tune it wrong and you get thrash, slow response to spikes, unnecessary AWS bills, or cascading failures.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The three strategies</h2></div>
+    <div class="tradeoff-grid">
+      <div class="tradeoff-option chosen">
+        <div class="tradeoff-label">Reactive</div>
+        <h4>Scale when a metric crosses a threshold</h4>
+        <p>"Scale up when CPU &gt; 70%; scale down when CPU &lt; 30%." Simple. Fast enough for most workloads. Metric lag + instance startup time mean real spikes hurt — you're always a minute behind.</p>
+      </div>
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">Predictive / scheduled</div>
+        <h4>Pre-scale for known patterns</h4>
+        <p>"Every weekday at 8:30am, traffic triples — scale up at 8:15am." Uses historical traffic shapes (ML or manual schedules). Great when patterns are stable. Useless for unexpected viral spikes.</p>
+      </div>
+      <div class="tradeoff-option">
+        <div class="tradeoff-label">Target tracking</div>
+        <h4>Maintain a metric at a setpoint</h4>
+        <p>"Keep average CPU at 50%." The autoscaler uses PID-like control to add/remove instances. Smoother than pure reactive; production-ready. AWS ALB + target tracking is the default in 2025.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">What metric to scale on</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Metric</th><th>Reflects</th><th>Catch</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">CPU usage</td><td>Compute-bound work</td><td>Irrelevant for I/O-bound services (80% idle waiting for DB)</td></tr>
+        <tr><td class="algo-name">Request count / RPS</td><td>Traffic volume</td><td>Ignores request cost variance — one expensive request ≠ one cheap one</td></tr>
+        <tr><td class="algo-name">Latency P99</td><td>User-perceived slowness</td><td>Scales after users already felt pain</td></tr>
+        <tr><td class="algo-name">Queue depth</td><td>Backlog of pending work</td><td>Only meaningful if you have an actual queue in front</td></tr>
+        <tr><td class="algo-name">Active connections</td><td>Load on persistent-connection services</td><td>Best for WebSocket / DB proxy tiers</td></tr>
+        <tr><td class="algo-name">Custom (e.g., GPU util)</td><td>Specific bottleneck</td><td>Requires custom metric pipeline</td></tr>
+      </tbody>
+    </table>
+    <div class="prose">
+      <p>For a typical web API: <strong>request count per instance</strong> is usually the cleanest signal. CPU is noisy; latency is too lagging. Combine: primary metric = RPS/instance; secondary = P99 latency as a safety trigger.</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Deep dive — the four operational traps</h2></div>
+    <div class="prose">
+      <p><strong>1. Scale-up latency.</strong> Instance boot + warmup (JVM, connection pool, cache population) = 30–120 seconds. Your traffic doubled 10 seconds ago; you still have old capacity. Mitigation: <strong>target utilization below 100%</strong> (60–70%) so headroom absorbs spikes while new instances boot. Keep a warm pool in critical systems.</p>
+      <p><strong>2. Thrashing.</strong> CPU alternates between 75% and 65%. Threshold-based autoscaler adds, then removes, then adds... <strong>Cooldown periods</strong> (wait 5 min after scaling before scaling again) and <strong>hysteresis</strong> (scale up at 75%, scale down at 45% — different thresholds) prevent this.</p>
+      <p><strong>3. Cascading scale.</strong> API tier scales up → hits the database → DB saturates → everyone's latency spikes → autoscaler adds more API instances → DB dies faster. Every downstream must either scale too or have backpressure. <a href="/concepts/circuit-breaker">Circuit breakers</a> are your friend.</p>
+      <p><strong>4. Cost explosions.</strong> A bug makes every request take 10× longer. CPU stays high; autoscaler adds instances; bill doubles overnight. <strong>Set hard maxes.</strong> Every autoscale group needs an upper bound — even if "upper bound hit" means users see 503, that's cheaper than a $50k surprise.</p>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Thrashing — Single Threshold vs Hysteresis + Cooldown</span>
+        <span class="diagram-type">SVG</span>
+      </div>
+      <div class="diagram-body">
+        <svg class="arch-svg" viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg">
+          <g font-family="Geist, system-ui, sans-serif" font-size="11">
+            <!-- Top: thrashing -->
+            <text x="20" y="22" font-weight="500" fill="hsl(0,70%,40%)">Single threshold (70%) — thrashes every 2 min</text>
+            <line x1="40" y1="100" x2="700" y2="100" stroke="#ccc9c4" stroke-dasharray="3 3"/>
+            <text x="34" y="104" text-anchor="end" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">70%</text>
+            <!-- CPU oscillation -->
+            <polyline points="40,90 100,60 160,110 220,70 280,115 340,65 400,108 460,72 520,112 580,68 640,110 700,75" stroke="hsl(0,70%,55%)" stroke-width="2" fill="none"/>
+            <!-- Scale events (markers) -->
+            <g fill="hsl(0,70%,40%)">
+              <circle cx="100" cy="60" r="3"/>
+              <circle cx="220" cy="70" r="3"/>
+              <circle cx="340" cy="65" r="3"/>
+              <circle cx="460" cy="72" r="3"/>
+              <circle cx="580" cy="68" r="3"/>
+              <text x="100" y="48" text-anchor="middle" font-size="8">+1</text>
+              <text x="220" y="58" text-anchor="middle" font-size="8">+1</text>
+              <text x="340" y="53" text-anchor="middle" font-size="8">+1</text>
+              <text x="460" y="60" text-anchor="middle" font-size="8">+1</text>
+              <text x="580" y="56" text-anchor="middle" font-size="8">+1</text>
+            </g>
+            <g fill="hsl(0,70%,40%)" font-family="JetBrains Mono, monospace">
+              <text x="160" y="129" text-anchor="middle" font-size="8">-1</text>
+              <text x="280" y="134" text-anchor="middle" font-size="8">-1</text>
+              <text x="400" y="127" text-anchor="middle" font-size="8">-1</text>
+              <text x="520" y="131" text-anchor="middle" font-size="8">-1</text>
+              <text x="640" y="129" text-anchor="middle" font-size="8">-1</text>
+            </g>
+
+            <!-- Bottom: hysteresis -->
+            <text x="20" y="170" font-weight="500" fill="hsl(145,55%,28%)">Scale up @ 75%, down @ 45% + 5min cooldown — stable</text>
+            <line x1="40" y1="220" x2="700" y2="220" stroke="#ccc9c4" stroke-dasharray="3 3"/>
+            <text x="34" y="224" text-anchor="end" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">75%</text>
+            <line x1="40" y1="265" x2="700" y2="265" stroke="#ccc9c4" stroke-dasharray="3 3"/>
+            <text x="34" y="269" text-anchor="end" font-size="9" fill="#878480" font-family="JetBrains Mono, monospace">45%</text>
+            <polyline points="40,235 100,215 200,250 300,240 400,235 500,232 600,238 700,242" stroke="hsl(145,55%,42%)" stroke-width="2" fill="none"/>
+            <circle cx="100" cy="215" r="3" fill="hsl(145,55%,28%)"/>
+            <text x="100" y="206" text-anchor="middle" font-size="8" fill="hsl(145,55%,28%)">+1 (cooldown 5min)</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">AWS Auto Scaling Groups</div><h4>Target tracking by default</h4><p>Set a target (e.g., 60% CPU) and AWS adjusts capacity. Supports custom CloudWatch metrics. Battle-tested.</p></div>
+      <div class="rw-card"><div class="rw-name">Kubernetes HPA</div><h4>Horizontal Pod Autoscaler</h4><p>Scales pod count based on metrics (CPU, memory, custom). Combined with Cluster Autoscaler for node-level scaling.</p></div>
+      <div class="rw-card"><div class="rw-name">KEDA</div><h4>Event-driven autoscaling</h4><p>Kubernetes add-on. Scales based on queue length, Kafka lag, Pub/Sub backlog. Perfect for worker pools.</p></div>
+      <div class="rw-card"><div class="rw-name">Lambda / Cloud Run</div><h4>Per-request autoscaling</h4><p>Serverless platforms autoscale at the request level. Trade: cold starts on scale-up. Great for variable workloads.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>News feed API tier autoscales on RPS. YouTube/Netflix encoding workers autoscale on queue depth. E-commerce checkout tier pre-scales for known events (Black Friday, product launches).</p></div>
+  </section>
+
+</main>
+</body>
+</html>

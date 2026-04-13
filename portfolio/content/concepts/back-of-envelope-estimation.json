@@ -1,0 +1,65 @@
+{
+  "slug": "back-of-envelope-estimation",
+  "title": "Back-of-Envelope Estimation",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 45,
+    "s": 88,
+    "l": 48
+  },
+  "category": "Foundations",
+  "blurb": "Every design decision hinges on numbers. Do we need sharding? Only if writes exceed ~10k/sec. Do we need a cache? Only if read latency is a bottleneck. Do we need a CDN? Only if users are geographically far from origin. ",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>Every design decision hinges on numbers. <span class=\"hl\">Do we need sharding? Only if writes exceed ~10k/sec.</span> Do we need a cache? Only if read latency is a bottleneck. Do we need a CDN? Only if users are geographically far from origin. You can't answer any of these without doing <span class=\"hl-accent\">back-of-envelope math</span> first. Interviewers care about this more than any specific technology.</p>\n      <p>The goal isn't precision — it's <strong>order of magnitude</strong>. Knowing it's \"10k QPS\" vs \"10M QPS\" changes the architecture entirely. Knowing it's exactly 11,437 QPS vs 9,812 QPS changes nothing.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The numbers you must memorize",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The numbers you must memorize</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Quantity</th><th>Value</th><th>Mnemonic</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Seconds/day</td><td>86,400</td><td>\"~100k\" — round up for estimates</td></tr>\n        <tr><td class=\"algo-name\">Seconds/month</td><td>2.5M</td><td>86.4k × 30</td></tr>\n        <tr><td class=\"algo-name\">Seconds/year</td><td>31.5M</td><td>\"π × 10⁷\"</td></tr>\n        <tr><td class=\"algo-name\">Bytes per char (ASCII)</td><td>1</td><td>—</td></tr>\n        <tr><td class=\"algo-name\">Bytes per char (UTF-8 general)</td><td>~2</td><td>pessimistic average</td></tr>\n        <tr><td class=\"algo-name\">KB / MB / GB / TB / PB</td><td>10³ / 10⁶ / 10⁹ / 10¹² / 10¹⁵</td><td>base 10 for estimation</td></tr>\n        <tr><td class=\"algo-name\">Days in 5 years</td><td>1825</td><td>for storage projections</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "The QPS / storage / bandwidth recipe",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">The QPS / storage / bandwidth recipe</h2></div>\n    <div class=\"prose\">\n      <p>Given <strong>N DAU</strong> (daily active users) and <strong>k actions/user/day</strong>:</p>\n      <ul>\n        <li><strong>Writes/sec</strong> = (N × k) ÷ 86,400</li>\n        <li><strong>Reads/sec</strong> = Writes × read-to-write ratio (typical: 10× to 1000× for social apps)</li>\n        <li><strong>Storage/day</strong> = (N × k) × avg-record-size</li>\n        <li><strong>Storage/5yr</strong> = storage/day × 1825 × replication-factor (3× typical)</li>\n        <li><strong>Bandwidth/sec</strong> = Reads × avg-response-size</li>\n      </ul>\n      <p>Worked example — Twitter-style feed, 100M DAU, 2 posts + 200 views each per day:</p>\n    </div>\n    <div class=\"kv-grid\">\n      <div class=\"kv-card\"><div class=\"kv-val\">2,300</div><div class=\"kv-lbl\">writes/sec (100M × 2 / 86.4k)</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">230,000</div><div class=\"kv-lbl\">reads/sec (100× writes)</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">200 GB</div><div class=\"kv-lbl\">posts/day (1KB each)</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">1.1 PB</div><div class=\"kv-lbl\">5-year storage (3× replication)</div></div>\n      <div class=\"kv-card\"><div class=\"kv-val\">230 MB/s</div><div class=\"kv-lbl\">read bandwidth (1KB/response)</div></div>\n    </div>\n    <div class=\"prose\">\n      <p>Those numbers immediately drive decisions: 2,300 writes/sec fits a single Postgres. 230k reads/sec needs Redis + CDN. 1.1 PB needs object storage and tiered storage. 230 MB/s is fine for one region but doubles per extra continent served.</p>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "Shortcuts that save time",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Shortcuts that save time</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>86400 ≈ 100k</strong> — round up, the error is ~15% which is fine.</li>\n        <li><strong>1M DAU × 1 action/day ≈ 12 QPS</strong> — memorize this as an anchor. 100M DAU → 1200 QPS per action. 1B DAU → 12k QPS per action.</li>\n        <li><strong>1 KB × 1 QPS = ~1 KB/s</strong> — scale bandwidth by record size × QPS.</li>\n        <li><strong>Peak ≈ 2–3× average</strong> — if daily average is 1200 QPS, plan for ~3000 QPS at peak hours. Interviewers reward this.</li>\n        <li><strong>Replication factor 3</strong> — always assume 3× storage for durability. Some systems (Ceph, MinIO erasure-coded) can do 1.5× but 3× is the safe baseline.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — the memorizable latency ladder",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — the memorizable latency ladder</h2></div>\n    <div class=\"prose\">\n      <p>Jeff Dean's \"numbers every engineer should know\" — updated. These explain why caches, CDNs, and in-region placement matter.</p>\n    </div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Operation</th><th>Latency</th><th>Scale if 1ns = 1 sec</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">L1 cache</td><td>0.5 ns</td><td>0.5 sec</td></tr>\n        <tr><td class=\"algo-name\">L2 cache</td><td>7 ns</td><td>7 sec</td></tr>\n        <tr><td class=\"algo-name\">RAM access</td><td>100 ns</td><td>~2 min</td></tr>\n        <tr><td class=\"algo-name\">SSD random read</td><td>~16 μs</td><td>~4.5 hours</td></tr>\n        <tr><td class=\"algo-name\">Redis / in-region</td><td>~0.5–1 ms</td><td>~1.5 weeks</td></tr>\n        <tr><td class=\"algo-name\">Cross-AZ round-trip</td><td>~1 ms</td><td>~2 weeks</td></tr>\n        <tr><td class=\"algo-name\">Cross-region (SF → NY)</td><td>~70 ms</td><td>~2 years</td></tr>\n        <tr><td class=\"algo-name\">Cross-continent (US → EU)</td><td>~100 ms</td><td>~3 years</td></tr>\n        <tr><td class=\"algo-name\">Cross-ocean (US → Asia)</td><td>~180 ms</td><td>~5.7 years</td></tr>\n      </tbody>\n    </table>\n    <div class=\"prose\">\n      <p>Two takeaways for interviews: (1) <strong>RAM is ~200× faster than SSD, SSD is ~30× faster than a network round-trip</strong> — that's why caches work. (2) <strong>Cross-ocean latency is physics</strong>; no amount of engineering beats the speed of light. This is why you need multi-region deployments and CDNs.</p>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Example estimations",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Example estimations</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">URL Shortener</div><h4>~100M short links/year</h4><p>100M × 7 chars = 700MB raw. Add 500B of metadata per entry = ~50GB/year. Fits in one Postgres. Reads: 10k/sec at peak, easy with Redis cache.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">News Feed</div><h4>200M DAU, 3 reads per second each at peak</h4><p>600M RPS across fleet → impossible per-DB. Need Redis feed cache (200 post IDs per user × 200M = 40 GB), per-follower pre-computation.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">WhatsApp</div><h4>2B users, 100B messages/day</h4><p>That's 1.2M writes/sec — 100× what a single Cassandra cluster handles. Shard by (user_id, chat_id). Persistent TCP connections ≈ 2B sockets → need ~100k servers × 20k conns each.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Uber</div><h4>5M drivers, location update every 4s</h4><p>1.25M writes/sec of (driver_id, lat, lng). Redis sorted sets by geohash prefix handles this. Matching RPS ≈ 200 rides/sec × 10 candidates = 2k lookups/sec — trivially easy.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Every problem page starts with a scale estimation section. The numbers there drive every architectural choice that follows.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

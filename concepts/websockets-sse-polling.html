@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>WebSockets vs SSE vs Polling — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 145; --accent-s: 63%; --accent-l: 42%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Chat. Live scores. Notifications. Collaborative editing. Any feature where the server pushes data to the client the moment it's ready. HTTP was designed for the opposite: client asks, server answers. To make push happen, you pick one of three techniques: <strong>polling</strong>, <strong>Server-Sent Events (SSE)</strong>, or <strong>WebSockets</strong>. Each has radically different resource costs, browser support, and failure modes.</p>
+      <p>"Use WebSockets" is the lazy answer. Often SSE is better. Sometimes plain polling is enough. Know which trade-off you're making.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The spectrum</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Technique</th><th>Direction</th><th>Per-connection cost</th><th>Reconnect?</th><th>Best for</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Short polling</td><td>Client → Server (repeat)</td><td>Full HTTP each time</td><td>N/A</td><td>Low-frequency updates (every minute+)</td></tr>
+        <tr><td class="algo-name">Long polling</td><td>Client → Server (held open)</td><td>Full HTTP, server holds up to 30s</td><td>Client retries on each response</td><td>Stepping-stone when WS/SSE unavailable</td></tr>
+        <tr><td class="algo-name">Server-Sent Events (SSE)</td><td>Server → Client only</td><td>One TCP connection, streams text lines</td><td>Auto-reconnect with <code>Last-Event-ID</code></td><td>Feeds, notifications, live counters — anywhere push is one-way</td></tr>
+        <tr><td class="algo-name">WebSockets</td><td>Bidirectional</td><td>One TCP connection, binary or text frames</td><td>Manual</td><td>Chat, gaming, collaborative editing, anything where client also sends</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">SSE — the underappreciated one</h2></div>
+    <div class="prose">
+      <p>An SSE endpoint is just an HTTP endpoint that never closes. Set <code>Content-Type: text/event-stream</code>, stream text events separated by blank lines. Browsers handle it via <code>new EventSource(url)</code>.</p>
+      <pre style="background:#f4f3f0;padding:12px;border-radius:6px;font-size:12px;font-family:var(--font-mono);overflow-x:auto">event: message
+id: 42
+data: {"user":"alice","text":"hi"}
+
+event: heartbeat
+data: ping</pre>
+      <p>Free auto-reconnect: if the connection drops, the browser reconnects and sends <code>Last-Event-ID: 42</code> so the server resumes from where it left off. Works through firewalls that don't like WebSockets. Runs over HTTP/2 for multiplexing.</p>
+      <p><strong>Use SSE when updates flow server → client.</strong> Most "real-time" features (news feed, dashboards, status pages) actually are one-way. WebSockets add complexity you don't need.</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Deep dive — why WebSockets are harder than they look</h2></div>
+    <div class="prose">
+      <p>A WebSocket is a long-lived TCP connection. That's great for latency, terrible for infrastructure:</p>
+      <ul>
+        <li><strong>Sticky connections.</strong> A user's WS lands on server 3. A new message for that user arriving at server 7 needs a <a href="/concepts/message-queue-vs-pubsub">pub/sub fabric</a> (Redis, Kafka) so server 3 can pick it up.</li>
+        <li><strong>No REST-style horizontal scaling.</strong> 1M concurrent users = 1M open sockets = your server fleet must hold state. Restarting a node drops thousands of connections.</li>
+        <li><strong>Load balancers hate them.</strong> Most LBs have default idle timeouts of 60s; WS needs heartbeats (<code>ping</code>/<code>pong</code> frames) to stay alive. Forget to configure and users drop every minute.</li>
+        <li><strong>TLS termination gets weird.</strong> Some proxies close idle WS after 5 minutes. Some strip WS upgrade headers. Always test your prod path end-to-end.</li>
+        <li><strong>Reconnect logic is on you.</strong> Unlike SSE, WS has no built-in "last event ID." Your app resends the last-seen timestamp on reconnect and the server backfills.</li>
+      </ul>
+      <p>Real WebSocket systems (WhatsApp, Discord, Slack) have specialized WS gateway fleets, pub/sub backbones, and careful connection-draining on deploy. It's an order of magnitude more infra work than SSE.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">Heuristic</div>
+        <p>Need bidirectional? WebSockets. Push-only? SSE. Not sure? Start with long polling — cheapest to build, easiest to debug — and upgrade only when traffic justifies it.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">WhatsApp</div><h4>Custom over TLS (not raw WS)</h4><p>WhatsApp uses a custom XMPP-derived binary protocol over TLS, not WebSockets. 50M+ concurrent connections per fleet.</p></div>
+      <div class="rw-card"><div class="rw-name">Discord / Slack</div><h4>WebSockets with a gateway tier</h4><p>Client connects to a gateway service that handles the WS lifecycle; business logic sits behind. Pub/sub for cross-server delivery.</p></div>
+      <div class="rw-card"><div class="rw-name">GitHub / Twitter web</div><h4>SSE for activity feeds</h4><p>Notifications, live comment updates, real-time feed items. One-way → SSE fits perfectly.</p></div>
+      <div class="rw-card"><div class="rw-name">Google Docs</div><h4>WebSockets for OT</h4><p>Every keystroke needs bidirectional transmission (client sends ops, server distributes). WS is the right call.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>WhatsApp (WebSockets + custom protocol). Notification system (WS for user clients + SSE for web dashboard). Video conferencing (signaling over WS, media over WebRTC/UDP). PUBG (UDP for game state; WS fallback). Stock trading (WS for live quotes).</p></div>
+  </section>
+
+</main>
+</body>
+</html>

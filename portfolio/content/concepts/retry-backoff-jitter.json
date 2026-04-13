@@ -1,0 +1,65 @@
+{
+  "slug": "retry-backoff-jitter",
+  "title": "Retries, Backoff & Jitter",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 25,
+    "s": 85,
+    "l": 50
+  },
+  "category": "Reliability",
+  "blurb": "Network calls fail. Retry solves 90% of transient failures for free. But naive retries cause retry storms — every client retrying the failing service simultaneously, which is exactly what the failing service can least ha",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>Network calls fail. Retry solves 90% of transient failures for free. But naive retries cause <span class=\"hl-red\">retry storms</span> — every client retrying the failing service simultaneously, which is exactly what the failing service can least handle. The fix is boring and essential: exponential backoff plus jitter.</p>\n      <p>\"We retry on failure\" isn't an answer. \"We retry up to 3 times with exponential backoff + full jitter + a budget\" is.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "Three disasters of naive retry",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Three disasters of naive retry</h2></div>\n    <div class=\"prose\">\n      <p><strong>Disaster 1 — immediate retry.</strong> First attempt fails. Retry in 0ms. That retry also fails (same network issue). Retry again. 10,000 requests/sec now becomes 30,000 requests/sec aimed at a service that couldn't even handle 10k. The service gets worse, not better.</p>\n      <p><strong>Disaster 2 — synchronized retry.</strong> Service outage at T=0. All 10,000 clients notice simultaneously. All retry at T+1s. Exactly-one-second spike of 10k requests hits the recovering service. Repeat at T+2s, T+4s... The service never gets a quiet moment to recover.</p>\n      <p><strong>Disaster 3 — unbounded retry.</strong> Every service in the call chain retries independently. Client retries A (3×), A retries B (3×), B retries C (3×). One original request becomes 27 requests under failure. Amplification cascades through the stack.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "Exponential backoff + full jitter",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Exponential backoff + full jitter</h2></div>\n    <div class=\"prose\">\n      <p>The battle-tested recipe:</p>\n      <ol>\n        <li><strong>Exponential backoff.</strong> Wait 100ms, then 200, 400, 800... doubling each retry. Gives the service time to recover.</li>\n        <li><strong>Full jitter</strong> (AWS paper, 2015). Replace the exact wait with <code>random(0, current_backoff)</code>. Spreads clients' retries over the interval — no synchronized spike.</li>\n        <li><strong>Max retries.</strong> 3–5 is typical. Beyond that, accept failure.</li>\n        <li><strong>Max backoff cap.</strong> 30 seconds or so. Don't wait an hour for retry 7.</li>\n      </ol>\n      <p>Pseudocode:</p>\n      <pre style=\"background:#f4f3f0;padding:12px;border-radius:6px;font-size:12px;font-family:var(--font-mono);overflow-x:auto\">for attempt in 1..max_retries:\n  try: return call()\n  except Transient:\n    base = min(max_backoff, initial * 2^attempt)\n    wait = random(0, base)\n    sleep(wait)\nthrow LastError</pre>\n    \n      <div class=\"code-caption\" data-code-snippet=\"1\">Exponential backoff with jitter</div>\n      <pre><code class=\"lang-python\">import random, time\n\ndef retry(fn, max_attempts=5, base=0.1, cap=10.0):\n    \"\"\"Full-jitter exponential backoff (AWS recommended).\"\"\"\n    for attempt in range(max_attempts):\n        try:\n            return fn()\n        except Exception:\n            if attempt == max_attempts - 1: raise\n            # base × 2^attempt, capped; uniform jitter 0..backoff\n            backoff = min(cap, base * (2 ** attempt))\n            time.sleep(random.uniform(0, backoff))\n\n# Attempt delays: 0-0.1s, 0-0.2s, 0-0.4s, 0-0.8s, 0-1.6s\n# Full-jitter outperforms \"backoff + small jitter\" for contended resources</code></pre>\n  </div>"
+    },
+    {
+      "id": "variants",
+      "label": "What to retry, what NOT to retry",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">What to retry, what NOT to retry</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Error</th><th>Retry?</th><th>Why</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">Network timeout</td><td>Yes</td><td>Transient. Next attempt may succeed.</td></tr>\n        <tr><td class=\"algo-name\">5xx (server error)</td><td>Yes</td><td>Server's fault, not yours. May recover.</td></tr>\n        <tr><td class=\"algo-name\">503 Service Unavailable</td><td>Yes, with backoff</td><td>Explicit \"try later\" signal.</td></tr>\n        <tr><td class=\"algo-name\">429 Too Many Requests</td><td>Yes, honoring Retry-After</td><td>Rate limited. Server told you when to retry.</td></tr>\n        <tr><td class=\"algo-name\">4xx other</td><td>No</td><td>Client's fault. Retrying won't help.</td></tr>\n        <tr><td class=\"algo-name\">Non-idempotent POST</td><td>Only with idempotency key</td><td>Retry might double-execute. Dangerous without guardrails.</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — retry budgets",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">Deep dive — retry budgets</h2></div>\n    <div class=\"prose\">\n      <p>Even exponential-backoff retries amplify load during outages. If 100% of requests are failing, each client's 3 retries means the failing service gets 3× its normal traffic precisely when it can't handle it.</p>\n      <p>A <strong>retry budget</strong> caps the retry multiplier globally. Rule: \"retries may be at most 20% of normal RPS.\" If all requests are failing, retries are capped — you fail fast for most requests rather than amplifying.</p>\n      <p>Google's SRE book and AWS SDKs implement this. Envoy's <code>retry_budget</code> config exposes it. The net: under steady-state failure, the service sees at most 1.2× normal RPS instead of 3× or 10×. Recovery is measurably faster.</p>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">Production answer</div>\n        <p>\"Exponential backoff with full jitter, max 3 retries, 30s max backoff, retry budget capped at 20% of baseline traffic. Combine with a <a href=\"/concepts/circuit-breaker\">circuit breaker</a> so sustained failure stops retries entirely.\"</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">AWS SDKs</div><h4>Full jitter baked in</h4><p>Every SDK retries with exponential + full jitter by default. Configurable per service. The reference implementation.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Envoy / gRPC</div><h4>Retry + budget</h4><p>Declarative retry policies in config. Retry budget caps total amplification. No app code.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Stripe</div><h4>Client SDK retry + idempotency keys</h4><p>Retries with exponential backoff; idempotency keys ensure POSTs are safe to retry. Industry benchmark.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">HTTP Retry-After header</div><h4>Server-directed retry</h4><p>When rate-limited (429) or overloaded (503), server sends <code>Retry-After: 10</code>. Good clients honor it — respects server's backpressure signal.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Notification system retries failed deliveries with exponential backoff. Payment gateway retries idempotent charge confirmations. Web crawler backs off when hitting rate-limited domains.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-news-feed",
+  "title": "Twitter / News Feed",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 210,
+    "s": 85,
+    "l": 50
+  },
+  "category": "Social & Feed",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>Design Twitter's home timeline. 500M DAU, average follows 200 accounts, ~6K tweets/sec global, feed load &lt; 200ms p99.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n      \n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Fan-out on write vs on read — this is the canonical tradeoff. What if a user follows a celebrity with 100M followers?</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Hybrid: push to most users, pull for celebrities. The cutover threshold is a key design decision.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Pre-compute materialized feeds. Don't query at read time from 200 users × days-of-tweets.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+1</span> BoE: ~290K feed loads/sec; 6K tweets/sec × 200 fan-out = 1.2M fan-out events/sec worst case</li>\n      <li><span class=\"rubric-points\">+2</span> Hybrid fan-out explicit: push-on-write for normal users (≤ 100K followers), pull-on-read for celebrities</li>\n      <li><span class=\"rubric-points\">+2</span> Feed storage: Redis sorted-set per user (timeline), TTL-bounded; backfill from tweet DB when empty</li>\n      <li><span class=\"rubric-points\">+1</span> Tweet storage: Cassandra, partition by user_id; read path: GET by tweet_id</li>\n      <li><span class=\"rubric-points\">+1</span> Ranker vs chronological: mention algorithmic re-ranking with recent engagement features</li>\n      <li><span class=\"rubric-points\">+1</span> Cache warming for users about to log in; invalidation on new tweet from followed account</li>\n      <li><span class=\"rubric-points\">+1</span> Image/video handled via URL reference; CDN serves; tweet stores cheap pointer only</li>\n      <li><span class=\"rubric-points\">+1</span> Addresses hot-key problem on celebrity's fan-out queue; backpressure / shedding plan</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Naive: query all followed users' tweets at read time and sort (doesn't scale past ~1K users)</li>\n        <li>Ignores celebrity problem; fan-out-on-write to 100M followers</li>\n        <li>Stores full tweet bytes in feed (should be IDs only with DB fetch)</li>\n        <li>No eviction / TTL on pre-computed feeds (memory explodes)</li>\n        <li>Single Postgres table for all tweets (billions of rows)</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 1
+}

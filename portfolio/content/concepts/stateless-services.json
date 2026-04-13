@@ -1,0 +1,65 @@
+{
+  "slug": "stateless-services",
+  "title": "Stateless Services",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 215,
+    "s": 70,
+    "l": 48
+  },
+  "category": "Scaling",
+  "blurb": "You want to scale horizontally. Your load balancer spreads traffic across N servers. User Alice's session is in memory on server 3. The LB routes Alice's next request to server 7. Server 7 doesn't know Alice — login lost",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>You want to <a href=\"/concepts/horizontal-vs-vertical-scaling\">scale horizontally</a>. Your load balancer spreads traffic across N servers. User Alice's session is in memory on server 3. The LB routes Alice's next request to server 7. Server 7 doesn't know Alice — <span class=\"hl-red\">login lost, cart empty, request fails</span>.</p>\n      <p>This is what \"stateful\" means: the server holds session-specific data that determines its behavior. Statelessness is the fix — <span class=\"hl\">any server can serve any request</span>. It's the property that makes auto-scaling, blue-green deploys, and load balancing Just Work.</p>\n    </div>"
+    },
+    {
+      "id": "intuition",
+      "label": "The definition",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The definition</h2></div>\n    <div class=\"prose\">\n      <p>A service is stateless if every request contains all the information needed to handle it, <em>or</em> can fetch that information from an external store. No two subsequent requests from the same user need to land on the same instance.</p>\n      <p>The classic test: <strong>kill any instance right now — does anything permanent break?</strong> If users lose data, their cart vanishes, or sessions drop, the service is stateful. If requests just retry on another instance, it's stateless.</p>\n    </div>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "Where state goes",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Where state goes</h2></div>\n    <div class=\"prose\">\n      <p>\"Stateless\" doesn't mean \"no state anywhere\" — it means the app server doesn't own it. State lives in:</p>\n      <ul>\n        <li><strong>The request itself.</strong> JWT in the Authorization header carries user identity. No session lookup needed. Trade-off: JWTs can't be revoked easily before expiry.</li>\n        <li><strong>Redis/Memcached.</strong> Session tokens → user_id, preferences, cart contents. Any app server reads the same Redis.</li>\n        <li><strong>The database.</strong> Persistent state (orders, posts, profile). What it's for anyway.</li>\n        <li><strong>Object storage (S3).</strong> Uploaded files, user-generated media. Never the local disk of an app server.</li>\n        <li><strong>The client.</strong> UI state, form input, unsaved drafts. Browser localStorage or the SPA's in-memory state.</li>\n      </ul>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "The stateless checklist",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">The stateless checklist</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Anti-pattern</th><th>Fix</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">In-memory sessions</td><td>Move to Redis or signed cookies / JWT</td></tr>\n        <tr><td class=\"algo-name\">Local file uploads</td><td>Upload directly to S3/GCS</td></tr>\n        <tr><td class=\"algo-name\">Process-local cache</td><td>Either accept soft cache (OK) or move to shared Redis (better for consistency)</td></tr>\n        <tr><td class=\"algo-name\">WebSocket connections held per-server</td><td>Add a pub/sub layer so any server can deliver to any connection</td></tr>\n        <tr><td class=\"algo-name\">Scheduled jobs running in-process</td><td>Move to a cron system with <a href=\"/concepts/distributed-locking\">distributed locking</a></td></tr>\n        <tr><td class=\"algo-name\">Rate limit counters in memory</td><td>Redis INCR with TTL</td></tr>\n        <tr><td class=\"algo-name\">Feature flags loaded at startup</td><td>Query a central flag service or subscribe to change events</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "What stateless gives up",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">What stateless gives up</h2></div>\n    <div class=\"prose\">\n      <ul>\n        <li><strong>Per-request latency.</strong> Fetching from Redis adds 1–5ms per call vs in-process access. Usually negligible.</li>\n        <li><strong>External dependency.</strong> Your app now depends on Redis being up. Mitigate with connection pooling + circuit breakers.</li>\n        <li><strong>Complexity.</strong> Two stores to think about (DB + cache + possibly more).</li>\n      </ul>\n      <p>The trade is overwhelmingly worth it. Every horizontal-scale architecture assumes stateless application tiers. Every container orchestrator (Kubernetes, ECS) assumes pods are disposable.</p>\n      <div class=\"callout callout-good\">\n        <div class=\"callout-label\">The mandate</div>\n        <p>Treat every app server as <strong>cattle, not pets</strong>. Any instance should be killable without warning; a new one spins up and works identically. If that's not true, find the state and move it.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — sticky sessions vs true statelessness",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Deep dive — sticky sessions vs true statelessness</h2></div>\n    <div class=\"prose\">\n      <p><strong>Sticky sessions</strong> (session affinity) is the middle ground: the load balancer remembers \"user Alice → server 3\" via a cookie and routes her there for the session's duration. Server 3 keeps her session in memory. Fast, no Redis needed, but:</p>\n      <ul>\n        <li>Server 3 dies → Alice's session dies. She's logged out mid-session.</li>\n        <li>Uneven load — long-session users pile onto one server.</li>\n        <li>Scale down is dangerous — killing a healthy instance kills live sessions.</li>\n        <li>Cross-service concerns — if Alice calls service B in the middle, does B also need to stick to her?</li>\n      </ul>\n      <p>Sticky sessions are a pragmatic retrofit when moving to Redis is too expensive. But new systems should skip them. JWT-signed tokens + Redis session storage is the right default in 2025 — any server, any region, any replica can serve any request.</p>\n      <p>The exception: <strong>WebSockets</strong>. A WebSocket is inherently stateful — it's a persistent TCP connection to one server. For chat/real-time apps, you accept sticky connections + a pub/sub layer (Redis Streams, NATS, Kafka) to fan out messages across servers.</p>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Every problem's API tier in this portfolio is stateless. WhatsApp's session tier is stateful (persistent WebSockets) but the business logic tier above it is stateless — any server can handle any user's request given the connection.</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

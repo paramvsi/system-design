@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Database Types — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 230; --accent-s: 55%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>"We'll use a database" is not an architecture decision — it's punting. Every system design interview eventually asks: <strong>Postgres or Cassandra?</strong> <strong>Redis or DynamoDB?</strong> <strong>Mongo or Elasticsearch?</strong> The answer is never "it depends" alone — it's "this workload needs X because Y."</p>
+      <p>This page is the decision matrix. Learn the shape of each, the failure modes of each, and which <em>real</em> workloads fit each.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The seven families</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Family</th><th>Exemplars</th><th>Best for</th><th>Hard no</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Relational (SQL)</td><td>Postgres, MySQL, CockroachDB</td><td>Transactions, complex queries, strong consistency</td><td>Huge write throughput on one table without sharding</td></tr>
+        <tr><td class="algo-name">Key-value</td><td>Redis, Memcached, DynamoDB</td><td>Caches, sessions, hot lookups by single key</td><td>Any query that's not by key</td></tr>
+        <tr><td class="algo-name">Document</td><td>MongoDB, Couchbase, DynamoDB</td><td>Flexible schema, nested objects, per-object CRUD</td><td>Heavy relational queries, multi-doc ACID</td></tr>
+        <tr><td class="algo-name">Wide-column</td><td>Cassandra, HBase, ScyllaDB</td><td>Time-series, massive writes, known access patterns</td><td>Ad-hoc queries, joins, strong consistency</td></tr>
+        <tr><td class="algo-name">Graph</td><td>Neo4j, JanusGraph, Amazon Neptune</td><td>Relationship-heavy data (social graph, fraud detection)</td><td>Simple CRUD, huge scale</td></tr>
+        <tr><td class="algo-name">Search (inverted index)</td><td>Elasticsearch, OpenSearch, Solr</td><td>Full-text search, faceting, relevance ranking</td><td>Source-of-truth storage (use as secondary only)</td></tr>
+        <tr><td class="algo-name">Time-series</td><td>InfluxDB, TimescaleDB, Prometheus</td><td>Metrics, monitoring, IoT telemetry</td><td>Transactional workloads, low cardinality</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">The ten databases you must know</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">PostgreSQL</div><h4>Relational — the default</h4><p>ACID, mature, JSON support, full-text search built in, extensions for everything. Scale limit ≈ single-box writes (~10k–50k/sec). Shard or switch when you outgrow.</p></div>
+      <div class="rw-card"><div class="rw-name">MySQL</div><h4>Relational — operational simplicity</h4><p>Simpler than Postgres, slightly less featureful. Huge operator knowledge. Vitess shards it at YouTube scale.</p></div>
+      <div class="rw-card"><div class="rw-name">Redis</div><h4>In-memory KV + data structures</h4><p>0.5ms reads, 1M ops/sec per node. Sessions, caches, leaderboards (sorted sets), pub/sub, rate limiting. Data in RAM — expensive for huge datasets.</p></div>
+      <div class="rw-card"><div class="rw-name">Memcached</div><h4>Pure KV cache</h4><p>No persistence, no data structures, no replication. Just a cache. Sub-millisecond. Still relevant when you need simplicity.</p></div>
+      <div class="rw-card"><div class="rw-name">DynamoDB</div><h4>Managed KV/document, any scale</h4><p>Single-digit ms at any throughput. Primary/sort keys drive data model. Expensive at large scale but zero ops.</p></div>
+      <div class="rw-card"><div class="rw-name">Cassandra</div><h4>Wide-column, write-heavy</h4><p>Leaderless, linearly scalable writes. Discord, Netflix, Instagram. Eventual consistency by default. Hard to operate well.</p></div>
+      <div class="rw-card"><div class="rw-name">MongoDB</div><h4>Document, flexible schema</h4><p>BSON documents, rich query language, secondary indexes. Sharded clusters. ACID on single doc; multi-doc since 4.0 (slower).</p></div>
+      <div class="rw-card"><div class="rw-name">Elasticsearch</div><h4>Inverted index, search</h4><p>Full-text + structured filtering + aggregations. NOT your source of truth — use alongside Postgres.</p></div>
+      <div class="rw-card"><div class="rw-name">Neo4j</div><h4>Graph — relationship-first</h4><p>Traversals over millions of edges in milliseconds. Fraud detection, recommendation, social networks. Not a general-purpose DB.</p></div>
+      <div class="rw-card"><div class="rw-name">Kafka</div><h4>Distributed log</h4><p>Technically not a DB — but often used as the system of record. Event sourcing, audit logs, stream processing. Retention from hours to years.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">The decision tree</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>Do you need ACID transactions across multiple rows?</strong> → Postgres/MySQL. Nothing else does this well.</li>
+        <li><strong>Do you need single-key lookups in &lt; 1ms?</strong> → Redis (in-memory) or DynamoDB (managed).</li>
+        <li><strong>Do you need &gt; 100k writes/sec on one logical dataset?</strong> → Cassandra or DynamoDB. Avoid SQL sharding unless the team has scar tissue.</li>
+        <li><strong>Do you need full-text search with relevance scoring?</strong> → Elasticsearch. Alongside, never instead of, a source-of-truth DB.</li>
+        <li><strong>Is your data graph-shaped (traversals &gt; joins)?</strong> → Neo4j or a graph extension.</li>
+        <li><strong>Is your data timestamped metrics?</strong> → Prometheus (metrics) or TimescaleDB (analytics).</li>
+        <li><strong>Default for greenfield apps?</strong> → <span class="hl-green">Postgres</span>. Can handle most workloads up to mid-scale and the migration path is well-trodden.</li>
+      </ol>
+    
+      <div class="code-caption" data-code-snippet="1">LSM-tree sketch (memtable + SSTables)</div>
+      <pre><code class="lang-python"># LSM = Log-Structured Merge tree. Writes: append to memtable + WAL.
+# Reads: check memtable → bloom filters → SSTables from newest to oldest.
+
+class LSM:
+    def __init__(self, memtable_limit=10**6):
+        self.memtable = {}  # sorted map (in-mem B-tree in real engines)
+        self.wal = WAL("lsm.wal")
+        self.sstables = []  # list of on-disk immutable files, newest first
+
+    def put(self, k, v):
+        self.wal.append((k, v))
+        self.memtable[k] = v
+        if len(self.memtable) &gt;= 10**6:
+            self._flush()
+
+    def _flush(self):
+        sst = SSTable.from_dict(self.memtable)
+        self.sstables.insert(0, sst)
+        self.memtable = {}
+        self.wal.rotate()
+
+    def get(self, k):
+        if k in self.memtable: return self.memtable[k]
+        for sst in self.sstables:
+            if k in sst.bloom:  # cheap probabilistic check
+                v = sst.get(k)
+                if v is not None: return v
+        return None
+
+# Compaction merges older SSTables; Cassandra, RocksDB, LevelDB all do this.</code></pre>
+  </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — polyglot persistence, the reality</h2></div>
+    <div class="prose">
+      <p>At scale, you don't pick one DB. You pick many. A realistic stack for a consumer social app:</p>
+      <ul>
+        <li><strong>Postgres</strong> — users, payments, account settings (relational + ACID)</li>
+        <li><strong>Cassandra</strong> — feed posts, activity events (write volume + eventual OK)</li>
+        <li><strong>Redis</strong> — session tokens, feed caches, rate limiters (sub-ms reads)</li>
+        <li><strong>Elasticsearch</strong> — search (posts, users, hashtags)</li>
+        <li><strong>S3</strong> — media (images, video) with CDN in front</li>
+        <li><strong>Kafka</strong> — event bus between all of the above</li>
+      </ul>
+      <p>Each has one job it does 10× better than the alternatives. Trying to force Postgres to do search, or Elasticsearch to hold the ledger, loses ~90% of the specialized DB's value.</p>
+      <div class="callout">
+        <div class="callout-label">Operational reality</div>
+        <p>Running 6 databases means 6 on-call rotations, 6 failure modes, 6 backup strategies. Polyglot isn't free. Most companies pick 2–3 (Postgres + Redis + one of {Cassandra, Elasticsearch, Kafka}) and push each hard.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Every problem in this portfolio picks 2–5 DBs. The decision table in §4 is the framework; the specific choices are justified on each problem page.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Online vs Offline Training — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 145; --accent-s: 55%; --accent-l: 40%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Your recommendation model was trained on last month's data. New trends emerged. New users appeared. The model is already stale — predictions degrade by the hour. Do you re-train nightly (offline), continuously update weights as events stream in (online), or something in between? Different answers cost orders of magnitude in infrastructure and produce dramatically different freshness/correctness tradeoffs.</p>
+      <p>Most production ML systems are <strong>offline-trained, online-served</strong>. A small but important class genuinely needs online learning. Knowing which is which is the interview-grade insight.</p>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The training cadence ladder</h2></div>
+    <table class="algo-table">
+      <thead><tr><th>Mode</th><th>Update cadence</th><th>Where trained</th><th>Best for</th></tr></thead>
+      <tbody>
+        <tr><td class="algo-name">Static (one-shot)</td><td>Once</td><td>Notebook → deploy</td><td>Stable patterns: spam classifier, language detection</td></tr>
+        <tr><td class="algo-name">Periodic offline</td><td>Daily / weekly</td><td>Spark / GPU cluster</td><td>Most production ML — recs, ranking, fraud baseline</td></tr>
+        <tr><td class="algo-name">Continual / incremental</td><td>Hours</td><td>GPU cluster, warm-start from previous</td><td>Evolving distributions (news, trends)</td></tr>
+        <tr><td class="algo-name">Online learning</td><td>Per event</td><td>Streaming SGD updates</td><td>Personalization with rapidly-shifting tastes; bandit problems</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Why offline dominates</h2></div>
+    <div class="prose">
+      <p>Despite all the hype, <strong>~95% of production ML is periodic offline training</strong>. Reasons:</p>
+      <ul>
+        <li><strong>Reproducibility.</strong> Re-train on a fixed snapshot → identical weights. Online updates make every model state ephemeral, hard to debug.</li>
+        <li><strong>Hyperparameter stability.</strong> Tuning a model is an offline experiment. Online updates with the wrong learning rate destroy what you trained.</li>
+        <li><strong>Feature monitoring.</strong> Offline pipelines run validation, distribution-shift alerts, A/B comparisons. Online updates skip all that.</li>
+        <li><strong>Rollback.</strong> Offline = checkpoint per training run. Roll back instantly. Online = "we lost the state from 3 hours ago" might be impossible.</li>
+        <li><strong>Sufficient freshness.</strong> Daily-trained model + real-time features (via <a href="/concepts/feature-store">feature store</a>) is often as good as continuous training and dramatically simpler.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">When online learning genuinely wins</h2></div>
+    <div class="prose">
+      <p>Online learning earns its complexity in three scenarios:</p>
+      <p><strong>1. Multi-armed bandits (recommendation exploration).</strong> Show ad A or ad B? Don't wait a day to learn — every impression provides signal. Thompson sampling or UCB updates per click.</p>
+      <p><strong>2. Drift-heavy problems.</strong> Twitter trending — what was hot 2 hours ago is dead. Fashion recs in fast-fashion ecommerce. News recommendation.</p>
+      <p><strong>3. Cold-start personalization.</strong> A new user arrives. Static model has no signal. Bandit-style online updates from their first 5 actions converge fast.</p>
+      <p>Architecture: keep a base model trained offline (the "warm prior"). Apply online deltas on top — usually as a simple linear model or shallow correction layer. If online state is lost, fall back to base model. The two layers compose.</p>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-head">
+        <span class="diagram-label">Offline + Online — The Hybrid Pattern</span>
+        <span class="diagram-type">Mermaid</span>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+flowchart LR
+    H[Historical data warehouse] -->|nightly job| OT[Offline trainer]
+    OT -->|model weights| M[Base model]
+    M --> S[Serving service]
+
+    E[Event stream<br/>clicks, purchases] -->|Kafka| OL[Online learner<br/>bandit / SGD]
+    OL -->|small delta layer| S
+
+    S -->|prediction + A/B logging| Log[Outcomes log]
+    Log -->|feeds back| H
+    Log -->|feeds back| E
+        </div>
+      </div>
+    </div>
+
+    <div class="callout callout-good">
+      <div class="callout-label">Interview answer</div>
+      <p>"Default to nightly offline training with online feature freshness. Add an online bandit layer only where exploration matters (ad selection, fast-changing trends). Keep the offline model as a fallback so a bad online update can't break the system."</p>
+    </div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Operational pitfalls</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Training-serving skew.</strong> Solved by sharing feature transformation code via a <a href="/concepts/feature-store">feature store</a>.</li>
+        <li><strong>Distribution drift.</strong> The world the model was trained on isn't the world it serves. Monitor input feature distributions vs training distributions; alert on KL divergence above threshold.</li>
+        <li><strong>Label leakage.</strong> Training data accidentally contains future signal. Always use point-in-time joins.</li>
+        <li><strong>Ground truth lag.</strong> "Did the user buy?" answer arrives hours/days later. Online models must handle delayed labels.</li>
+        <li><strong>Catastrophic forgetting</strong> (online learning specific). Sustained updates on a new distribution erase old knowledge. Mitigate with replay buffers or elastic weight consolidation.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Netflix recommendations</div><h4>Hybrid</h4><p>Daily offline retrain of the deep ranker. Lightweight online update layer for "things you just clicked on." A/B test framework compares both side by side.</p></div>
+      <div class="rw-card"><div class="rw-name">Google Ads</div><h4>Genuinely online</h4><p>Click prediction model updates continuously. Bandit-style exploration for new ads. Massive online infrastructure — one of the few places that needs it.</p></div>
+      <div class="rw-card"><div class="rw-name">Spotify Discover Weekly</div><h4>Pure offline batch</h4><p>Weekly playlist generation. Nothing online. Works because user taste changes slowly.</p></div>
+      <div class="rw-card"><div class="rw-name">Stripe Radar</div><h4>Daily retrain + online features</h4><p>Fraud model retrained daily. Real-time features (current session, IP velocity) update online via Kafka — but model weights are static between training runs.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Recommendation algorithm uses offline training + online feature freshness. News feed retrains ranker daily but applies fresh engagement features online. Leaderboard's scoring weights rarely change — pure static.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

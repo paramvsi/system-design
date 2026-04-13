@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Zero Trust Networking — Concept</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 0; --accent-s: 0%; --accent-l: 25%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>The traditional security model: castle-and-moat. Strong perimeter (firewall + VPN); inside the perimeter, services trust each other implicitly. The flaw: <span class="hl-red">one compromised laptop or one breached service inside the perimeter sees everything</span>. The 2013 Target breach, the SolarWinds compromise, every major recent incident — same pattern. Once an attacker is inside, the network gives them everything.</p>
+      <p><strong>Zero trust</strong> flips the model: <em>never trust, always verify</em>. Every request — even between two of your own services in the same datacenter — must authenticate and authorize. No "internal vs external"; no "trusted network." Every connection is treated as if it's coming from the open internet.</p>
+    </div>
+  </section>
+
+  <section class="section" id="intuition">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">The five principles</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>Verify explicitly.</strong> Authenticate every request based on identity, device, location, and signals. No implicit trust because "you're inside the firewall."</li>
+        <li><strong>Least privilege access.</strong> Each service / user gets the minimum permissions to do its job. Most calls denied by default.</li>
+        <li><strong>Assume breach.</strong> Design as if attackers are already inside. Limit blast radius via segmentation.</li>
+        <li><strong>Continuous validation.</strong> A token issued an hour ago might no longer be valid. Re-check on every request, not just at login.</li>
+        <li><strong>End-to-end encryption.</strong> Every connection is mTLS — even within your own network.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="how-it-works">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">The architecture</h2></div>
+    <div class="prose">
+      <p>Practical implementation in a cloud-native stack:</p>
+      <ul>
+        <li><strong>Identity for every workload.</strong> Each pod / function / VM has its own identity (SPIFFE, IAM role, K8s ServiceAccount). No shared service accounts; no "the prod-app password."</li>
+        <li><strong>mTLS everywhere.</strong> A <a href="/concepts/service-mesh">service mesh</a> (Istio, Linkerd) issues short-lived certs per workload + enforces mTLS on every connection.</li>
+        <li><strong>Policy engine.</strong> "Service A can call Service B's <code>/orders</code> endpoint, but not <code>/admin</code>." Policy enforced at the proxy, not in app code. Open Policy Agent (OPA) is common.</li>
+        <li><strong>Short-lived credentials.</strong> No long-lived API keys. Tokens expire in minutes; auto-rotated.</li>
+        <li><strong>Audit log.</strong> Every authz decision logged. Who tried to access what, when, granted/denied.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="variants">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">The user-side: BeyondCorp</h2></div>
+    <div class="prose">
+      <p>Google's BeyondCorp is the canonical user-facing zero-trust deployment. The principles applied to employee access:</p>
+      <ul>
+        <li>No corporate VPN. Engineers access internal apps over the public internet.</li>
+        <li>Every request authenticated via Google identity + device certificate.</li>
+        <li>Access decision based on user identity + device posture (managed laptop? OS up to date? not jailbroken?).</li>
+        <li>Per-app policy ("Engineering team can access internal Bug Tracker"; not based on "is on corp WiFi").</li>
+      </ul>
+      <p>Result: Google employees worked remotely from anywhere with no VPN, securely, years before COVID forced everyone else into the same model. Cloudflare Access, Tailscale, Twingate are the productized versions for non-Google companies.</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Deep dive — the workload identity flow</h2></div>
+    <div class="prose">
+      <p>How does Service A prove to Service B who it is, without sharing a long-lived credential?</p>
+      <ol>
+        <li><strong>Service A starts.</strong> Platform (K8s, ECS, EC2) attaches a workload identity — a signed token from the platform: "I am pod foo in namespace bar."</li>
+        <li><strong>A wants to call B.</strong> A presents its workload identity token to a local sidecar (Envoy in the mesh).</li>
+        <li><strong>Sidecar fetches a fresh mTLS cert</strong> from the cert authority (CA), proving A's identity to anyone speaking mTLS. Cert TTL: minutes.</li>
+        <li><strong>A's sidecar opens an mTLS connection</strong> to B's sidecar. Both sides present certs. Mutual proof of identity.</li>
+        <li><strong>B's sidecar checks policy:</strong> "Is identity A allowed to call this path on B?" Yes → forward to B's app. No → reject with 403.</li>
+        <li><strong>B's app processes the request</strong> in plain HTTP. Sidecar handled all the security.</li>
+      </ol>
+      <p>App code knows nothing about identity, certs, or mTLS. The platform + mesh enforce zero-trust. Compromise of one service exposes only what that service was already authorized for; lateral movement is blocked.</p>
+      <div class="callout callout-good">
+        <div class="callout-label">Interview answer</div>
+        <p>"Zero-trust replaces network-perimeter security with per-request identity verification. Every workload has its own short-lived identity, every connection uses mTLS via service mesh, every authorization checked against policy at the sidecar. No 'internal vs external' — even pod-to-pod calls are authenticated."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="real-world">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Real-world</h2></div>
+    <div class="real-world-grid">
+      <div class="rw-card"><div class="rw-name">Google BeyondCorp</div><h4>The reference</h4><p>Internal Google security model since ~2014. No VPN; per-request user + device verification. Inspired the entire zero-trust movement.</p></div>
+      <div class="rw-card"><div class="rw-name">Cloudflare Access</div><h4>BeyondCorp for everyone else</h4><p>SaaS zero-trust for company apps. Replaces legacy VPN. Used by thousands of companies post-COVID remote shift.</p></div>
+      <div class="rw-card"><div class="rw-name">Istio + SPIFFE</div><h4>Workload identity</h4><p>Open-source standard for workload identity. Istio integrates SPIFFE for cluster-wide mTLS. The K8s-native zero-trust stack.</p></div>
+      <div class="rw-card"><div class="rw-name">HashiCorp Boundary + Vault</div><h4>Zero-trust toolkit</h4><p>Boundary for user access, Vault for short-lived credentials. Common in Hashicorp shops.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="used-in">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Used in problems</h2></div>
+    <div class="prose"><p>Payment gateway must implement zero-trust for PCI compliance. E-commerce internal microservices use mTLS via service mesh. WhatsApp's media servers fetch identities per session — long-lived secrets are forbidden.</p></div>
+  </section>
+
+</main>
+</body>
+</html>

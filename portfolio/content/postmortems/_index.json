@@ -1,0 +1,242 @@
+[
+  {
+    "slug": "slack-2021-jan-aws",
+    "title": "First-Day-Of-Year",
+    "difficulty": null,
+    "accent": {
+      "h": 160,
+      "s": 55,
+      "l": 42
+    },
+    "tags": [
+      "Surge traffic",
+      "AWS TGW",
+      "Retry amplification",
+      "5h outage"
+    ],
+    "category": "Capacity + cascading failure",
+    "blurb": "On the first working day of 2021, everyone returning from holiday logged into Slack at once. The spike exposed a surprising limit on AWS Transit Gateway capacity. Retries from clients amplified the load into sustained sa",
+    "problemNumber": "01",
+    "readMinutes": 2
+  },
+  {
+    "slug": "cloudflare-2019-regex",
+    "title": "Catastrophic Regex",
+    "difficulty": null,
+    "accent": {
+      "h": 270,
+      "s": 55,
+      "l": 52
+    },
+    "tags": [
+      "Regex backtracking",
+      "Global",
+      "27 minutes",
+      "WAF"
+    ],
+    "category": "Capacity + cascading failure",
+    "blurb": "A single regular expression in a Cloudflare WAF rule consumed all CPU on every Cloudflare machine worldwide within seconds. 502s for everyone Cloudflare fronted — ~10% of the internet — for 27 minutes.",
+    "problemNumber": "07",
+    "readMinutes": 2
+  },
+  {
+    "slug": "slack-2022-consul",
+    "title": "Consul + HAProxy",
+    "difficulty": null,
+    "accent": {
+      "h": 320,
+      "s": 65,
+      "l": 50
+    },
+    "tags": [
+      "Metastable failure",
+      "Consul",
+      "HAProxy",
+      "4h outage"
+    ],
+    "category": "Coordination + consensus",
+    "blurb": "A brief network blip between Slack's service registry (Consul) and its load balancers (HAProxy) caused a metastable failure: even after the network recovered, the system stayed broken because recovering generated more wo",
+    "problemNumber": "02",
+    "readMinutes": 2
+  },
+  {
+    "slug": "github-2018-network-partition",
+    "title": "43-Second Partition",
+    "difficulty": null,
+    "accent": {
+      "h": 210,
+      "s": 70,
+      "l": 48
+    },
+    "tags": [
+      "Split brain",
+      "MySQL Orchestrator",
+      "43s → 24h",
+      "Consensus"
+    ],
+    "category": "Coordination + consensus",
+    "blurb": "A 43-second network partition between GitHub's US East and US West data centers caused MySQL Orchestrator to promote a new primary in the wrong region. 43 seconds of split-brain writes took 24 hours to reconcile. Webhook",
+    "problemNumber": "10",
+    "readMinutes": 3
+  },
+  {
+    "slug": "roblox-2021-consul",
+    "title": "73 Hours Down",
+    "difficulty": null,
+    "accent": {
+      "h": 0,
+      "s": 70,
+      "l": 48
+    },
+    "tags": [
+      "Consul",
+      "BoltDB pathology",
+      "73 hour outage",
+      "Hotspot"
+    ],
+    "category": "Coordination + consensus",
+    "blurb": "Enabling a new streaming feature in Consul KV triggered a pathological interaction with BoltDB, Consul's embedded storage. Write latency exploded; Consul became unresponsive. Recovery took 73 hours — the worst outage in ",
+    "problemNumber": "10",
+    "readMinutes": 2
+  },
+  {
+    "slug": "gitlab-2017-db-delete",
+    "title": "Accidentally Deleted",
+    "difficulty": null,
+    "accent": {
+      "h": 340,
+      "s": 75,
+      "l": 52
+    },
+    "tags": [
+      "Operator error",
+      "Backups failing silently",
+      "Data loss",
+      "Live-streamed recovery"
+    ],
+    "category": "Deploy / operator error",
+    "blurb": "An engineer, tired and debugging a replication issue at 11pm, ran rm -rf on the production primary database directory instead of the replica. Five of six backup methods were later discovered to have been silently failing",
+    "problemNumber": "01",
+    "readMinutes": 3
+  },
+  {
+    "slug": "aws-s3-2017-typo",
+    "title": "S3 us-east-1",
+    "difficulty": null,
+    "accent": {
+      "h": 28,
+      "s": 88,
+      "l": 48
+    },
+    "tags": [
+      "Operator error",
+      "us-east-1",
+      "~4 hour outage",
+      "Cascading failure"
+    ],
+    "category": "Deploy / operator error",
+    "blurb": "A single command typo during debugging a billing system took down significant fractions of the internet — Slack, Trello, Quora, Docker Hub, and AWS's own status page — for roughly 4 hours. The blast radius caught Amazon ",
+    "problemNumber": "02",
+    "readMinutes": 3
+  },
+  {
+    "slug": "datadog-2023-systemd",
+    "title": "systemd Update",
+    "difficulty": null,
+    "accent": {
+      "h": 255,
+      "s": 50,
+      "l": 50
+    },
+    "tags": [
+      "Auto-update",
+      "systemd",
+      "All regions",
+      "24h outage"
+    ],
+    "category": "Deploy / operator error",
+    "blurb": "A routine Ubuntu systemd security update, applied automatically to tens of thousands of Datadog VMs across all 5 regions, broke networking on every affected host. Datadog's observability service — the one customers trust",
+    "problemNumber": "03",
+    "readMinutes": 2
+  },
+  {
+    "slug": "reddit-2023-k8s-upgrade",
+    "title": "\"Pi Day\"",
+    "difficulty": null,
+    "accent": {
+      "h": 18,
+      "s": 85,
+      "l": 50
+    },
+    "tags": [
+      "Kubernetes",
+      "CNI fork",
+      "5h outage",
+      "Tech debt"
+    ],
+    "category": "Deploy / operator error",
+    "blurb": "A planned Kubernetes control-plane upgrade introduced an incompatibility with a custom Calico (CNI) fork Reddit had been maintaining for years. Routing broke across pods. Reddit.com went fully dark for 5 hours — the long",
+    "problemNumber": "03",
+    "readMinutes": 2
+  },
+  {
+    "slug": "crowdstrike-2024-kernel-driver",
+    "title": "Kernel Driver",
+    "difficulty": null,
+    "accent": {
+      "h": 15,
+      "s": 85,
+      "l": 48
+    },
+    "tags": [
+      "Kernel driver",
+      "8.5M hosts",
+      "Global",
+      "Manual recovery"
+    ],
+    "category": "Deploy / operator error",
+    "blurb": "A content update to CrowdStrike's Falcon kernel driver caused an out-of-bounds read that crashed Windows at boot. 8.5 million Windows hosts globally went into boot loops. Airlines grounded, hospitals diverted ambulances,",
+    "problemNumber": "07",
+    "readMinutes": 3
+  },
+  {
+    "slug": "knight-capital-2012",
+    "title": "Knight Capital",
+    "difficulty": null,
+    "accent": {
+      "h": 0,
+      "s": 75,
+      "l": 50
+    },
+    "tags": [
+      "Stale deploy",
+      "Trading",
+      "$440M loss",
+      "Firm-ending"
+    ],
+    "category": "Deploy / operator error",
+    "blurb": "A stale deployment on 1 of 8 trading servers caused Knight's algorithm to submit millions of unintended orders in 45 minutes. Loss: $440 million. The firm was insolvent by end of day; absorbed by a competitor within week",
+    "problemNumber": "08",
+    "readMinutes": 3
+  },
+  {
+    "slug": "facebook-2021-bgp",
+    "title": "BGP Withdrawal",
+    "difficulty": null,
+    "accent": {
+      "h": 220,
+      "s": 75,
+      "l": 48
+    },
+    "tags": [
+      "BGP",
+      "DNS",
+      "~6 hour outage",
+      "Meta"
+    ],
+    "category": "Infrastructure + network",
+    "blurb": "A routine maintenance command on Facebook's backbone network triggered a BGP withdrawal of all of Facebook's prefixes — making facebook.com, instagram.com, whatsapp.com unreachable from the internet for 6 hours. Internal",
+    "problemNumber": "10",
+    "readMinutes": 3
+  }
+]

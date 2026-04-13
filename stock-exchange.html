@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Stock Exchange — System Design</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+<style>
+/* ux-v2-bumped */
+
+:root{--accent-h:230;--accent-s:75%;--accent-l:48%;--accent:hsl(var(--accent-h),var(--accent-s),var(--accent-l));--accent-light:hsl(var(--accent-h),80%,94%);--accent-mid:hsl(var(--accent-h),70%,88%);--accent-text:hsl(var(--accent-h),var(--accent-s),32%);--accent-border:hsl(var(--accent-h),60%,80%);--hl-yellow:#fff0a0;--hl-yellow-dark:#a07a00;--hl-accent:hsl(var(--accent-h),90%,88%);--hl-accent-dark:hsl(var(--accent-h),70%,30%);--bg:#fff;--bg-subtle:#f7f7f5;--bg-raised:#f0eeeb;--bg-code:#f4f3f0;--border:#e4e2de;--border-strong:#ccc9c4;--text-primary:#111110;--text-secondary:#4a4845;--text-muted:#878480;--text-code:#2d2c2b;--font-serif:'Instrument Serif',Georgia,serif;--font-sans:'Geist',system-ui,sans-serif;--font-mono:'JetBrains Mono','Fira Code',monospace;--radius-sm:4px;--radius-md:8px;--radius-lg:12px}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:80px}body{font-family:var(--font-sans);font-size:15px;line-height:1.7;color:var(--text-primary);background:var(--bg);-webkit-font-smoothing:antialiased}
+.layout{display:grid;grid-template-columns:270px 1fr;grid-template-rows:auto 1fr;min-height:100vh}
+.topbar{grid-column:1/-1;position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;height:52px;padding:0 24px;background:rgba(255,255,255,.88);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+.topbar-left{display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size: 13.5px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted)}.topbar-left a{color:var(--text-muted);text-decoration:none;transition:color .2s}.topbar-left a:hover{color:var(--accent)}.topbar-sep{color:var(--border-strong);user-select:none}.topbar-problem{color:var(--accent-text);font-weight:500}
+.topbar-right{display:flex;align-items:center;gap:16px}.topbar-tag{font-family:var(--font-mono);font-size: 11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:var(--radius-sm);background:var(--accent-light);color:var(--accent-text)}
+.sidebar{position:sticky;top:52px;height:calc(100vh - 52px);overflow-y:auto;padding:28px 20px 40px;border-right:1px solid var(--border);background:var(--bg-subtle)}.sidebar::-webkit-scrollbar{width:3px}.sidebar::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:4px}
+.sidebar-label{font-family:var(--font-mono);font-size: 11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:12px}
+.sidebar-nav{list-style:none;margin-bottom:32px}.sidebar-nav li{margin-bottom:2px}.sidebar-nav a{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:var(--radius-sm);font-size: 15px;font-weight:400;color:var(--text-secondary);text-decoration:none;transition:all .15s ease;position:relative}.sidebar-nav a::before{content:'';width:4px;height:4px;border-radius:50%;background:var(--border-strong);flex-shrink:0;transition:all .2s ease}.sidebar-nav a:hover{background:var(--bg-raised);color:var(--text-primary)}.sidebar-nav a.active{background:var(--accent-light);color:var(--accent-text);font-weight:500}.sidebar-nav a.active::before{background:var(--accent);width:6px;height:6px}
+.sidebar-sub{list-style:none;margin:2px 0 2px 18px}.sidebar-sub li{margin-bottom:1px}.sidebar-sub a{font-size: 12px;padding:3px 8px}
+.sidebar-related{list-style:none;margin-top:8px}.sidebar-related li{margin-bottom:4px}.sidebar-related a{font-size: 14.5px;color:var(--text-muted);text-decoration:none;transition:color .15s}.sidebar-related a:hover{color:var(--accent)}
+.main{padding:0 48px 120px;max-width:900px;min-width:0}
+.hero{padding:56px 0 40px;border-bottom:1px solid var(--border);margin-bottom:48px}.hero-number{font-family:var(--font-mono);font-size: 12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:12px}.hero h1{font-family:var(--font-serif);font-size:48px;font-weight:400;line-height:1.1;color:var(--text-primary);margin-bottom:16px;letter-spacing:-.02em}.hero-desc{font-size:17px;line-height:1.65;color:var(--text-secondary);max-width:600px;margin-bottom:20px}.hero-tags{display:flex;gap:8px;flex-wrap:wrap}.hero-tag{font-family:var(--font-mono);font-size: 12px;font-weight:400;letter-spacing:.04em;padding:4px 10px;border-radius:var(--radius-sm);background:var(--bg-raised);color:var(--text-muted);border:1px solid var(--border)}
+.section{margin-bottom:56px;opacity:0;transform:translateY(20px);animation:fadeUp .5s ease forwards}.section:nth-child(1){animation-delay:.05s}.section:nth-child(2){animation-delay:.1s}.section:nth-child(3){animation-delay:.15s}.section:nth-child(4){animation-delay:.2s}.section:nth-child(5){animation-delay:.25s}.section:nth-child(6){animation-delay:.3s}.section:nth-child(7){animation-delay:.35s}.section:nth-child(8){animation-delay:.4s}.section:nth-child(9){animation-delay:.45s}.section:nth-child(10){animation-delay:.5s}.section:nth-child(11){animation-delay:.55s}@keyframes fadeUp{to{opacity:1;transform:translateY(0)}}
+.section-number{font-family:var(--font-mono);font-size: 12px;font-weight:500;letter-spacing:.06em;color:var(--accent);margin-bottom:6px}.section h2{font-family:var(--font-serif);font-size:30px;font-weight:400;color:var(--text-primary);margin-bottom:20px;letter-spacing:-.01em}.section h3{font-family:var(--font-sans);font-size:16px;font-weight:600;color:var(--text-primary);margin:28px 0 10px}.section h4{font-family:var(--font-sans);font-size: 16px;font-weight:600;color:var(--text-primary);margin:20px 0 8px}.section p{color:var(--text-secondary);margin-bottom:14px;max-width:720px}.section ul,.section ol{padding-left:20px;margin-bottom:16px;color:var(--text-secondary)}.section li{margin-bottom:6px}
+.hl{background:var(--hl-yellow);color:var(--hl-yellow-dark);padding:1px 5px;border-radius:3px;font-weight:500}.hl-accent{background:var(--hl-accent);color:var(--hl-accent-dark);padding:1px 5px;border-radius:3px;font-weight:500}.hl-red{background:hsl(0,85%,93%);color:hsl(0,70%,35%);padding:1px 5px;border-radius:3px;font-weight:500}.hl-green{background:hsl(145,60%,90%);color:hsl(145,55%,28%);padding:1px 5px;border-radius:3px;font-weight:500}
+.card{background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--radius-md);padding:20px 24px;margin-bottom:16px}.card-accent{background:var(--accent-light);border-color:var(--accent-border)}.card h4{font-family:var(--font-sans);font-size: 16px;font-weight:600;color:var(--text-primary);margin-bottom:8px}.card p{font-size: 16px;color:var(--text-secondary);margin-bottom:0}.card-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.code-block{background:var(--bg-code);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px 20px;margin-bottom:16px;overflow-x:auto}.code-block code{font-family:var(--font-mono);font-size: 14.5px;font-weight:400;color:var(--text-code);line-height:1.7}.code-label{font-family:var(--font-mono);font-size: 11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px}.inline-code{font-family:var(--font-mono);font-size: 15px;background:var(--bg-code);border:1px solid var(--border);padding:1px 6px;border-radius:var(--radius-sm);color:var(--text-code)}
+.table-wrap{overflow-x:auto;margin-bottom:16px;border:1px solid var(--border);border-radius:var(--radius-md)}.table-wrap table{width:100%;border-collapse:collapse;font-size: 15.5px}.table-wrap th{font-family:var(--font-mono);font-size: 12px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted);text-align:left;padding:10px 16px;background:var(--bg-subtle);border-bottom:1px solid var(--border)}.table-wrap td{padding:10px 16px;border-bottom:1px solid var(--border);color:var(--text-secondary)}.table-wrap tr:last-child td{border-bottom:none}
+.scale-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px}.scale-card{background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;text-align:center}.scale-card .number{font-family:var(--font-mono);font-size:22px;font-weight:500;color:var(--accent-text);margin-bottom:2px}.scale-card .label{font-size: 13.5px;color:var(--text-muted)}
+.arch-diagram{background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--radius-lg);padding:32px;margin-bottom:20px;overflow-x:auto}.arch-diagram svg{display:block;margin:0 auto}.arch-diagram .node{cursor:pointer;transition:filter .2s}.arch-diagram .node:hover{filter:brightness(.95)}.arch-diagram .node rect,.arch-diagram .node-rect{rx:8;ry:8;stroke-width:1.5}.arch-diagram .node-label{font-family:'Geist',system-ui,sans-serif;font-size: 12px;font-weight:500;fill:var(--text-primary);text-anchor:middle;dominant-baseline:central;pointer-events:none}.arch-diagram .node-sublabel{font-family:'JetBrains Mono',monospace;font-size: 10.5px;fill:var(--text-muted);text-anchor:middle;dominant-baseline:central;pointer-events:none}.arch-diagram .edge{stroke:var(--border-strong);stroke-width:1.5;fill:none;marker-end:url(#arrowhead)}.arch-diagram .edge-label{font-family:'JetBrains Mono',monospace;font-size: 10.5px;fill:var(--text-muted);text-anchor:middle}.node-highlight rect{stroke:var(--accent)!important;stroke-width:2.5!important}.node-highlight .node-label{fill:var(--accent-text)!important}
+.flow-stepper{background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;margin-bottom:20px}.flow-stepper-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}.flow-stepper-title{font-family:var(--font-mono);font-size: 12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}.flow-stepper-controls{display:flex;gap:8px}.flow-btn{font-family:var(--font-mono);font-size: 12px;font-weight:500;padding:5px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg);color:var(--text-secondary);cursor:pointer;transition:all .15s}.flow-btn:hover{background:var(--accent-light);border-color:var(--accent-border);color:var(--accent-text)}.flow-btn:disabled{opacity:.4;cursor:not-allowed}.flow-btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}.flow-btn-primary:hover{opacity:.9;background:var(--accent);color:#fff}
+.flow-steps{display:flex;gap:4px;align-items:center;margin-bottom:16px;overflow-x:auto;padding-bottom:4px}.flow-node{font-family:var(--font-mono);font-size: 12px;font-weight:500;padding:6px 14px;border-radius:var(--radius-sm);background:var(--bg);border:1px solid var(--border);color:var(--text-muted);white-space:nowrap;transition:all .3s ease}.flow-node.active{background:var(--accent-light);border-color:var(--accent);color:var(--accent-text);box-shadow:0 0 0 3px var(--accent-mid)}.flow-node.done{background:var(--accent-light);border-color:var(--accent-border);color:var(--accent-text)}.flow-arrow{color:var(--border-strong);font-size: 16px;flex-shrink:0}.flow-desc{font-size: 16px;color:var(--text-secondary);line-height:1.6;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-md);min-height:52px}.flow-counter{font-family:var(--font-mono);font-size: 12px;color:var(--text-muted);margin-top:10px;text-align:right}
+.mermaid-wrap{background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;margin-bottom:20px;overflow-x:auto}.mermaid{text-align:center}
+.tradeoff{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}.tradeoff-option{background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px 20px}.tradeoff-option.chosen{border-color:var(--accent-border);background:var(--accent-light)}.tradeoff-label{font-family:var(--font-mono);font-size: 11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px}.tradeoff-label.yes{color:hsl(145,55%,32%)}.tradeoff-label.no{color:var(--text-muted)}.tradeoff-option h4{font-size: 16px;font-weight:600;color:var(--text-primary);margin-bottom:6px}.tradeoff-option p{font-size: 15px;color:var(--text-secondary);margin-bottom:0}
+.callout{border-left:3px solid var(--accent);padding:14px 18px;background:var(--accent-light);border-radius:0 var(--radius-md) var(--radius-md) 0;margin-bottom:16px}.callout p{font-size: 16px;color:var(--accent-text);margin-bottom:0}.callout-warn{border-left-color:hsl(38,92%,50%);background:hsl(38,80%,94%)}.callout-warn p{color:hsl(38,70%,28%)}.callout-danger{border-left-color:hsl(0,72%,52%);background:hsl(0,80%,95%)}.callout-danger p{color:hsl(0,65%,32%)}
+.tip-card{display:flex;gap:14px;padding:16px 20px;background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--radius-md);margin-bottom:10px}.tip-icon{font-size:18px;flex-shrink:0;margin-top:1px}.tip-content{font-size: 16px;color:var(--text-secondary);line-height:1.6}.tip-content strong{color:var(--text-primary);font-weight:600}
+.similar-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:16px}.similar-card{display:block;text-decoration:none;background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--radius-md);padding:18px 20px;transition:all .2s ease}.similar-card:hover{border-color:var(--accent-border);background:var(--accent-light);transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.06)}.similar-card h4{font-size: 16px;font-weight:600;color:var(--text-primary);margin-bottom:4px}.similar-card p{font-size: 13.5px;color:var(--text-muted);margin-bottom:0}
+.evolution-step{display:flex;gap:16px;margin-bottom:20px;position:relative}.evolution-step:not(:last-child)::after{content:'';position:absolute;left:15px;top:36px;bottom:-20px;width:2px;background:var(--border)}.evolution-marker{width:32px;height:32px;border-radius:50%;background:var(--accent-light);border:2px solid var(--accent-border);display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size: 13.5px;font-weight:600;color:var(--accent-text);flex-shrink:0}.evolution-content h4{font-size: 16px;font-weight:600;color:var(--text-primary);margin-bottom:4px}.evolution-content p{font-size: 15.5px;color:var(--text-secondary);margin-bottom:0}
+.dd-nav{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:28px}.dd-nav-item{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--radius-md);text-decoration:none;transition:all .15s;cursor:pointer}.dd-nav-item:hover{background:var(--accent-light);border-color:var(--accent-border)}.dd-nav-item .dd-num{font-family:var(--font-mono);font-size: 11px;font-weight:600;color:var(--accent);min-width:20px}.dd-nav-item .dd-title{font-size: 13.5px;font-weight:500;color:var(--text-primary)}
+.dd-section{border-top:1px solid var(--border);padding-top:32px;margin-top:32px}.dd-section-header{display:flex;align-items:center;gap:12px;margin-bottom:20px}.dd-section-num{font-family:var(--font-mono);font-size: 13.5px;font-weight:600;color:var(--accent);background:var(--accent-light);border:1px solid var(--accent-border);width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}.dd-section h3{font-size:20px;font-family:var(--font-serif);font-weight:400;margin:0}
+@media(max-width:900px){.layout{grid-template-columns:1fr}.sidebar{display:none}.main{padding:0 20px 80px}.hero h1{font-size:34px}.tradeoff{grid-template-columns:1fr}.card-grid{grid-template-columns:1fr}.dd-nav{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="layout">
+<header class="topbar">
+<div class="topbar-left"><a href="../index.html">System Design</a><span class="topbar-sep">/</span><span class="topbar-problem">Stock Exchange</span></div>
+<div class="topbar-right"><span class="topbar-tag">EXPERT</span></div>
+</header>
+
+<aside class="sidebar">
+<div class="sidebar-label">Sections</div>
+<ul class="sidebar-nav" id="sidebar-nav">
+<li><a href="#problem">Problem Statement</a></li>
+<li><a href="#requirements">Requirements</a></li>
+<li><a href="#scale">Scale Estimation</a></li>
+<li><a href="#api">API Design</a></li>
+<li><a href="#architecture">Architecture</a></li>
+<li><a href="#deep-dive">Deep Dives (15)</a>
+<ul class="sidebar-sub">
+<li><a href="#dd-1">Order Book</a></li>
+<li><a href="#dd-2">Matching Algorithm</a></li>
+<li><a href="#dd-3">LMAX Disruptor</a></li>
+<li><a href="#dd-4">Kernel Bypass</a></li>
+<li><a href="#dd-5">WAL &amp; Recovery</a></li>
+<li><a href="#dd-6">Replication</a></li>
+<li><a href="#dd-7">Market Data Multicast</a></li>
+<li><a href="#dd-8">Fairness</a></li>
+<li><a href="#dd-9">Auctions</a></li>
+<li><a href="#dd-10">Mechanical Sympathy</a></li>
+<li><a href="#dd-11">Stop Orders</a></li>
+<li><a href="#dd-12">Self-Trade Prevention</a></li>
+<li><a href="#dd-13">Fee Engine</a></li>
+<li><a href="#dd-14">Capacity Planning</a></li>
+<li><a href="#dd-15">Multi-Asset</a></li>
+</ul>
+</li>
+<li><a href="#tradeoffs">Tradeoffs</a></li>
+<li><a href="#failures">Failure Scenarios</a></li>
+<li><a href="#interview-tips">Interview Tips</a></li>
+<li><a href="#similar">Similar Problems</a></li>
+<li><a href="#evolution">Evolution</a></li>
+</ul>
+<div class="sidebar-label">Related</div>
+<ul class="sidebar-related">
+<li><a href="../stock-trading-platform/index.html">Stock Trading Platform</a></li>
+<li><a href="../kafka/index.html">Distributed Message Queue</a></li>
+<li><a href="../rate-limiter/index.html">Rate Limiter</a></li>
+</ul>
+</aside>
+
+<main class="main">
+<div class="hero">
+<div class="hero-number">System Design — Expert</div>
+<h1>High-Throughput Stock Exchange</h1>
+<p class="hero-desc">Design a NASDAQ-scale order-matching system that processes millions of orders per second with single-digit microsecond latency, maintains deterministic fairness guarantees, and broadcasts every state change to thousands of participants in real-time.</p>
+<div class="hero-tags">
+<span class="hero-tag">Matching Engine</span>
+<span class="hero-tag">Microsecond Latency</span>
+<span class="hero-tag">Kernel Bypass</span>
+<span class="hero-tag">LMAX Disruptor</span>
+<span class="hero-tag">UDP Multicast</span>
+<span class="hero-tag">FIX Protocol</span>
+<span class="hero-tag">Deterministic</span>
+<span class="hero-tag">Cache-Line Engineering</span>
+</div>
+</div>
+
+<div class="section" id="problem">
+<div class="section-number">01</div>
+<h2>Problem Statement</h2>
+<p>Design a centralized order-matching system — the core of a stock exchange like NASDAQ or NYSE. The exchange receives buy and sell orders from thousands of brokers, matches them according to <span class="hl">price-time priority</span> rules, and broadcasts results to all market participants.</p>
+<p>This is fundamentally a <span class="hl-accent">systems programming problem</span>, not a distributed systems problem. The matching engine itself runs on a <span class="hl">single thread per symbol</span> to eliminate all synchronization overhead. The distributed aspects come from gateway servers, replication, and market data broadcasting.</p>
+<div class="callout">
+<p><strong>Core question:</strong> How do you process millions of orders per second with single-digit microsecond latency, while maintaining deterministic fairness guarantees and zero data loss?</p>
+</div>
+<p>Three planes with completely different design philosophies: the <span class="hl-accent">Order Gateway</span> is distributed and stateless, the <span class="hl-accent">Matching Engine</span> is single-threaded and bare-metal optimized, and the <span class="hl-accent">Market Data Plane</span> uses hardware-level multicast for simultaneous delivery to all subscribers.</p>
+<div class="card card-accent">
+<h4>How is this different from Robinhood?</h4>
+<p>Robinhood (broker) accepts orders from users, validates buying power, and routes to exchanges. The exchange receives orders from <em>thousands of brokers simultaneously</em>, maintains an order book per symbol, runs a matching engine that pairs buyers with sellers, and broadcasts trades/quotes to the entire market. Robinhood's hard problem was consistency of money movement. The exchange's hard problem is <span class="hl">throughput and latency at extreme scale with deterministic fairness</span>.</p>
+</div>
+</div>
+
+<div class="section" id="requirements">
+<div class="section-number">02</div>
+<h2>Requirements</h2>
+<h3>Functional Requirements</h3>
+<div class="card">
+<h4>Order Management</h4>
+<ul>
+<li>Accept orders via <span class="hl-accent">FIX protocol</span> from member broker-dealers — market, limit, stop, stop-limit, IOC, FOK, GTC, day orders</li>
+<li>Cancel and modify (cancel-replace) resting orders with O(1) lookup</li>
+<li>Match orders using <span class="hl">price-time priority (FIFO)</span> — best price first, earliest order first within same price</li>
+<li>Support <span class="hl-accent">auction mechanisms</span> — opening cross, closing cross, halt auctions</li>
+<li>Manage trading sessions — pre-market, continuous, auction, after-hours</li>
+</ul>
+</div>
+<div class="card">
+<h4>Market Data</h4>
+<ul>
+<li>Publish trade reports and quote updates via <span class="hl-accent">UDP multicast</span> to all subscribers simultaneously</li>
+<li>Level 1 (top of book) feed to SIP for NBBO computation</li>
+<li>Level 2 (depth of book) proprietary feed using <span class="hl-accent">ITCH protocol</span></li>
+<li>A/B feed redundancy on independent network paths</li>
+<li>Retransmit server (TCP) for gap recovery; snapshot service for full-book recovery</li>
+</ul>
+</div>
+<div class="card">
+<h4>Regulatory</h4>
+<ul>
+<li><span class="hl-accent">LULD circuit breakers</span> — halt trading if price moves &gt;5% in 5 minutes</li>
+<li><span class="hl-accent">Reg NMS Rule 611</span> — trade-through prevention against NBBO</li>
+<li><span class="hl-accent">Self-trade prevention</span> — detect and prevent wash trades within same broker</li>
+<li>Maker-taker fee tagging on every fill</li>
+<li>CAT (Consolidated Audit Trail) reporting with nanosecond timestamps</li>
+<li>Deterministic replay for regulatory verification</li>
+</ul>
+</div>
+<h3>Non-Functional Requirements</h3>
+<div class="card-grid">
+<div class="card">
+<h4>Latency</h4>
+<ul>
+<li>Order-to-ack: <span class="hl">&lt; 10 μs</span> median</li>
+<li>Order-to-match: <span class="hl">&lt; 15 μs</span> median</li>
+<li>p99: <span class="hl">&lt; 50 μs</span></li>
+<li>p99.9: &lt; 100 μs</li>
+<li>Jitter: &lt; 5 μs standard deviation</li>
+</ul>
+</div>
+<div class="card">
+<h4>Throughput &amp; Availability</h4>
+<ul>
+<li>Sustained: <span class="hl">1M orders/sec</span>, peak 3-5M</li>
+<li>Per-symbol hot: <span class="hl">100K orders/sec</span> (SPY/AAPL)</li>
+<li><span class="hl">99.999% uptime</span> during market hours (~59 sec downtime/year)</li>
+<li>Recovery: &lt; 5 seconds after crash via standby failover</li>
+<li>Zero data loss for acknowledged events</li>
+</ul>
+</div>
+</div>
+<div class="callout-warn callout">
+<p><strong>Technology elimination:</strong> At 10μs total budget, <span class="hl-red">no databases, no Redis, no Kafka, no HTTP, no JSON, no GC in the hot path</span>. Everything in the matching engine must be in-memory, pre-allocated, lock-free, and zero-copy.</p>
+</div>
+</div>
+
+<div class="section" id="scale">
+<div class="section-number">03</div>
+<h2>Scale Estimation</h2>
+<p>Anchored on NASDAQ-scale: 15-20% of total US equity volume. <span class="hl">2.5B orders/day</span>, but only 7M trades (OTR ~150:1). The order book is overwhelmingly an add-and-cancel machine — cancels (52%) are more frequent than adds (40%).</p>
+<div class="scale-grid">
+<div class="scale-card"><div class="number">1M/sec</div><div class="label">Sustained Orders</div></div>
+<div class="scale-card"><div class="number">3-5M/sec</div><div class="label">Peak Orders</div></div>
+<div class="scale-card"><div class="number">100K/sec</div><div class="label">Per-Symbol Hot</div></div>
+<div class="scale-card"><div class="number">10 μs</div><div class="label">Time Budget/Order</div></div>
+<div class="scale-card"><div class="number">~16 GB</div><div class="label">Total Book Memory</div></div>
+<div class="scale-card"><div class="number">1-5M/sec</div><div class="label">Market Data Out</div></div>
+<div class="scale-card"><div class="number">~2,000</div><div class="label">FIX Sessions</div></div>
+<div class="scale-card"><div class="number">144 MB/sec</div><div class="label">WAL Write Rate</div></div>
+</div>
+<div class="card">
+<h4>Per-Symbol Hot Path Budget</h4>
+<p>SPY at 100K orders/sec → <span class="hl">10 μs per order</span> → ~35,000 CPU cycles at 3.5 GHz. A single L3 cache miss costs ~150 cycles. This means <span class="hl-red">every data access must hit L1/L2 cache</span>. The order book data structure design is driven entirely by cache-line optimization.</p>
+</div>
+<div class="card">
+<h4>Symbol Partitioning Strategy</h4>
+<p>Static core assignment: top 10 symbols get dedicated cores. Next 90 symbols share 10 cores (~9 each). Next 900 share 10 cores. Remaining 7,000 share 10 cores. Each core runs one matching thread — no context switching, no locks, no shared state between cores.</p>
+</div>
+</div>
+
+<div class="section" id="api">
+<div class="section-number">04</div>
+<h2>API Design</h2>
+<p>No REST. No JSON. No HTTP. Everything is <span class="hl-accent">binary messages over persistent TCP connections</span> using the FIX protocol externally, and custom 64-byte structs internally. HTTP overhead alone (~80-2,330μs) exceeds our entire 10μs budget.</p>
+<h3>Inbound: FIX Protocol (Broker → Exchange)</h3>
+<div class="code-block"><code><pre>NewOrderSingle (MsgType=D):
+  cl_ord_id, symbol, side(Buy/Sell), quantity, ord_type(Market/Limit),
+  price (integer, hundredths of cents), time_in_force(Day/GTC/IOC/FOK)
+
+OrderCancelRequest (MsgType=F):
+  cl_ord_id, orig_cl_ord_id, symbol, side
+
+CancelReplaceRequest (MsgType=G):
+  cl_ord_id, orig_cl_ord_id, symbol, side, new_qty, new_price
+  → Price change loses time priority; qty-down-only keeps priority</pre></code></div>
+<h3>Internal: 64-byte Cache-Line-Aligned Struct</h3>
+<div class="code-block"><code><pre>struct InternalOrder {   // exactly 1 cache line = 64 bytes
+  uint8_t  msg_type;     // NEW, CANCEL, REPLACE
+  uint8_t  side;         // BUY=1, SELL=2
+  uint8_t  ord_type;     // MARKET=1, LIMIT=2, STOP=3
+  uint8_t  tif;          // DAY=0, GTC=1, IOC=3, FOK=4
+  uint32_t symbol_id;    // integer ID (not string — gateway maps at logon)
+  uint64_t order_id;     // exchange-assigned
+  uint64_t cl_ord_id;    // broker's ID (hashed to uint64)
+  uint32_t broker_id;    // integer broker ID
+  uint32_t quantity;
+  int64_t  price;        // hundredths of cents ($187.45 = 18745000)
+  uint64_t timestamp;    // nanoseconds (NIC hardware PTP clock)
+  uint64_t orig_order_id;// for cancel/replace
+} __attribute__((packed, aligned(64)));</pre></code></div>
+<h3>Outbound: ExecutionReport (Exchange → Broker)</h3>
+<div class="code-block"><code><pre>ExecutionReport (MsgType=8):
+  exec_type: NEW | PARTIAL_FILL | FILLED | CANCELLED | REJECTED
+  last_qty, last_px, leaves_qty, cum_qty, avg_px
+  liquidity_indicator: 'A'=Added(maker) | 'R'=Removed(taker)
+  contra_broker: other side's broker ID (for clearing)</pre></code></div>
+<h3>Market Data: ITCH + MoldUDP64</h3>
+<div class="code-block"><code><pre>ITCH message types (subscribers reconstruct full order book):
+  ADD_ORDER (36 bytes): order_ref, side, shares, symbol, price
+  ORDER_EXECUTED (31 bytes): order_ref, shares, match_number
+  ORDER_CANCELLED (23 bytes): order_ref, cancelled_shares
+  ORDER_REPLACE (35 bytes): old_ref, new_ref, shares, price
+  TRADE (44 bytes): non-displayable execution
+
+MoldUDP64 framing: session_id(10) + sequence(8) + msg_count(2)
+  Multiple ITCH messages batched per UDP packet (up to MTU 1500)
+  A/B feed redundancy on independent switch paths</pre></code></div>
+</div>
+
+<div class="section" id="architecture">
+<div class="section-number">05</div>
+<h2>High-Level Architecture</h2>
+<p>Three planes with completely different scaling models: <span class="hl-accent">Gateway</span> (stateless, horizontal), <span class="hl-accent">Matching Engine</span> (stateful, vertical + partitioning), <span class="hl-accent">Market Data</span> (stateless formatting, hardware multicast).</p>
+<div class="arch-diagram">
+<svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg">
+<defs><marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#ccc9c4"/></marker></defs>
+<text x="450" y="20" font-family="JetBrains Mono, monospace" font-size="10" fill="#878480" text-anchor="middle" letter-spacing="0.08em">GATEWAY PLANE — LEFT  ·  MATCHING ENGINE — CENTER  ·  MARKET DATA — RIGHT</text>
+<g class="node" id="node-broker" onclick="hlNode('node-broker')"><rect class="node-rect" x="10" y="80" width="100" height="50" fill="#f7f7f5" stroke="#e4e2de"/><text class="node-label" x="60" y="100">Brokers</text><text class="node-sublabel" x="60" y="115">FIX Sessions</text></g>
+<g class="node" id="node-gw" onclick="hlNode('node-gw')"><rect class="node-rect" x="10" y="170" width="100" height="50" fill="hsl(230,80%,94%)" stroke="hsl(230,60%,80%)"/><text class="node-label" x="60" y="190">Gateways</text><text class="node-sublabel" x="60" y="205">Parse · Validate</text></g>
+<g class="node" id="node-seq" onclick="hlNode('node-seq')"><rect class="node-rect" x="150" y="170" width="110" height="50" fill="hsl(230,80%,94%)" stroke="hsl(230,60%,80%)"/><text class="node-label" x="205" y="190">Sequencer</text><text class="node-sublabel" x="205" y="205">HW Timestamp Sort</text></g>
+<g class="node" id="node-me" onclick="hlNode('node-me')"><rect class="node-rect" x="310" y="120" width="150" height="70" fill="hsl(45,80%,92%)" stroke="hsl(45,60%,78%)"/><text class="node-label" x="385" y="148">Matching Engine</text><text class="node-sublabel" x="385" y="165">Single-Thread/Symbol</text></g>
+<g class="node" id="node-disruptor" onclick="hlNode('node-disruptor')"><rect class="node-rect" x="310" y="230" width="150" height="50" fill="hsl(230,80%,94%)" stroke="hsl(230,60%,80%)"/><text class="node-label" x="385" y="250">Disruptor</text><text class="node-sublabel" x="385" y="265">Lock-Free Ring Buffer</text></g>
+<g class="node" id="node-wal" onclick="hlNode('node-wal')"><rect class="node-rect" x="200" y="320" width="100" height="50" fill="#f7f7f5" stroke="#e4e2de"/><text class="node-label" x="250" y="340">WAL Writer</text><text class="node-sublabel" x="250" y="355">mmap · NVMe</text></g>
+<g class="node" id="node-repl" onclick="hlNode('node-repl')"><rect class="node-rect" x="320" y="320" width="100" height="50" fill="hsl(0,60%,92%)" stroke="hsl(0,40%,80%)"/><text class="node-label" x="370" y="340">Replication</text><text class="node-sublabel" x="370" y="355">RDMA · 1.5μs</text></g>
+<g class="node" id="node-gwresp" onclick="hlNode('node-gwresp')"><rect class="node-rect" x="200" y="400" width="110" height="45" fill="hsl(230,80%,94%)" stroke="hsl(230,60%,80%)"/><text class="node-label" x="255" y="418">GW Response</text><text class="node-sublabel" x="255" y="432">FIX ExecReport</text></g>
+<g class="node" id="node-md" onclick="hlNode('node-md')"><rect class="node-rect" x="550" y="230" width="120" height="50" fill="hsl(200,70%,92%)" stroke="hsl(200,50%,78%)"/><text class="node-label" x="610" y="250">MD Formatter</text><text class="node-sublabel" x="610" y="265">ITCH · SIP</text></g>
+<g class="node" id="node-mcast" onclick="hlNode('node-mcast')"><rect class="node-rect" x="720" y="230" width="120" height="50" fill="hsl(200,70%,92%)" stroke="hsl(200,50%,78%)"/><text class="node-label" x="780" y="250">UDP Multicast</text><text class="node-sublabel" x="780" y="265">A/B Feeds</text></g>
+<g class="node" id="node-subs" onclick="hlNode('node-subs')"><rect class="node-rect" x="720" y="320" width="120" height="50" fill="#f7f7f5" stroke="#e4e2de"/><text class="node-label" x="780" y="340">Subscribers</text><text class="node-sublabel" x="780" y="355">HFT · Vendors</text></g>
+<g class="node" id="node-standby" onclick="hlNode('node-standby')"><rect class="node-rect" x="500" y="320" width="120" height="50" fill="hsl(0,60%,92%)" stroke="hsl(0,40%,80%)"/><text class="node-label" x="560" y="340">Hot Standby</text><text class="node-sublabel" x="560" y="355">Identical Books</text></g>
+<line class="edge" x1="60" y1="130" x2="60" y2="170"/><line class="edge" x1="110" y1="195" x2="150" y2="195"/><line class="edge" x1="260" y1="195" x2="310" y2="165"/><line class="edge" x1="385" y1="190" x2="385" y2="230"/><line class="edge" x1="350" y1="280" x2="250" y2="320"/><line class="edge" x1="385" y1="280" x2="370" y2="320"/><line class="edge" x1="460" y1="255" x2="550" y2="255"/><line class="edge" x1="670" y1="255" x2="720" y2="255"/><line class="edge" x1="780" y1="280" x2="780" y2="320"/><line class="edge" x1="420" y1="345" x2="500" y2="345"/><line class="edge" x1="280" y1="370" x2="260" y2="400" stroke-dasharray="5,5"/>
+<text class="edge-label" x="65" y="155">FIX/TCP</text><text class="edge-label" x="130" y="187">Normalize</text><text class="edge-label" x="280" y="172">Sorted</text><text class="edge-label" x="393" y="215">Events</text><text class="edge-label" x="290" y="300">Tier 1</text><text class="edge-label" x="510" y="248">Consumer</text><text class="edge-label" x="695" y="248">Multicast</text><text class="edge-label" x="455" y="337">RDMA</text><text class="edge-label" x="230" y="390">Barrier</text>
+</svg>
+</div>
+
+<div class="flow-stepper">
+<div class="flow-stepper-header"><span class="flow-stepper-title">Order Matching Flow — Step Through</span>
+<div class="flow-stepper-controls"><button class="flow-btn" onclick="resetFlow()" id="flow-reset" disabled>Reset</button><button class="flow-btn flow-btn-primary" onclick="runFlow()" id="flow-next">Next Step →</button></div></div>
+<div class="flow-steps" id="flow-steps"></div>
+<div class="flow-desc" id="flow-desc">Click <strong>Next Step</strong> to walk through a complete order from broker to execution.</div>
+<div class="flow-counter" id="flow-counter"></div>
+</div>
+
+<h3>Infrastructure</h3>
+<div class="table-wrap"><table>
+<tr><th>Component</th><th>Count</th><th>Key Spec</th></tr>
+<tr><td>Gateway Servers</td><td>4-8</td><td>16-32 cores, 25GbE DPDK, Solarflare Onload</td></tr>
+<tr><td>Matching Engine Primary</td><td>1</td><td>40-64 cores, 512GB RAM, 40GbE RDMA, NVMe</td></tr>
+<tr><td>Matching Engine Standby</td><td>1</td><td>Identical to primary, RDMA-connected</td></tr>
+<tr><td>Market Data Servers</td><td>4-6</td><td>16-32 cores, 40GbE multicast-capable</td></tr>
+<tr><td>Retransmit / Snapshot</td><td>2-4</td><td>256GB RAM (message buffer)</td></tr>
+<tr><td>Network Switches</td><td>6-8</td><td>Arista 7130, cut-through, &lt;500ns latency</td></tr>
+<tr><td>PTP Grandmaster</td><td>2</td><td>GPS-synced, ±30ns to UTC</td></tr>
+</table></div>
+</div>
+
+<div class="section" id="deep-dive">
+<div class="section-number">06</div>
+<h2>Deep Dives — 15 Rabbit Holes</h2>
+<p>Each rabbit hole explores a critical subsystem at implementation depth — from cache-line-level data structure engineering to regulatory fairness requirements.</p>
+<div class="dd-nav">
+<a class="dd-nav-item" href="#dd-01"><span class="dd-num">01</span><span class="dd-title">Order Book Data Structure</span></a><a class="dd-nav-item" href="#dd-02"><span class="dd-num">02</span><span class="dd-title">Matching Algorithm — Price-Time Priority</span></a><a class="dd-nav-item" href="#dd-03"><span class="dd-num">03</span><span class="dd-title">LMAX Disruptor — Lock-Free Fan-Out</span></a><a class="dd-nav-item" href="#dd-04"><span class="dd-num">04</span><span class="dd-title">Kernel Bypass Networking</span></a><a class="dd-nav-item" href="#dd-05"><span class="dd-num">05</span><span class="dd-title">WAL Design &amp; Crash Recovery</span></a><a class="dd-nav-item" href="#dd-06"><span class="dd-num">06</span><span class="dd-title">Replication &amp; Failover</span></a><a class="dd-nav-item" href="#dd-07"><span class="dd-num">07</span><span class="dd-title">Market Data Multicast</span></a><a class="dd-nav-item" href="#dd-08"><span class="dd-num">08</span><span class="dd-title">Fairness Engineering</span></a><a class="dd-nav-item" href="#dd-09"><span class="dd-num">09</span><span class="dd-title">Auction Mechanisms</span></a><a class="dd-nav-item" href="#dd-10"><span class="dd-num">10</span><span class="dd-title">Mechanical Sympathy — CPU Architecture</span></a><a class="dd-nav-item" href="#dd-11"><span class="dd-num">11</span><span class="dd-title">Stop Order &amp; Triggered Order Management</span></a><a class="dd-nav-item" href="#dd-12"><span class="dd-num">12</span><span class="dd-title">Self-Trade Prevention</span></a><a class="dd-nav-item" href="#dd-13"><span class="dd-num">13</span><span class="dd-title">Fee Engine — Maker-Taker Economics</span></a><a class="dd-nav-item" href="#dd-14"><span class="dd-num">14</span><span class="dd-title">Capacity Planning &amp; Stress Testing</span></a><a class="dd-nav-item" href="#dd-15"><span class="dd-num">15</span><span class="dd-title">Multi-Asset Extension</span></a></div>
+<div class="dd-section" id="dd-01">
+<div class="dd-section-header"><div class="dd-section-num">01</div><h3>Order Book Data Structure</h3></div>
+
+<p>The single most performance-critical data structure. Uses a <span class="hl-accent">hybrid approach</span>: flat array indexed by price for the hot zone (O(1) lookup, 512KB fits in L2 cache) plus Red-Black Tree for far-from-market orders.</p>
+<h3>Operation Frequency Drives Optimization</h3>
+<div class="table-wrap"><table>
+<tr><th>Operation</th><th>Frequency</th><th>Target</th><th>Complexity</th></tr>
+<tr><td>Cancel order</td><td>52% of messages</td><td>&lt; 0.5 μs</td><td>O(1) HashMap + O(1) list remove</td></tr>
+<tr><td>Add order</td><td>40%</td><td>&lt; 1 μs</td><td>O(1) array index + O(1) list append</td></tr>
+<tr><td>Match (trade)</td><td>0.03%</td><td>&lt; 3 μs</td><td>O(k) fills at best price</td></tr>
+<tr><td>Read best bid/ask</td><td>every operation</td><td>&lt; 0.1 μs</td><td>O(1) cached pointer</td></tr>
+</table></div>
+<h3>64-Byte Order Struct (Exactly 1 Cache Line)</h3>
+<div class="code-block"><code><pre>struct Order {  // hot fields first for prefetcher
+  int64_t price;           // 8B — compared during matching
+  uint32_t remaining_qty;  // 4B — decremented during fills
+  uint32_t broker_id;      // 4B — checked for STP
+  Order* next;             // 8B — linked list traversal
+  Order* prev;             // 8B — linked list removal
+  uint64_t order_id;       // 8B — for execution report
+  uint64_t cl_ord_id;      // 8B — for broker response
+  uint32_t original_qty;   // 4B — cold
+  uint32_t symbol_id;      // 4B — cold
+  uint64_t timestamp;      // 8B — cold
+} __attribute__((packed, aligned(64))); // = 64 bytes ✓</pre></code></div>
+<h3>Custom Open-Addressing HashMap for O(1) Cancel</h3>
+<p>1M slots × 16 bytes = 16 MB (fits in L3). Fibonacci hashing with linear probing — at 50% load factor, average 1.5 probes per lookup. <span class="hl">5-10 ns per cancel lookup</span> vs 50-200 ns for std::unordered_map. Pre-allocated pool with free-list allocator on huge pages eliminates all malloc/free in the hot path.</p>
+<div class="callout"><p><strong>Benchmark:</strong> Add: ~22 ns, Cancel: ~30 ns, Match: ~140 ns per order. One core handles 33-45M operations/sec. Our requirement is 100K/sec — <span class="hl">300× headroom</span>.</p></div>
+
+</div>
+
+<div class="dd-section" id="dd-02">
+<div class="dd-section-header"><div class="dd-section-num">02</div><h3>Matching Algorithm — Price-Time Priority</h3></div>
+
+<p>The core product. Incoming marketable orders sweep through the opposite side of the book, matching against resting orders in FIFO order at each price level.</p>
+<div class="mermaid-wrap"><div class="mermaid">
+sequenceDiagram
+    participant B as Broker
+    participant G as Gateway
+    participant M as Matching Engine
+    participant D as Disruptor
+    B->>G: FIX NewOrderSingle (BUY 100 AAPL LIMIT $187.46)
+    G->>M: 64-byte InternalOrder (validated, normalized)
+    Note over M: Check: $187.46 >= best ask $187.46 → MARKETABLE!
+    Note over M: Match against resting sell at $187.46 (FIFO)
+    Note over M: STP check: different brokers ✓
+    Note over M: Fill 100 shares @ $187.46
+    M->>D: TRADE event + ORDER_EXECUTED + QUOTE_UPDATE
+    D-->>G: ExecutionReport (FILLED, liquidity='R' taker)
+    D-->>G: ExecutionReport to seller (liquidity='A' maker)
+</div></div>
+<h3>Order Type Handling</h3>
+<div class="card-grid">
+<div class="card"><h4>Market Orders</h4><p>Always match immediately. No price limit — take whatever is available. Sweep through price levels until fully filled or book exhausted. Never rest on the book.</p></div>
+<div class="card"><h4>Limit Orders</h4><p>Match if marketable (buy price ≥ best ask). Remaining quantity rests on book. IOC: cancel unfilled portion. FOK: pre-check full quantity available before executing any fills.</p></div>
+<div class="card"><h4>Stop Orders</h4><p>Sit in separate trigger table. After every trade, check if trade price crosses any stop triggers. Triggered stops convert to market/limit and enter normal matching — can cause cascades.</p></div>
+<div class="card"><h4>Cancel-Replace</h4><p>Atomic cancel + new order. Price change loses time priority. Qty-down-only keeps priority. New price might be marketable — modify can trigger immediate matching.</p></div>
+</div>
+<h3>Deterministic Replay</h3>
+<p>Same input sequence must produce same output sequence. Every time. No floating-point (integer prices), no system clock reads (timestamps from input), no randomness, no threads. Any trading day can be replayed and verified — regulatory requirement.</p>
+
+</div>
+
+<div class="dd-section" id="dd-03">
+<div class="dd-section-header"><div class="dd-section-num">03</div><h3>LMAX Disruptor — Lock-Free Fan-Out</h3></div>
+
+<p>Pre-allocated ring buffer connecting the single-threaded matching engine to 5 downstream consumers. <span class="hl">No copying, no locks, no allocation</span>. All consumers read from the same memory with independent cursors.</p>
+<div class="code-block"><code><pre>Ring Buffer: 262,144 slots × 128 bytes = 32 MB (pre-allocated, huge pages)
+Producer: Matching engine (single writer, ~1M events/sec)
+Consumers (each on own core):
+  Tier 1: WAL Writer + Replication Sender (no dependencies)
+  Tier 2: Gateway Response + Market Data (gated behind Tier 1)
+  Tier 3: Surveillance (gated behind Tier 2)</pre></code></div>
+<h3>Cache-Line Padding Eliminates False Sharing</h3>
+<p>Each cursor is padded to 64 bytes (one cache line). Without padding: producer update invalidates ALL consumer cache lines (~40-70 ns per event). With padding: zero cross-core cache coherence traffic. This single optimization made the Disruptor "impossibly fast."</p>
+<h3>Dependency Barriers</h3>
+<p>Gateway cannot send broker ExecutionReport until BOTH WAL and Replication confirm the event is durable. This is the mechanism that achieves <span class="hl-green">zero data loss for acknowledged events</span> without adding latency to the matching engine.</p>
+<div class="callout"><p><strong>Performance:</strong> ~50M messages/sec between threads. 5× faster than any lock-based queue. One event reaches all 5 consumers in ~130 ns total (vs ~500+ ns with standard queues).</p></div>
+
+</div>
+
+<div class="dd-section" id="dd-04">
+<div class="dd-section-header"><div class="dd-section-num">04</div><h3>Kernel Bypass Networking</h3></div>
+
+<p>The Linux kernel TCP/IP stack adds ~10 μs per packet (interrupts, memory allocation, TCP processing, context switches, data copying). Our entire budget is 10 μs. <span class="hl-red">Kernel networking alone consumes 92% of our budget.</span></p>
+<h3>Three Levels of Bypass</h3>
+<div class="card"><h4>External: Solarflare Onload</h4><p>Intercepts standard socket calls, implements TCP in userspace. Application code unchanged. recv() drops from 9 μs to 1.5 μs. Used for broker FIX connections on gateway servers.</p></div>
+<div class="card"><h4>Internal: DPDK / ef_vi (raw UDP)</h4><p>NIC mapped directly into userspace. Packets polled from DMA ring buffer — no interrupts, no kernel. Receive latency: 0.5 μs. Used for gateway → matching engine internal path.</p></div>
+<div class="card"><h4>Replication: RDMA</h4><p>One-sided writes directly into standby's memory without involving standby CPU. Latency: 1.5 μs same-rack. Used for matching engine → standby replication.</p></div>
+<h3>Hardware Timestamping (PTP)</h3>
+<p>NIC PHY stamps every packet at the wire level with ±5 ns accuracy (GPS-synced PTP clock). This provides regulatory-quality nanosecond timestamps and enables the fairness sequencer.</p>
+
+</div>
+
+<div class="dd-section" id="dd-05">
+<div class="dd-section-header"><div class="dd-section-num">05</div><h3>WAL Design &amp; Crash Recovery</h3></div>
+
+<p>No database — all state is in memory. Persistence via memory-mapped WAL: append 144-byte entries at ~0.1 μs (memcpy to page cache). OS flushes to NVMe asynchronously. True durability comes from <span class="hl-accent">RDMA replication to standby</span>, not local disk.</p>
+<h3>Recovery Strategy</h3>
+<div class="code-block"><code><pre>Cold recovery:
+  1. Load latest snapshot (~310 MB, ~0.1 sec from NVMe)
+  2. Replay WAL from snapshot timestamp (~30 sec of events)
+  3. Replay speed: ~2M events/sec → ~6 seconds total
+  4. Resume accepting orders
+
+Hot failover (preferred):
+  Standby takes over in ~5-10 ms
+  Primary's WAL used only for convenience on restart</pre></code></div>
+<h3>Deterministic Replay</h3>
+<p>Timer events (market open/close, LULD recompute) injected as input messages through the WAL — not from system clock. This ensures replay produces identical order book state. Verified nightly by replaying the full day and comparing every output event.</p>
+
+</div>
+
+<div class="dd-section" id="dd-06">
+<div class="dd-section-header"><div class="dd-section-num">06</div><h3>Replication &amp; Failover</h3></div>
+
+<p>Pipelined RDMA replication: matching engine doesn't wait (0 μs cost), but gateway consumer IS gated behind replication (+1.5 μs to broker notification). <span class="hl-green">Zero data loss for acknowledged events.</span></p>
+<h3>Failover Sequence (~5-10 ms total)</h3>
+<div class="code-block"><code><pre>T=0ms    Primary crashes
+T=3ms    Standby detects 3 missed heartbeats (1ms interval)
+T=3.5ms  Standby fences primary via IPMI power-off
+T=3.6ms  Standby replays pending events from RDMA buffer
+T=4ms    Standby promotes to primary (new epoch)
+T=5ms    Gateways notified, redirect order flow
+T=6ms    Normal operation resumes</pre></code></div>
+<h3>Split-Brain Prevention</h3>
+<p>Three mechanisms: <span class="hl-accent">physical fencing</span> (IPMI power-off of old primary), <span class="hl-accent">epoch numbers</span> (gateways reject old-epoch messages), <span class="hl-accent">3-node quorum</span> (primary needs 2/3 votes to continue). If fencing fails → failover aborted rather than risking two primaries.</p>
+
+</div>
+
+<div class="dd-section" id="dd-07">
+<div class="dd-section-header"><div class="dd-section-num">07</div><h3>Market Data Multicast</h3></div>
+
+<p>Unicast to 1,000 subscribers at 1M msg/sec = 1 billion sends/sec = impossible. UDP multicast: send once, switch replicates to all. <span class="hl">50 MB/sec outbound vs 50 GB/sec for unicast.</span></p>
+<h3>Channel Architecture</h3>
+<p>~50 channels, ~100-200 symbols each. Hot symbols (AAPL, SPY) get smaller groups. Each channel has A/B feed on independent switch paths. MoldUDP64 framing with per-channel monotonic sequence numbers for gap detection.</p>
+<h3>A/B Feed Redundancy</h3>
+<p>Two completely independent network paths (different NICs, switches, fiber routes). A alone delivers 99.999% of messages. A OR B delivers 99.9999999% (nine 9s). TCP retransmit server handles the ultra-rare case where both feeds lose the same packet.</p>
+<h3>Adaptive Batching</h3>
+<p>Trades: flush immediately (0 delay). Quote updates: flush within 10 μs. Depth updates: batch up to 50 μs or 35 messages. Reduces packet rate by 97% while keeping latency-sensitive messages fast.</p>
+
+</div>
+
+<div class="dd-section" id="dd-08">
+<div class="dd-section-header"><div class="dd-section-num">08</div><h3>Fairness Engineering</h3></div>
+
+<p>The defining constraint separating an exchange from any other high-performance system. SEC mandates equal access — latency differences translate directly into money.</p>
+<div class="card-grid">
+<div class="card"><h4>Physical: Cable Equalization</h4><p>Every co-lo path measured by OTDR, padded to equal length (±0.5m = ±2.5 ns). Verified annually by third party.</p></div>
+<div class="card"><h4>Temporal: PTP Timestamps</h4><p>NIC PHY timestamps at ±5 ns accuracy. Two packets 50 ns apart get correctly ordered (30 ns error &lt; 50 ns difference).</p></div>
+<div class="card"><h4>Architectural: HW Sequencer</h4><p>3 μs window collects messages from all gateways, sorts by hardware timestamp. Absorbs all gateway processing variance.</p></div>
+<div class="card"><h4>Computational: Determinism</h4><p>Single-threaded, no float, no clock reads, no randomness. Same input → same output. Regulators can replay any day.</p></div>
+</div>
+<h3>IEX Speed Bump — Alternative Model</h3>
+<p>350 μs of coiled fiber on all paths. Makes microsecond-level differences irrelevant. 150 ns cable advantage becomes 0.04% of total delay. Our exchange uses the traditional model of minimizing latency for everyone equally.</p>
+
+</div>
+
+<div class="dd-section" id="dd-09">
+<div class="dd-section-header"><div class="dd-section-num">09</div><h3>Auction Mechanisms</h3></div>
+
+<p>At market open and close, a completely different algorithm finds a single equilibrium price maximizing matched volume. The closing auction price is the <span class="hl">most important price in finance</span> — used by every index fund, ETF, mutual fund, and option for valuation.</p>
+<h3>Algorithm: Cumulative Supply/Demand Curves</h3>
+<div class="code-block"><code><pre>For each possible price P:
+  buy_demand(P) = MOO buys + all limit buys at P or higher
+  sell_supply(P) = MOC sells + all limit sells at P or lower
+  matched(P) = min(buy_demand, sell_supply)
+
+Clearing price = P that maximizes matched(P)
+Tie-breakers: minimum imbalance → closest to reference price
+
+All eligible orders execute at the SINGLE clearing price.
+NOII (Net Order Imbalance Indicator) published every second
+before auction so traders can adjust orders.</pre></code></div>
+<p>NASDAQ's closing cross handles <span class="hl">$50-80 billion/day</span> and 10-15% of total US equity volume. Getting the price wrong by $0.01 on AAPL can misvalue ~$168 million in index fund NAV.</p>
+
+</div>
+
+<div class="dd-section" id="dd-10">
+<div class="dd-section-header"><div class="dd-section-num">10</div><h3>Mechanical Sympathy — CPU Architecture</h3></div>
+
+<p>Every optimization is rooted in understanding the CPU. L1 access: ~1 ns. L2: ~4 ns. L3: ~14 ns. DRAM: <span class="hl-red">~80 ns (80× slower than L1)</span>. A single DRAM access costs as much time as processing an entire order.</p>
+<h3>Key Techniques</h3>
+<div class="card-grid">
+<div class="card"><h4>Cache-Line Alignment</h4><p>All structs are 64 bytes. No straddling. Predictable access patterns. Hardware prefetcher handles sequential scans.</p></div>
+<div class="card"><h4>Huge Pages</h4><p>2 MB pages eliminate TLB misses. 32 MB order pool = 16 huge pages. All fit in TLB. Regular 4KB pages = 8,192 entries → TLB thrashing.</p></div>
+<div class="card"><h4>Core Isolation</h4><p>isolcpus + nohz_full + IRQ affinity to core 0. Matching cores get zero interrupts, zero timer ticks, zero scheduling.</p></div>
+<div class="card"><h4>NUMA Pinning</h4><p>All order book memory on local NUMA node. Remote access: 140 ns vs 80 ns local = 75% slowdown.</p></div>
+</div>
+<h3>rdtsc for Nanosecond Timestamps</h3>
+<p>~7 ns to read TSC register (no syscall). clock_gettime: ~20-50 ns (syscall overhead). At 1M timestamps/sec, saves ~30 ms/sec. Used for internal timing; NIC PTP clock for regulatory timestamps.</p>
+
+</div>
+
+<div class="dd-section" id="dd-11">
+<div class="dd-section-header"><div class="dd-section-num">11</div><h3>Stop Order &amp; Triggered Order Management</h3></div>
+
+<p>Stop orders don't sit on the visible book — they sit in a separate trigger table indexed by trigger price (same flat-array optimization). After <span class="hl">every trade</span>, check if trade price crosses any triggers.</p>
+<p>Most trades don't trigger stops: one integer comparison (~2 ns). Only when a trade crosses a trigger does real work happen — triggered stops convert to market/limit orders and enter normal matching, potentially causing <span class="hl-red">cascading triggers</span> (positive feedback loop). LULD circuit breakers are the safety valve.</p>
+
+</div>
+
+<div class="dd-section" id="dd-12">
+<div class="dd-section-header"><div class="dd-section-num">12</div><h3>Self-Trade Prevention</h3></div>
+
+<p>Market makers run 20+ strategies simultaneously. STP prevents wash trades (matching against yourself). Checked in the <span class="hl">innermost matching loop</span> — one integer comparison per potential match. Modes: cancel resting, cancel incoming, cancel both, cancel smallest. Per-broker configuration, supports sub-broker group-level STP.</p>
+<p>Performance impact: branch predictor learns 99%+ of matches are between different brokers → ~0 penalty for the common case.</p>
+
+</div>
+
+<div class="dd-section" id="dd-13">
+<div class="dd-section-header"><div class="dd-section-num">13</div><h3>Fee Engine — Maker-Taker Economics</h3></div>
+
+<p>Every fill tagged as maker (resting, earns ~$0.002/share rebate) or taker (incoming, pays ~$0.003/share fee). Exchange net: <span class="hl">$0.001/share × 3B shares/day = $3M/day revenue</span>. Volume-tiered pricing: high-volume brokers get better rates. Fee model drives entire market microstructure — brokers route specifically to earn rebates.</p>
+
+</div>
+
+<div class="dd-section" id="dd-14">
+<div class="dd-section-header"><div class="dd-section-num">14</div><h3>Capacity Planning &amp; Stress Testing</h3></div>
+
+<p>Exchange cannot fail during extreme events (GME squeeze: 10-50× volume, Flash Crash: 20× message rate). Stress testing: replay historical extreme days at 2-10× speed. Capacity headroom: normal &lt;30%, peak &lt;60%, extreme &lt;90%. Graceful degradation: throttle high-OTR brokers first, reject new orders while processing existing ones, widen LULD bands, <span class="hl-red">never crash or lose data</span>.</p>
+
+</div>
+
+<div class="dd-section" id="dd-15">
+<div class="dd-section-header"><div class="dd-section-num">15</div><h3>Multi-Asset Extension</h3></div>
+
+<p>Core matching engine is generic, parameterized by: matching algorithm (FIFO vs pro-rata), tick size, trading hours, circuit breaker rules, fee schedule. Options: 3M order books (10K stocks × 300 series), pro-rata matching. Futures: 24-hour, margin model. Crypto: 24/7/365, no regulation. Cross-asset combo orders: atomic matching across multiple books — architecturally hardest extension.</p>
+
+</div>
+</div>
+<div class="section" id="tradeoffs">
+<div class="section-number">07</div>
+<h2>Key Design Decisions &amp; Tradeoffs</h2>
+<h3>1. Single-Threaded vs Multi-Threaded Matching</h3>
+<div class="tradeoff">
+<div class="tradeoff-option chosen"><div class="tradeoff-label yes">✓ Chosen</div><h4>Single-Threaded per Symbol</h4><p>No locks, no synchronization, no cache coherence traffic. Eliminates ALL concurrency overhead. FIFO ordering guaranteed by construction. Deterministic replay trivially correct.</p></div>
+<div class="tradeoff-option"><div class="tradeoff-label no">✗ Alternative</div><h4>Multi-Threaded per Symbol</h4><p>Could use more cores per hot symbol. But: lock contention, non-deterministic ordering, cache-line ping-pong. Net throughput LOWER than single-threaded for sequential workloads.</p></div>
+</div>
+<h3>2. Flat Array vs Tree for Price Levels</h3>
+<div class="tradeoff">
+<div class="tradeoff-option chosen"><div class="tradeoff-label yes">✓ Chosen</div><h4>Hybrid: Flat Array + RB-Tree</h4><p>O(1) price lookup for hot zone (512KB in L2). O(log n) tree for far-from-market orders. 99.9% of operations hit the array. Best of both worlds.</p></div>
+<div class="tradeoff-option"><div class="tradeoff-label no">✗ Alternative</div><h4>Tree Only</h4><p>O(log n) everything. Simpler. But pointer-chasing defeats cache prefetcher — 5-25× slower for the common case.</p></div>
+</div>
+<h3>3. Pipelined vs Synchronous Replication</h3>
+<div class="tradeoff">
+<div class="tradeoff-option chosen"><div class="tradeoff-label yes">✓ Chosen</div><h4>Pipelined + Gateway Barrier</h4><p>Matching engine: 0 μs wait. Broker notification: +1.5 μs (gated behind replication). Zero data loss for acknowledged events. Best of both worlds.</p></div>
+<div class="tradeoff-option"><div class="tradeoff-label no">✗ Alternative</div><h4>Fully Synchronous</h4><p>Matching engine waits for standby ACK (+1.5 μs per event). Safest possible. But adds latency to the matching engine itself, not just to broker notification.</p></div>
+</div>
+<h3>4. Kernel Bypass Hybrid vs Full Bypass</h3>
+<div class="tradeoff">
+<div class="tradeoff-option chosen"><div class="tradeoff-label yes">✓ Chosen</div><h4>Hybrid: Onload External, DPDK Internal</h4><p>Solarflare Onload for broker TCP (compatible, no code change). Raw DPDK/ef_vi for internal paths (maximum speed). RDMA for replication.</p></div>
+<div class="tradeoff-option"><div class="tradeoff-label no">✗ Alternative</div><h4>Full DPDK Everywhere</h4><p>Maximum speed but must implement TCP in userspace. Massive engineering effort. Brokers expect standard TCP/FIX.</p></div>
+</div>
+</div>
+
+<div class="section" id="failures">
+<div class="section-number">08</div>
+<h2>What Can Go Wrong</h2>
+<div class="card"><h4>Split Brain — Both Sides Think They're Primary</h4><p>Network partition causes standby to promote while primary is alive. <span class="hl-green">Mitigation:</span> IPMI fencing + epoch numbers + 3-node quorum. If fencing fails: abort failover.</p></div>
+<div class="card"><h4>Stop Order Cascade</h4><p>Large price move triggers stop-losses, which trigger more stops, causing a flash crash. <span class="hl-green">Mitigation:</span> LULD circuit breakers halt trading if price moves &gt;5% in 5 minutes.</p></div>
+<div class="card"><h4>Market Data Packet Loss</h4><p>Subscriber's local order book diverges from reality. <span class="hl-green">Mitigation:</span> A/B feed redundancy (nine 9s delivery), TCP retransmit server for gaps, snapshot service for full recovery.</p></div>
+<div class="card"><h4>Gateway Processing Variance</h4><p>Different gateways process same message type at different speeds → unfair advantage. <span class="hl-green">Mitigation:</span> Hardware-timestamp sequencer with 3μs window sorts all messages by true arrival time.</p></div>
+<div class="card"><h4>Matching Engine Crash</h4><p>All order books lost (in-memory only). <span class="hl-green">Mitigation:</span> Hot standby failover in 5-10 ms. Cold recovery from snapshot + WAL replay in ~6 seconds.</p></div>
+<div class="card"><h4>GC Pause (if Java)</h4><p>10-50 ms pause stalls matching for 10,000-50,000 orders. <span class="hl-green">Mitigation:</span> Zero allocation in hot path, pre-allocated pools, primitive types, Disruptor pattern. LMAX achieves 0 GC during market hours in Java.</p></div>
+<div class="card"><h4>NVMe Write Stall</h4><p>SSD garbage collection causes ~100 μs write latency spike. <span class="hl-green">Mitigation:</span> WAL writer is a Disruptor consumer on a separate core. Matching engine is decoupled from disk I/O. Disruptor absorbs ~262 ms of lag.</p></div>
+</div>
+
+
+  <section class="section" id="antipatterns">
+    <div class="section-head"><span class="section-n">⚠</span><h2 class="section-title">Anti-patterns</h2></div>
+    <div class="prose">
+      
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Match orders across threads for parallelism</div>
+        <p class="why">Breaks price-time priority; non-deterministic fills.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Single-threaded matching per symbol; state journaled; deterministic replay.</div>
+    </div>
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Lock rows in Postgres for each fill</div>
+        <p class="why">Nowhere near the required throughput (10-100k trades/sec/symbol).</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> In-memory order book; fills written via journal, settled async to DB.</div>
+    </div>
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Use message queue (Kafka) for order routing</div>
+        <p class="why">Ordering guarantee isn't strict enough; spikes add latency.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Low-latency sequencer with durable journal; Kafka for post-trade analytics only.</div>
+    </div>
+    </div>
+  </section>
+
+  <div class="section" id="interview-tips">
+<div class="section-number">09</div>
+<h2>Interview Tips</h2>
+<div class="tip-card"><span class="tip-icon">💡</span><div class="tip-content"><strong>Lead with the three-plane split.</strong> "This system has three fundamentally different planes — a distributed gateway, a single-threaded matching engine, and a multicast market data pipeline. Each has a different scaling model." This immediately signals deep architectural understanding.</div></div>
+<div class="tip-card"><span class="tip-icon">⚡</span><div class="tip-content"><strong>Explain WHY single-threaded.</strong> "Single-threaded eliminates all synchronization overhead — no locks, no CAS, no cache coherence traffic. For sequential workloads like order matching, this is FASTER than multi-threaded, not slower." Counter-intuitive but correct.</div></div>
+<div class="tip-card"><span class="tip-icon">🎯</span><div class="tip-content"><strong>Name the Disruptor.</strong> "I'd use the LMAX Disruptor pattern — a pre-allocated ring buffer with independent consumer cursors and cache-line-padded sequences." Naming a specific, well-known pattern shows you've studied real exchange architectures.</div></div>
+<div class="tip-card"><span class="tip-icon">📋</span><div class="tip-content"><strong>Mention the OTR ratio.</strong> "Order-to-trade ratio is ~150:1 — the book is overwhelmingly an add-and-cancel machine, not a matching machine. Cancel performance matters as much as match performance." Shows you understand real market microstructure.</div></div>
+<div class="tip-card"><span class="tip-icon">🔑</span><div class="tip-content"><strong>Talk about fairness as a constraint.</strong> "Cable length equalization, hardware timestamps with PTP, and a sequencer with a 3μs window — fairness isn't just nice-to-have, it's legally mandated by the SEC." This separates you from generic high-performance system answers.</div></div>
+<div class="tip-card"><span class="tip-icon">🏗️</span><div class="tip-content"><strong>Know why kernel bypass matters.</strong> "The Linux kernel adds ~10μs per packet. Our budget is 10μs total. Kernel bypass via DPDK/Onload reduces network I/O to ~0.5μs, making microsecond matching physically possible." Concrete numbers beat hand-waving.</div></div>
+</div>
+
+<div class="section" id="similar">
+<div class="section-number">10</div>
+<h2>Similar Problems</h2>
+<div class="similar-grid">
+<a href="../stock-trading-platform/index.html" class="similar-card"><h4>Stock Trading Platform (Robinhood)</h4><p>The broker side — routes orders TO exchanges. Same FIX protocol, different consistency model.</p></a>
+<a href="../kafka/index.html" class="similar-card"><h4>Distributed Message Queue</h4><p>Disruptor is a specialized queue. Understanding Kafka internals helps explain the WAL + consumer offset model.</p></a>
+<a href="../rate-limiter/index.html" class="similar-card"><h4>Rate Limiter</h4><p>Exchange enforces per-broker message rate limits and order-to-trade ratio limits.</p></a>
+<a href="../cache/index.html" class="similar-card"><h4>Design a Cache (Redis)</h4><p>Order book is essentially a specialized in-memory cache with custom eviction (fill/cancel) and lookup (price + order ID).</p></a>
+</div>
+</div>
+
+<div class="section" id="evolution">
+<div class="section-number">11</div>
+<h2>Evolution</h2>
+<p>How this design grows from a simple matching engine to a multi-asset global exchange.</p>
+<div class="evolution-step"><div class="evolution-marker">1</div><div class="evolution-content"><h4>MVP — Single-Symbol Matching Engine</h4><p>One thread, one order book, one symbol. HashMap + linked list. Standard TCP networking. File-based WAL. Process-level crash recovery. Proves the matching algorithm works correctly.</p></div></div>
+<div class="evolution-step"><div class="evolution-marker">2</div><div class="evolution-content"><h4>Multi-Symbol with Partitioning</h4><p>Symbol-based partitioning across CPU cores. Pre-allocated memory pools. Flat array price levels. Custom open-addressing HashMap. Kernel bypass on internal paths (DPDK). Basic UDP multicast for market data.</p></div></div>
+<div class="evolution-step"><div class="evolution-marker">3</div><div class="evolution-content"><h4>Production Exchange (Current Design)</h4><p>Full Disruptor fan-out, RDMA replication with hot standby, hardware-timestamp sequencer for fairness, A/B multicast feeds with MoldUDP64/ITCH, PTP time synchronization, auction mechanisms, LULD circuit breakers, co-location facility with cable equalization.</p></div></div>
+<div class="evolution-step"><div class="evolution-marker">4</div><div class="evolution-content"><h4>Multi-Asset Global Exchange</h4><p>Options (pro-rata matching, 3M order books), futures (24-hour, margin model), cross-asset combo orders, multi-data-center with active-active gateway routing, FPGA-accelerated matching for sub-microsecond latency, ML-based surveillance system.</p></div></div>
+</div>
+
+</main>
+</div>
+<script>
+mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'hsl(230,80%,94%)',primaryTextColor:'#111110',primaryBorderColor:'hsl(230,60%,80%)',lineColor:'#ccc9c4',secondaryColor:'#f7f7f5',tertiaryColor:'#f0eeeb',fontFamily:'Geist,system-ui,sans-serif',fontSize:'13px'}});
+(function(){const s=document.querySelectorAll('.section[id],.dd-section[id]');const n=document.querySelectorAll('#sidebar-nav a');const o=new IntersectionObserver(e=>{e.forEach(e=>{if(e.isIntersecting){const id=e.target.id;n.forEach(l=>{l.classList.toggle('active',l.getAttribute('href')==='#'+id)})}})},{rootMargin:'-80px 0px -60% 0px',threshold:0});s.forEach(s=>o.observe(s))})();
+let highlightedNode=null;function hlNode(id){if(highlightedNode)document.getElementById(highlightedNode).classList.remove('node-highlight');if(highlightedNode===id){highlightedNode=null;return}document.getElementById(id).classList.add('node-highlight');highlightedNode=id}
+const FLOW_NODES=['Broker (co-lo)','Gateway NIC','FIX Parse','Validate','Sequencer','Matching Engine','Order Book Match','Disruptor Publish','WAL + Replication','Gateway Response','Broker Receives'];
+const FLOW_DESCS=[
+'Citadel\'s co-located server sends FIX NewOrderSingle: BUY 100 AAPL LIMIT $187.46. Cable propagation: ~0.1 μs (equalized to 60m).',
+'Solarflare NIC receives TCP packet via Onload (kernel bypass TCP). Hardware PTP timestamp stamped at PHY layer: T=14:30:00.000123456. Latency: ~0.3 μs.',
+'FIX protocol engine parses tag-value pairs, verifies checksum, tracks sequence number. Latency: ~0.3 μs.',
+'Validation pipeline: symbol exists, price within LULD bands, tick size correct, rate limit check, duplicate ClOrdID check, risk check. Normalizes to 64-byte InternalOrder struct. Latency: ~0.5 μs.',
+'Hardware-timestamp sequencer collects messages from all gateways within 3 μs window, sorts by NIC arrival timestamp for fairness. Forwards to correct matching engine partition. Latency: ~1.5 μs avg.',
+'Matching engine core (dedicated, isolated, busy-spinning) reads from input queue. Checks: $187.46 >= best ask $187.46 → MARKETABLE! Initiates matching sweep.',
+'Price-time priority: match against resting sell order at $187.46 (FIFO). STP check: different brokers ✓. LULD check: within bands ✓. Fill 100 shares @ $187.46. Update order book, compute new best. Latency: ~3 μs.',
+'Publish to Disruptor ring buffer: TRADE event + ORDER_EXECUTED (resting) + ORDER_EXECUTED (aggressor) + QUOTE_UPDATE. Batch commit: single cursor update with RELEASE memory barrier. Latency: ~0.02 μs.',
+'Tier 1 consumers (parallel): WAL writer appends to mmap (~0.1 μs). Replication sender RDMA-writes to standby (~1.5 μs). Both must complete before Tier 2 consumers proceed.',
+'Tier 2 gateway consumer (gated by WAL + replication): formats FIX ExecutionReport — FILLED, qty=100, price=$187.46, liquidity=\'R\' (taker). Sends to Citadel\'s FIX session via Onload TCP. Simultaneously: market data formatter produces ITCH ORDER_EXECUTED + SIP trade report → UDP multicast. Latency: ~1-2 μs.',
+'Citadel receives ExecutionReport. Total round-trip: ~8-10 μs from FIX send to ExecutionReport receive. All within the same building — microseconds, not milliseconds.'
+];
+let flowStep=-1;const flowStepsEl=document.getElementById('flow-steps');const flowDescEl=document.getElementById('flow-desc');const flowCounter=document.getElementById('flow-counter');const flowNextBtn=document.getElementById('flow-next');const flowResetBtn=document.getElementById('flow-reset');
+FLOW_NODES.forEach((name,i)=>{if(i>0){const a=document.createElement('span');a.className='flow-arrow';a.textContent='→';flowStepsEl.appendChild(a)}const n=document.createElement('span');n.className='flow-node';n.id='fnode-'+i;n.textContent=name;flowStepsEl.appendChild(n)});
+function runFlow(){flowStep++;if(flowStep>=FLOW_NODES.length){flowNextBtn.disabled=true;flowDescEl.innerHTML='<strong>✓ Flow complete.</strong> From broker FIX submission to ExecutionReport received: ~8-10 μs total round-trip. Every event is durable on the standby before the broker is notified.';return}flowResetBtn.disabled=false;for(let i=0;i<flowStep;i++){document.getElementById('fnode-'+i).classList.remove('active');document.getElementById('fnode-'+i).classList.add('done')}document.getElementById('fnode-'+flowStep).classList.add('active');document.getElementById('fnode-'+flowStep).scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});flowDescEl.innerHTML=FLOW_DESCS[flowStep];flowCounter.textContent='Step '+(flowStep+1)+' of '+FLOW_NODES.length;if(flowStep===FLOW_NODES.length-1)flowNextBtn.textContent='Finish ✓'}
+function resetFlow(){flowStep=-1;FLOW_NODES.forEach((_,i)=>{const el=document.getElementById('fnode-'+i);el.classList.remove('active','done')});flowDescEl.innerHTML='Click <strong>Next Step</strong> to walk through a complete order from broker to execution.';flowCounter.textContent='';flowNextBtn.disabled=false;flowNextBtn.textContent='Next Step →';flowResetBtn.disabled=true}
+</script>
+</body>
+</html>

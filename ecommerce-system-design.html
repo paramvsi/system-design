@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>E-Commerce Platform — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+
+    /* ============================================================
+       DESIGN SYSTEM — DO NOT MODIFY VARIABLE NAMES
+       Only change --accent-h, --accent-s, --accent-l per problem
+       ============================================================ */
+    :root {
+      /* ── Accent — Amber for E-Commerce ── */
+      --accent-h:       38;
+      --accent-s:       92%;
+      --accent-l:       50%;
+      --accent:         hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light:   hsl(var(--accent-h), 80%, 94%);
+      --accent-mid:     hsl(var(--accent-h), 70%, 88%);
+      --accent-text:    hsl(var(--accent-h), var(--accent-s), 32%);
+      --accent-border:  hsl(var(--accent-h), 60%, 80%);
+
+      /* ── Highlights ── */
+      --hl-yellow:      #fff0a0;
+      --hl-yellow-dark: #a07a00;
+      --hl-accent:      hsl(var(--accent-h), 90%, 88%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 30%);
+
+      /* ── Surfaces ── */
+      --bg:             #ffffff;
+      --bg-subtle:      #f7f7f5;
+      --bg-raised:      #f0eeeb;
+      --bg-code:        #f4f3f0;
+      --border:         #e4e2de;
+      --border-strong:  #ccc9c4;
+
+      /* ── Text ── */
+      --text-primary:   #111110;
+      --text-secondary: #4a4845;
+      --text-muted:     #878480;
+      --text-code:      #2d2c2b;
+
+      /* ── Typography ── */
+      --font-serif:     'Instrument Serif', Georgia, serif;
+      --font-sans:      'Geist', system-ui, sans-serif;
+      --font-mono:      'JetBrains Mono', 'Fira Code', monospace;
+
+      /* ── Radii ── */
+      --radius-sm:      4px;
+      --radius-md:      8px;
+      --radius-lg:      12px;
+    }
+
+    /* ── Reset ── */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+    body {
+      font-family: var(--font-sans);
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--text-primary);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Layout Shell ── */
+    .layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      grid-template-rows: auto 1fr;
+      min-height: 100vh;
+    }
+
+    /* ── Topbar ── */
+    .topbar {
+      grid-column: 1 / -1;
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 52px; padding: 0 24px;
+      background: rgba(255,255,255,0.88);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .topbar-left {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--font-mono); font-size: 13.5px; font-weight: 500;
+      letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted);
+    }
+    .topbar-left a { color: var(--text-muted); text-decoration: none; transition: color 0.2s; }
+    .topbar-left a:hover { color: var(--accent); }
+    .topbar-sep { color: var(--border-strong); user-select: none; }
+    .topbar-problem { color: var(--accent-text); font-weight: 500; }
+    .topbar-right { display: flex; align-items: center; gap: 16px; }
+    .topbar-tag {
+      font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      padding: 3px 8px; border-radius: var(--radius-sm);
+      background: var(--accent-light); color: var(--accent-text);
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      position: sticky; top: 52px; height: calc(100vh - 52px);
+      overflow-y: auto; padding: 28px 20px 40px;
+      border-right: 1px solid var(--border); background: var(--bg-subtle);
+    }
+    .sidebar::-webkit-scrollbar { width: 3px; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+    .sidebar-label {
+      font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 12px;
+    }
+    .sidebar-nav { list-style: none; margin-bottom: 32px; }
+    .sidebar-nav li { margin-bottom: 2px; }
+    .sidebar-nav a {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 10px; border-radius: var(--radius-sm);
+      font-size: 15px; font-weight: 400; color: var(--text-secondary);
+      text-decoration: none; transition: all 0.15s ease; position: relative;
+    }
+    .sidebar-nav a::before {
+      content: ''; width: 4px; height: 4px; border-radius: 50%;
+      background: var(--border-strong); flex-shrink: 0; transition: all 0.2s ease;
+    }
+    .sidebar-nav a:hover { background: var(--bg-raised); color: var(--text-primary); }
+    .sidebar-nav a.active { background: var(--accent-light); color: var(--accent-text); font-weight: 500; }
+    .sidebar-nav a.active::before { background: var(--accent); width: 6px; height: 6px; }
+    .sidebar-related { list-style: none; margin-top: 8px; }
+    .sidebar-related li { margin-bottom: 4px; }
+    .sidebar-related a { font-size: 14.5px; color: var(--text-muted); text-decoration: none; transition: color 0.15s; }
+    .sidebar-related a:hover { color: var(--accent); }
+
+    /* ── Main Content ── */
+    .main { padding: 0 48px 120px; max-width: 860px; min-width: 0; }
+
+    /* ── Hero ── */
+    .hero { padding: 56px 0 40px; border-bottom: 1px solid var(--border); margin-bottom: 48px; }
+    .hero-number {
+      font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 12px;
+    }
+    .hero h1 {
+      font-family: var(--font-serif); font-size: 48px; font-weight: 400;
+      line-height: 1.1; color: var(--text-primary); margin-bottom: 16px; letter-spacing: -0.02em;
+    }
+    .hero-desc { font-size: 17px; line-height: 1.65; color: var(--text-secondary); max-width: 600px; margin-bottom: 20px; }
+    .hero-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+    .hero-tag {
+      font-family: var(--font-mono); font-size: 12px; font-weight: 400;
+      letter-spacing: 0.04em; padding: 4px 10px; border-radius: var(--radius-sm);
+      background: var(--bg-raised); color: var(--text-muted); border: 1px solid var(--border);
+    }
+
+    /* ── Sections ── */
+    .section { margin-bottom: 56px; opacity: 0; transform: translateY(20px); animation: fadeUp 0.5s ease forwards; }
+    .section:nth-child(1)  { animation-delay: 0.05s; }
+    .section:nth-child(2)  { animation-delay: 0.10s; }
+    .section:nth-child(3)  { animation-delay: 0.15s; }
+    .section:nth-child(4)  { animation-delay: 0.20s; }
+    .section:nth-child(5)  { animation-delay: 0.25s; }
+    .section:nth-child(6)  { animation-delay: 0.30s; }
+    .section:nth-child(7)  { animation-delay: 0.35s; }
+    .section:nth-child(8)  { animation-delay: 0.40s; }
+    .section:nth-child(9)  { animation-delay: 0.45s; }
+    .section:nth-child(10) { animation-delay: 0.50s; }
+    .section:nth-child(11) { animation-delay: 0.55s; }
+    @keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
+    .section-number { font-family: var(--font-mono); font-size: 12px; font-weight: 500; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 6px; }
+    .section h2 { font-family: var(--font-serif); font-size: 30px; font-weight: 400; color: var(--text-primary); margin-bottom: 20px; letter-spacing: -0.01em; }
+    .section h3 { font-family: var(--font-sans); font-size: 16px; font-weight: 600; color: var(--text-primary); margin: 28px 0 10px; }
+    .section p { color: var(--text-secondary); margin-bottom: 14px; max-width: 680px; }
+    .section ul, .section ol { padding-left: 20px; margin-bottom: 16px; color: var(--text-secondary); }
+    .section li { margin-bottom: 6px; }
+
+    /* ── Highlights ── */
+    .hl { background: var(--hl-yellow); color: var(--hl-yellow-dark); padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+    .hl-accent { background: var(--hl-accent); color: var(--hl-accent-dark); padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+    .hl-red { background: hsl(0, 85%, 93%); color: hsl(0, 70%, 35%); padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+    .hl-green { background: hsl(145, 60%, 90%); color: hsl(145, 55%, 28%); padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+
+    /* ── Cards ── */
+    .card { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px 24px; margin-bottom: 16px; }
+    .card-accent { background: var(--accent-light); border-color: var(--accent-border); }
+    .card h4 { font-family: var(--font-sans); font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; }
+    .card p { font-size: 16px; color: var(--text-secondary); margin-bottom: 0; }
+    .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+
+    /* ── Code Blocks ── */
+    .code-block { background: var(--bg-code); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px 20px; margin-bottom: 16px; overflow-x: auto; }
+    .code-block code { font-family: var(--font-mono); font-size: 14.5px; font-weight: 400; color: var(--text-code); line-height: 1.7; }
+    .code-label { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; }
+    .inline-code { font-family: var(--font-mono); font-size: 15px; background: var(--bg-code); border: 1px solid var(--border); padding: 1px 6px; border-radius: var(--radius-sm); color: var(--text-code); }
+
+    /* ── Tables ── */
+    .table-wrap { overflow-x: auto; margin-bottom: 16px; border: 1px solid var(--border); border-radius: var(--radius-md); }
+    .table-wrap table { width: 100%; border-collapse: collapse; font-size: 15.5px; }
+    .table-wrap th { font-family: var(--font-mono); font-size: 12px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); text-align: left; padding: 10px 16px; background: var(--bg-subtle); border-bottom: 1px solid var(--border); }
+    .table-wrap td { padding: 10px 16px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
+    .table-wrap tr:last-child td { border-bottom: none; }
+
+    /* ── Scale Grid ── */
+    .scale-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .scale-card { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; text-align: center; }
+    .scale-card .number { font-family: var(--font-mono); font-size: 22px; font-weight: 500; color: var(--accent-text); margin-bottom: 2px; }
+    .scale-card .label { font-size: 13.5px; color: var(--text-muted); }
+
+    /* ── Architecture SVG ── */
+    .arch-diagram { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 32px; margin-bottom: 20px; overflow-x: auto; }
+    .arch-diagram svg { display: block; margin: 0 auto; }
+    .arch-diagram .node { cursor: pointer; transition: filter 0.2s; }
+    .arch-diagram .node:hover { filter: brightness(0.95); }
+    .arch-diagram .node rect, .arch-diagram .node-rect { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arch-diagram .node-label { font-family: 'Geist', system-ui, sans-serif; font-size: 13.5px; font-weight: 500; fill: var(--text-primary); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+    .arch-diagram .node-sublabel { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; fill: var(--text-muted); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+    .arch-diagram .edge { stroke: var(--border-strong); stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+    .arch-diagram .edge-label { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; fill: var(--text-muted); text-anchor: middle; }
+    .node-highlight rect { stroke: var(--accent) !important; stroke-width: 2.5 !important; }
+    .node-highlight .node-label { fill: var(--accent-text) !important; }
+
+    /* ── Flow Stepper ── */
+    .flow-stepper { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 20px; }
+    .flow-stepper-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .flow-stepper-title { font-family: var(--font-mono); font-size: 12px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+    .flow-stepper-controls { display: flex; gap: 8px; }
+    .flow-btn { font-family: var(--font-mono); font-size: 12px; font-weight: 500; padding: 5px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg); color: var(--text-secondary); cursor: pointer; transition: all 0.15s; }
+    .flow-btn:hover { background: var(--accent-light); border-color: var(--accent-border); color: var(--accent-text); }
+    .flow-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .flow-btn-primary { background: var(--accent); border-color: var(--accent); color: white; }
+    .flow-btn-primary:hover { opacity: 0.9; background: var(--accent); color: white; }
+    .flow-steps { display: flex; gap: 4px; align-items: center; margin-bottom: 16px; overflow-x: auto; padding-bottom: 4px; }
+    .flow-node { font-family: var(--font-mono); font-size: 12px; font-weight: 500; padding: 6px 14px; border-radius: var(--radius-sm); background: var(--bg); border: 1px solid var(--border); color: var(--text-muted); white-space: nowrap; transition: all 0.3s ease; }
+    .flow-node.active { background: var(--accent-light); border-color: var(--accent); color: var(--accent-text); box-shadow: 0 0 0 3px var(--accent-mid); }
+    .flow-node.done { background: var(--accent-light); border-color: var(--accent-border); color: var(--accent-text); }
+    .flow-arrow { color: var(--border-strong); font-size: 16px; flex-shrink: 0; }
+    .flow-desc { font-size: 16px; color: var(--text-secondary); line-height: 1.6; padding: 14px 16px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); min-height: 52px; }
+    .flow-counter { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); margin-top: 10px; text-align: right; }
+
+    /* ── Mermaid ── */
+    .mermaid-wrap { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 20px; overflow-x: auto; }
+    .mermaid { text-align: center; }
+
+    /* ── Tradeoff Cards ── */
+    .tradeoff { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .tradeoff-option { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px 20px; }
+    .tradeoff-option.chosen { border-color: var(--accent-border); background: var(--accent-light); }
+    .tradeoff-label { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px; }
+    .tradeoff-label.yes { color: hsl(145, 55%, 32%); }
+    .tradeoff-label.no { color: var(--text-muted); }
+    .tradeoff-option h4 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+    .tradeoff-option p { font-size: 15px; color: var(--text-secondary); margin-bottom: 0; }
+
+    /* ── Callout ── */
+    .callout { border-left: 3px solid var(--accent); padding: 14px 18px; background: var(--accent-light); border-radius: 0 var(--radius-md) var(--radius-md) 0; margin-bottom: 16px; }
+    .callout p { font-size: 16px; color: var(--accent-text); margin-bottom: 0; }
+    .callout-warn { border-left-color: hsl(38, 92%, 50%); background: hsl(38, 80%, 94%); }
+    .callout-warn p { color: hsl(38, 70%, 28%); }
+    .callout-danger { border-left-color: hsl(0, 72%, 52%); background: hsl(0, 80%, 95%); }
+    .callout-danger p { color: hsl(0, 65%, 32%); }
+
+    /* ── Tips ── */
+    .tip-card { display: flex; gap: 14px; padding: 16px 20px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); margin-bottom: 10px; }
+    .tip-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+    .tip-content { font-size: 16px; color: var(--text-secondary); line-height: 1.6; }
+    .tip-content strong { color: var(--text-primary); font-weight: 600; }
+
+    /* ── Similar ── */
+    .similar-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .similar-card { display: block; text-decoration: none; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px 20px; transition: all 0.2s ease; }
+    .similar-card:hover { border-color: var(--accent-border); background: var(--accent-light); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+    .similar-card h4 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+    .similar-card p { font-size: 13.5px; color: var(--text-muted); margin-bottom: 0; }
+
+    /* ── Evolution ── */
+    .evolution-step { display: flex; gap: 16px; margin-bottom: 20px; position: relative; }
+    .evolution-step:not(:last-child)::after { content: ''; position: absolute; left: 15px; top: 36px; bottom: -20px; width: 2px; background: var(--border); }
+    .evolution-marker { width: 32px; height: 32px; border-radius: 50%; background: var(--accent-light); border: 2px solid var(--accent-border); display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 13.5px; font-weight: 600; color: var(--accent-text); flex-shrink: 0; }
+    .evolution-content h4 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+    .evolution-content p { font-size: 15.5px; color: var(--text-secondary); margin-bottom: 0; }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .main { padding: 0 20px 80px; }
+      .hero h1 { font-size: 34px; }
+      .tradeoff { grid-template-columns: 1fr; }
+      .card-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- ═══════════════════ TOPBAR ═══════════════════ -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <a href="../index.html">System Design</a>
+      <span class="topbar-sep">/</span>
+      <span class="topbar-problem">E-Commerce Platform</span>
+    </div>
+    <div class="topbar-right">
+      <span class="topbar-tag">HARD</span>
+    </div>
+  </header>
+
+  <!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-label">Sections</div>
+    <ul class="sidebar-nav" id="sidebar-nav">
+      <li><a href="#problem">Problem Statement</a></li>
+      <li><a href="#requirements">Requirements</a></li>
+      <li><a href="#scale">Scale Estimation</a></li>
+      <li><a href="#api">API Design</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#deep-dive">Deep Dive</a></li>
+      <li><a href="#tradeoffs">Tradeoffs</a></li>
+      <li><a href="#failures">Failure Scenarios</a></li>
+      <li><a href="#interview-tips">Interview Tips</a></li>
+      <li><a href="#similar">Similar Problems</a></li>
+      <li><a href="#evolution">Evolution</a></li>
+    </ul>
+    <div class="sidebar-label">Related</div>
+    <ul class="sidebar-related">
+      <li><a href="../uber/index.html">Uber / Ride Sharing</a></li>
+      <li><a href="../whatsapp/index.html">WhatsApp / Chat</a></li>
+      <li><a href="../rate-limiter/index.html">Rate Limiter</a></li>
+      <li><a href="../notification-system/index.html">Notification System</a></li>
+    </ul>
+  </aside>
+
+  <!-- ═══════════════════ MAIN ═══════════════════ -->
+  <main class="main">
+
+    <!-- ── Hero ── -->
+    <div class="hero">
+      <div class="hero-number">System Design — 06</div>
+      <h1>E-Commerce Platform</h1>
+      <p class="hero-desc">
+        Design a large-scale platform like Amazon or Flipkart — from product search to checkout — where millions browse concurrently but inventory must never oversell.
+      </p>
+      <div class="hero-tags">
+        <span class="hero-tag">Distributed Transactions</span>
+        <span class="hero-tag">Inventory Concurrency</span>
+        <span class="hero-tag">CQRS</span>
+        <span class="hero-tag">Saga Pattern</span>
+        <span class="hero-tag">Flash Sales</span>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 01 · PROBLEM STATEMENT ═══════════════ -->
+    <div class="section" id="problem">
+      <div class="section-number">01</div>
+      <h2>Problem Statement</h2>
+      <p>
+        Design the core buyer purchase flow of a large-scale e-commerce platform: a user searches for products, views a product page, adds items to a shopping cart, and checks out with payment and order confirmation. The system serves <span class="hl">50 million daily active users</span> with a <span class="hl">1000:1 read-to-write ratio</span>, must handle flash sale traffic spikes of <span class="hl">100x</span>, and must guarantee that inventory is never oversold.
+      </p>
+      <div class="callout">
+        <p><strong>Core question:</strong> How do you serve millions of concurrent browsers with low-latency reads while guaranteeing that two customers never successfully buy the last unit of the same item?</p>
+      </div>
+      <h3>In Scope</h3>
+      <div class="card">
+        <ul>
+          <li><strong>Product search &amp; browse</strong> — keyword search with faceted filters, category navigation</li>
+          <li><strong>Product detail page</strong> — the most visited page, mixing cached content with real-time inventory</li>
+          <li><strong>Shopping cart</strong> — persistent across sessions and devices, no premature inventory lock</li>
+          <li><strong>Checkout &amp; ordering</strong> — inventory reservation, payment processing, order creation (the distributed transaction)</li>
+          <li><strong>Order tracking</strong> — event-driven state machine from Confirmed to Delivered</li>
+        </ul>
+      </div>
+      <h3>Out of Scope</h3>
+      <p>
+        Seller onboarding, recommendation engine, reviews &amp; ratings, returns/refunds, delivery logistics, pricing engine, coupons. Each is acknowledged as a separate system but excluded for focus.
+      </p>
+    </div>
+
+    <!-- ═══════════════ 02 · REQUIREMENTS ═══════════════ -->
+    <div class="section" id="requirements">
+      <div class="section-number">02</div>
+      <h2>Requirements</h2>
+
+      <h3>Functional Requirements</h3>
+      <div class="card">
+        <ul>
+          <li>Users can search products by keyword with filters (price, brand, rating, category) and browse by category tree</li>
+          <li>Product detail pages display info, images, real-time stock status (<em>"Only 3 left!"</em>), and delivery estimate</li>
+          <li>Shopping cart persists across sessions/devices; adding to cart does <span class="hl-red">not</span> reserve inventory</li>
+          <li>Checkout atomically reserves inventory → processes payment → creates order — never overselling</li>
+          <li>Users track order status via an event-driven state machine (Confirmed → Shipped → Delivered)</li>
+        </ul>
+      </div>
+
+      <h3>Non-Functional Requirements</h3>
+      <div class="card">
+        <ul>
+          <li><strong>Read path:</strong> <span class="hl">99.99% available</span>, &lt; 300ms search, &lt; 200ms product page — eventually consistent</li>
+          <li><strong>Write path:</strong> <span class="hl">99.95% available</span>, &lt; 2s checkout — <span class="hl-green">strongly consistent</span> for inventory &amp; payment</li>
+          <li><strong>Read:write ratio ≈ 1000:1</strong> — drives separate scaling strategies for each path</li>
+          <li><strong>Flash sales:</strong> Handle <span class="hl">10,000+ concurrent buys</span> on a single product without overselling or degraded UX</li>
+          <li><strong>Data durability:</strong> Zero order loss. Idempotent payments. Cart loss tolerable.</li>
+        </ul>
+      </div>
+
+      <div class="callout">
+        <p><strong>Key insight:</strong> Different parts of the system need different consistency models. The read path (search, PDP) is eventually consistent and cached. The write path (inventory, payment) is strongly consistent and transactional. This <em>two-zone architecture</em> is the fundamental design pattern.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 03 · SCALE ESTIMATION ═══════════════ -->
+    <div class="section" id="scale">
+      <div class="section-number">03</div>
+      <h2>Scale Estimation</h2>
+
+      <p>Assumptions: <span class="hl">500M registered users</span>, <span class="hl">50M DAU</span>, ~20 page views per session, 2% conversion rate, 500M products in catalog.</p>
+
+      <div class="scale-grid">
+        <div class="scale-card">
+          <div class="number">~17K/sec</div>
+          <div class="label">Avg page reads</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~170K/sec</div>
+          <div class="label">Peak (flash sale)</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~12/sec</div>
+          <div class="label">Avg orders</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">1000:1</div>
+          <div class="label">Read:Write ratio</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>Derivation</h4>
+        <p>50M DAU × 1.5 sessions × 20 pages = <strong>1.5B page views/day</strong> ≈ 17K reads/sec (avg), peak at 3–5x. Orders: 50M × 2% = 1M/day ≈ 12/sec. Flash sale hot-key: <strong>10K concurrent DECR on a single SKU</strong> — the number that breaks naive database locking.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Storage</th><th>Size</th><th>Store</th></tr></thead>
+          <tbody>
+            <tr><td>Product metadata</td><td>~2 TB</td><td>PostgreSQL</td></tr>
+            <tr><td>Search index</td><td>~6–8 TB</td><td>Elasticsearch</td></tr>
+            <tr><td>Product images</td><td>~4.8 PB</td><td>S3 + CDN</td></tr>
+            <tr><td>Cart data (active)</td><td>~4 GB</td><td>Redis</td></tr>
+            <tr><td>Order data (5 yr)</td><td>~1.8 TB</td><td>PostgreSQL (sharded)</td></tr>
+            <tr><td>Inventory records</td><td>~16 GB</td><td>Redis + PostgreSQL</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 04 · API DESIGN ═══════════════ -->
+    <div class="section" id="api">
+      <div class="section-number">04</div>
+      <h2>API Design</h2>
+
+      <p>REST for cacheability, cursor-based pagination for deep search pages, <span class="hl-accent">idempotency keys</span> on order placement to prevent double-charging, and a two-step checkout flow (session → confirm) to allow inventory reservation with TTL.</p>
+
+      <div class="code-label">Search — Elasticsearch backed</div>
+      <div class="code-block"><code><pre>GET /api/v1/search?q=wireless+headphones&category=audio
+                  &price_min=50&price_max=300&sort=relevance
+                  &cursor=eyJzY29yZSI6MC44NX0&limit=20
+
+→ 200  { results[], facets{ brands[], price_ranges[] },
+         pagination{ cursor, has_next }, metadata{ search_time_ms } }</pre></code></div>
+
+      <div class="code-label">Checkout initiation — reserves inventory with TTL</div>
+      <div class="code-block"><code><pre>POST /api/v1/orders/checkout
+Body: { shipping_address_id, coupon_code }
+
+→ 200  { checkout_session_id, items[], pricing{ subtotal, tax,
+         discount, total }, reservation_expires_at }
+→ 409  { error: "INVENTORY_CONFLICT", items[{ available }] }</pre></code></div>
+
+      <div class="code-label">Place order — the point of no return</div>
+      <div class="code-block"><code><pre>POST /api/v1/orders
+Headers: Idempotency-Key: 550e8400-e29b-41d4-...
+Body: { checkout_session_id, payment_method_id }
+
+→ 201  { order_id, status: "CONFIRMED", payment{ transaction_id } }
+→ 402  { error: "PAYMENT_FAILED", session_still_valid: true }
+→ 410  { error: "SESSION_EXPIRED", items_released: true }</pre></code></div>
+
+      <div class="code-label">Internal — Atomic inventory reservation (Lua in Redis)</div>
+      <div class="code-block"><code><pre>POST /internal/inventory/reserve
+Body: { reservation_id, items[{ product_id, quantity }], ttl_seconds: 600 }
+
+→ 200  { status: "RESERVED", expires_at }
+→ 409  { status: "PARTIAL_FAILURE", reserved_items[] }</pre></code></div>
+    </div>
+
+    <!-- ═══════════════ 05 · HIGH-LEVEL ARCHITECTURE ═══════════════ -->
+    <div class="section" id="architecture">
+      <div class="section-number">05</div>
+      <h2>High-Level Architecture</h2>
+
+      <p>The architecture is split into a <span class="hl-green">fast, eventually-consistent read plane</span> (CDN → cache → search) and a <span class="hl-accent">strongly-consistent write plane</span> (inventory → payment → order). The <span class="hl">1000:1 ratio</span> justifies investing heavily in the read path while keeping the write path careful and transactional.</p>
+
+      <!-- ── Inline SVG Diagram ── -->
+      <div class="arch-diagram">
+        <svg viewBox="0 0 860 520" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="#ccc9c4"/>
+            </marker>
+          </defs>
+
+          <!-- Clients -->
+          <g class="node" id="node-client" onclick="hlNode('node-client')">
+            <rect class="node-rect" x="350" y="10" width="160" height="50" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="430" y="30">Clients</text>
+            <text class="node-sublabel" x="430" y="46">Web / Mobile / Tablet</text>
+          </g>
+
+          <!-- CDN -->
+          <g class="node" id="node-cdn" onclick="hlNode('node-cdn')">
+            <rect class="node-rect" x="140" y="90" width="130" height="50" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="205" y="110">CDN</text>
+            <text class="node-sublabel" x="205" y="126">CloudFront</text>
+          </g>
+
+          <!-- API Gateway -->
+          <g class="node" id="node-gw" onclick="hlNode('node-gw')">
+            <rect class="node-rect" x="350" y="90" width="160" height="50" fill="hsl(38,80%,94%)" stroke="hsl(38,60%,80%)"/>
+            <text class="node-label" x="430" y="110">API Gateway</text>
+            <text class="node-sublabel" x="430" y="126">Auth · Rate Limit · Route</text>
+          </g>
+
+          <!-- Services Row -->
+          <g class="node" id="node-product" onclick="hlNode('node-product')">
+            <rect class="node-rect" x="20" y="190" width="120" height="50" fill="hsl(38,80%,94%)" stroke="hsl(38,60%,80%)"/>
+            <text class="node-label" x="80" y="210">Product Svc</text>
+            <text class="node-sublabel" x="80" y="226">Catalog + PDP</text>
+          </g>
+          <g class="node" id="node-search" onclick="hlNode('node-search')">
+            <rect class="node-rect" x="160" y="190" width="120" height="50" fill="hsl(38,80%,94%)" stroke="hsl(38,60%,80%)"/>
+            <text class="node-label" x="220" y="210">Search Svc</text>
+            <text class="node-sublabel" x="220" y="226">Full-text + Facets</text>
+          </g>
+          <g class="node" id="node-cart" onclick="hlNode('node-cart')">
+            <rect class="node-rect" x="300" y="190" width="120" height="50" fill="hsl(38,80%,94%)" stroke="hsl(38,60%,80%)"/>
+            <text class="node-label" x="360" y="210">Cart Svc</text>
+            <text class="node-sublabel" x="360" y="226">Add / Remove</text>
+          </g>
+          <g class="node" id="node-order" onclick="hlNode('node-order')">
+            <rect class="node-rect" x="440" y="190" width="120" height="50" fill="hsl(38,80%,94%)" stroke="hsl(38,60%,80%)"/>
+            <text class="node-label" x="500" y="210">Order Svc</text>
+            <text class="node-sublabel" x="500" y="226">Saga Orchestrator</text>
+          </g>
+          <g class="node" id="node-inventory" onclick="hlNode('node-inventory')">
+            <rect class="node-rect" x="580" y="190" width="120" height="50" fill="hsl(38,80%,94%)" stroke="hsl(38,60%,80%)"/>
+            <text class="node-label" x="640" y="210">Inventory Svc</text>
+            <text class="node-sublabel" x="640" y="226">Atomic Reserve</text>
+          </g>
+          <g class="node" id="node-payment" onclick="hlNode('node-payment')">
+            <rect class="node-rect" x="720" y="190" width="120" height="50" fill="hsl(38,80%,94%)" stroke="hsl(38,60%,80%)"/>
+            <text class="node-label" x="780" y="210">Payment Svc</text>
+            <text class="node-sublabel" x="780" y="226">Stripe / Razorpay</text>
+          </g>
+
+          <!-- Data Stores Row -->
+          <g class="node" id="node-redis" onclick="hlNode('node-redis')">
+            <rect class="node-rect" x="20" y="310" width="120" height="50" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="80" y="330">Redis</text>
+            <text class="node-sublabel" x="80" y="346">Cache + Cart + Inv</text>
+          </g>
+          <g class="node" id="node-es" onclick="hlNode('node-es')">
+            <rect class="node-rect" x="160" y="310" width="120" height="50" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="220" y="330">Elasticsearch</text>
+            <text class="node-sublabel" x="220" y="346">Search Index</text>
+          </g>
+          <g class="node" id="node-pgcatalog" onclick="hlNode('node-pgcatalog')">
+            <rect class="node-rect" x="300" y="310" width="120" height="50" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="360" y="330">PostgreSQL</text>
+            <text class="node-sublabel" x="360" y="346">Catalog + Users</text>
+          </g>
+          <g class="node" id="node-pgorders" onclick="hlNode('node-pgorders')">
+            <rect class="node-rect" x="440" y="310" width="120" height="50" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="500" y="330">PostgreSQL</text>
+            <text class="node-sublabel" x="500" y="346">Orders (Sharded)</text>
+          </g>
+          <g class="node" id="node-dynamo" onclick="hlNode('node-dynamo')">
+            <rect class="node-rect" x="580" y="310" width="120" height="50" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="640" y="330">DynamoDB</text>
+            <text class="node-sublabel" x="640" y="346">Cart Backup</text>
+          </g>
+          <g class="node" id="node-s3" onclick="hlNode('node-s3')">
+            <rect class="node-rect" x="720" y="310" width="120" height="50" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="780" y="330">S3</text>
+            <text class="node-sublabel" x="780" y="346">Product Images</text>
+          </g>
+
+          <!-- Kafka -->
+          <g class="node" id="node-kafka" onclick="hlNode('node-kafka')">
+            <rect class="node-rect" x="300" y="410" width="260" height="50" fill="hsl(38,80%,94%)" stroke="hsl(38,60%,80%)"/>
+            <text class="node-label" x="430" y="430">Kafka</text>
+            <text class="node-sublabel" x="430" y="446">Events: order.created, product.updated</text>
+          </g>
+
+          <!-- Consumers -->
+          <g class="node" id="node-notif" onclick="hlNode('node-notif')">
+            <rect class="node-rect" x="600" y="410" width="120" height="50" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="660" y="430">Notification</text>
+            <text class="node-sublabel" x="660" y="446">Email · SMS · Push</text>
+          </g>
+          <g class="node" id="node-indexer" onclick="hlNode('node-indexer')">
+            <rect class="node-rect" x="140" y="410" width="120" height="50" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="200" y="430">Search Indexer</text>
+            <text class="node-sublabel" x="200" y="446">ES Sync Consumer</text>
+          </g>
+
+          <!-- Edges -->
+          <line class="edge" x1="430" y1="60" x2="430" y2="90"/>
+          <line class="edge" x1="380" y1="60" x2="205" y2="90"/>
+          <line class="edge" x1="430" y1="140" x2="80" y2="190"/>
+          <line class="edge" x1="430" y1="140" x2="220" y2="190"/>
+          <line class="edge" x1="430" y1="140" x2="360" y2="190"/>
+          <line class="edge" x1="430" y1="140" x2="500" y2="190"/>
+          <line class="edge" x1="500" y1="240" x2="640" y2="190"/>
+          <line class="edge" x1="500" y1="240" x2="780" y2="190"/>
+          <line class="edge" x1="80" y1="240" x2="80" y2="310"/>
+          <line class="edge" x1="220" y1="240" x2="220" y2="310"/>
+          <line class="edge" x1="360" y1="240" x2="80" y2="310"/>
+          <line class="edge" x1="360" y1="240" x2="360" y2="310"/>
+          <line class="edge" x1="500" y1="240" x2="500" y2="310"/>
+          <line class="edge" x1="640" y1="240" x2="80" y2="310"/>
+          <line class="edge" x1="360" y1="240" x2="640" y2="310"/>
+          <line class="edge" x1="500" y1="360" x2="430" y2="410"/>
+          <line class="edge" x1="560" y1="435" x2="600" y2="435"/>
+          <line class="edge" x1="300" y1="435" x2="260" y2="435"/>
+
+          <!-- Edge Labels -->
+          <text class="edge-label" x="290" y="78">Static</text>
+          <text class="edge-label" x="546" y="220">Reserve</text>
+          <text class="edge-label" x="700" y="220">Charge</text>
+          <text class="edge-label" x="470" y="390">Outbox</text>
+        </svg>
+      </div>
+
+      <!-- ── Flow Stepper ── -->
+      <div class="flow-stepper">
+        <div class="flow-stepper-header">
+          <span class="flow-stepper-title">Checkout Flow — Step Through</span>
+          <div class="flow-stepper-controls">
+            <button class="flow-btn" onclick="resetFlow()" id="flow-reset" disabled>Reset</button>
+            <button class="flow-btn flow-btn-primary" onclick="runFlow()" id="flow-next">Next Step →</button>
+          </div>
+        </div>
+        <div class="flow-steps" id="flow-steps"></div>
+        <div class="flow-desc" id="flow-desc">Click <strong>Next Step</strong> to walk through the checkout request flow.</div>
+        <div class="flow-counter" id="flow-counter"></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 06 · DEEP DIVE ═══════════════ -->
+    <div class="section" id="deep-dive">
+      <div class="section-number">06</div>
+      <h2>Deep Dive — Inventory Under Concurrency</h2>
+
+      <p>The single hardest problem in e-commerce: <span class="hl">10,000 users click "Buy" on an item with 5 units left — within the same second.</span> How do exactly 5 succeed and 9,995 get a clean "sold out"?</p>
+
+      <h3>Why Naive Approaches Fail</h3>
+      <div class="card-grid">
+        <div class="card">
+          <h4><span class="hl-red">Pessimistic Lock</span></h4>
+          <p><code>SELECT ... FOR UPDATE</code> serializes all 10K requests through one row lock. At 5ms/txn = <strong>50 seconds total</strong>. Connection pool exhaustion crashes the entire database.</p>
+        </div>
+        <div class="card">
+          <h4><span class="hl-red">Optimistic Lock</span></h4>
+          <p>Version-based check-and-retry. 10K reads, 1 succeeds, 9,999 retry. Cascading retries produce ~50M total attempts — worse than pessimistic.</p>
+        </div>
+      </div>
+
+      <h3>The Production Solution: Redis Atomic DECR</h3>
+      <p>Redis is single-threaded — every command executes sequentially with no interleaving. A <span class="hl-accent">Lua script</span> atomically checks availability and decrements, handling <span class="hl">50,000+ ops/sec</span> — a 250x improvement over database locking.</p>
+
+      <div class="code-label">Reserve with TTL — Redis Lua Script</div>
+      <div class="code-block"><code><pre>local available = tonumber(redis.call('GET', KEYS[1]))
+if available == nil or available &lt;= 0 then
+    return {0, "OUT_OF_STOCK", 0}
+end
+local requested = tonumber(ARGV[1])
+if available &lt; requested then
+    return {0, "INSUFFICIENT_STOCK", available}
+end
+redis.call('DECRBY', KEYS[1], requested)
+redis.call('HSET', KEYS[2], ARGV[2], ARGV[1])
+redis.call('EXPIRE', KEYS[2], tonumber(ARGV[3]))
+return {1, "RESERVED", available - requested}</pre></code></div>
+
+      <h3>Two-Phase Reservation Lifecycle</h3>
+
+      <!-- Mermaid Sequence Diagram -->
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+sequenceDiagram
+    participant U as User
+    participant O as Order Svc
+    participant I as Inventory (Redis)
+    participant P as Payment Svc
+    participant DB as Order DB
+
+    U->>O: POST /orders/checkout
+    O->>I: EVAL reserve.lua (DECR + TTL)
+    I-->>O: RESERVED (10 min TTL)
+    O-->>U: checkout_session_id + pricing
+
+    U->>O: POST /orders (Idempotency-Key)
+    O->>P: Charge card (idempotent)
+    P-->>O: Payment SUCCESS
+    O->>DB: INSERT order + outbox (single txn)
+    O->>I: Confirm reservation (HDEL)
+    O-->>U: 201 Order Confirmed
+
+    Note over I: If TTL expires before payment:
+    I->>I: Sweeper: INCRBY (release stock)
+        </div>
+      </div>
+
+      <p><strong>Soft vs. hard expiry:</strong> The user sees a 10-minute timer (soft). The actual Redis TTL is 15 minutes (hard). The 5-minute buffer ensures reservations never expire while payment is in-flight.</p>
+
+      <h3>Reconciliation — The Safety Net</h3>
+      <p>Redis is volatile; PostgreSQL is the durable source of truth. A <span class="hl-accent">reconciliation job</span> runs every 5 minutes (paused during flash sales), compares Redis counters with PostgreSQL, and corrects drift. An orphaned-reservation sweeper releases reservations that exist in PostgreSQL but are missing from Redis (e.g., after a Redis failover).</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Approach</th><th>Throughput</th><th>Correct?</th><th>Best For</th></tr></thead>
+          <tbody>
+            <tr><td>Pessimistic Lock</td><td>~200/sec</td><td>Yes</td><td>Low traffic (&lt;100 concurrent)</td></tr>
+            <tr><td>Optimistic Lock</td><td>~500/sec*</td><td>Yes</td><td>Moderate contention</td></tr>
+            <tr><td>Atomic SQL UPDATE</td><td>~2,000/sec</td><td>Yes</td><td>Single-DB architectures</td></tr>
+            <tr><td><strong>Redis Lua (2-phase)</strong></td><td><strong>~50,000/sec</strong></td><td><strong>Yes</strong></td><td><strong>Flash sales, production</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 07 · TRADEOFFS ═══════════════ -->
+    <div class="section" id="tradeoffs">
+      <div class="section-number">07</div>
+      <h2>Key Design Decisions &amp; Tradeoffs</h2>
+
+      <h3>Inventory Counter: Redis vs. Database Locking</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Redis Atomic DECR (Lua)</h4>
+          <p>50K+ ops/sec on a single instance. No lock contention, no connection pool exhaustion. Cost: dual-system complexity and reconciliation job.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>PostgreSQL FOR UPDATE</h4>
+          <p>~200 ops/sec. Correct but serializes under contention. Single source of truth (simpler), but melts under flash sale load.</p>
+        </div>
+      </div>
+
+      <h3>Checkout Orchestration: Saga vs. 2PC</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Saga with Compensating Transactions</h4>
+          <p>Each service commits independently. Orchestrator handles rollback. Works across Redis, Stripe, PostgreSQL. Higher availability — one slow service doesn't block all.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Two-Phase Commit (2PC)</h4>
+          <p>True atomicity across databases. But requires all participants available simultaneously (reduces availability), holds locks during prepare phase, and doesn't work with Redis or Stripe.</p>
+        </div>
+      </div>
+
+      <h3>Search: Elasticsearch vs. PostgreSQL Full-Text</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Elasticsearch (Async Indexed)</h4>
+          <p>Purpose-built: fuzzy matching, faceted aggregations, relevance ranking, 20–50ms queries on 500M docs. Accepts 1–5 second index lag.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>PostgreSQL tsvector + GIN</h4>
+          <p>Single source of truth, no sync lag. But no fuzzy search, no facets, 100–500ms on 500M rows. Good fallback for ES outage.</p>
+        </div>
+      </div>
+
+      <h3>Consistency Model: Eventual (Reads) vs. Strong (Writes)</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Two-Zone Architecture</h4>
+          <p>Read path: aggressive caching, CDN, eventual consistency (seconds of staleness OK). Write path: strong consistency for inventory and payments. 99% of traffic hits the fast zone.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Strong Consistency Everywhere</h4>
+          <p>Every read hits the source of truth. No stale data. But can't serve 50K reads/sec without a massive database fleet, and latency doubles.</p>
+        </div>
+      </div>
+
+      <h3>Side Effects: Kafka Events vs. Synchronous Calls</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Kafka (Async Events + Outbox)</h4>
+          <p>One "order.created" event, 5+ consumers. If notification service is down, events queue — no orders fail. Supports replay for data recovery.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Synchronous HTTP Calls</h4>
+          <p>Simpler. But if notification service is down, checkout either fails (bad) or silently drops notifications (also bad). No replay capability.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 08 · FAILURE SCENARIOS ═══════════════ -->
+    <div class="section" id="failures">
+      <div class="section-number">08</div>
+      <h2>What Can Go Wrong</h2>
+
+      <div class="card">
+        <h4>Redis Crashes During Flash Sale</h4>
+        <p>Inventory counter lost. <strong>Recovery:</strong> Sentinel promotes replica in 10–30s. Reconciliation job corrects drift within 5 min. Orphaned-reservation sweeper releases stuck stock. Worst case: oversell a few units → cancel + apologize + 15% discount code.</p>
+      </div>
+
+      <div class="card">
+        <h4>Payment Succeeds but Order Write Fails</h4>
+        <p>User charged with no order record — the scariest failure. <strong>Recovery:</strong> Payment intent pre-logged in PostgreSQL. Recovery worker finds charges without orders, retries order creation. If unrecoverable after 30 min, issues automatic refund. Idempotency key prevents double-charging on retries.</p>
+      </div>
+
+      <div class="card">
+        <h4>Elasticsearch Cluster Down</h4>
+        <p>Search stops. <strong>Graceful degradation:</strong> L1 — serve cached results for popular queries. L2 — fall back to PostgreSQL <code>tsvector</code> (basic but functional). L3 — show category browsing + trending products. Browsing, cart, checkout all unaffected.</p>
+      </div>
+
+      <div class="card">
+        <h4>Cascading Failure from Slow Service</h4>
+        <p>Inventory Service responds in 5s → Order Service thread pool fills → API Gateway queue grows → all endpoints affected. <strong>Defense in depth:</strong> 2s timeouts, circuit breakers (trip after 5 failures), bulkhead pattern (separate thread pools per workload), load shedding (drop non-critical requests at 90%+ load).</p>
+      </div>
+
+      <div class="card">
+        <h4>Kafka Unavailable</h4>
+        <p>Orders still placed (critical path is synchronous). But emails don't send, search index doesn't update, warehouse not notified. <strong>Recovery:</strong> Outbox table queues all events in PostgreSQL. When Kafka recovers, relay drains the backlog. Delay = Kafka downtime. No events lost.</p>
+      </div>
+
+      <div class="card">
+        <h4>Stale Cache Serving Wrong Prices</h4>
+        <p>Seller changes price; cache shows old price for up to 15 min. <strong>Fix:</strong> Write-through cache (immediate update) + event-driven invalidation (safety net via Kafka) + TTL (ultimate backstop). Checkout always verifies prices against source of truth before charging.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 09 · INTERVIEW TIPS ═══════════════ -->
+    <div class="section" id="interview-tips">
+      <div class="section-number">09</div>
+      <h2>Interview Tips</h2>
+
+      <div class="tip-card">
+        <span class="tip-icon">💡</span>
+        <div class="tip-content">
+          <strong>Lead with the 1000:1 ratio</strong><br/>
+          Derive it in 30 seconds, then explain its consequence: separate read and write paths with different consistency models. This one insight drives the entire architecture and immediately signals data-driven thinking.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">⚡</span>
+        <div class="tip-content">
+          <strong>"Add-to-cart does NOT reserve inventory"</strong><br/>
+          State this proactively. Most candidates get it wrong. Explain why: 100K users holding items in abandoned carts would create phantom stock-outs. Reservation happens at checkout initiation, not cart addition.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🎯</span>
+        <div class="tip-content">
+          <strong>Build the diagram layer by layer</strong><br/>
+          Start: Client → Server → DB. Then add CDN (static assets), then Redis (cache), then Elasticsearch (search), then split into services, then add Kafka. Each layer is a response to a specific bottleneck, not a pattern from memory.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🔑</span>
+        <div class="tip-content">
+          <strong>Idempotency key on order placement</strong><br/>
+          Mention it before the interviewer asks about double-charging. It signals production experience. Explain: client generates a UUID, server deduplicates — even if the response is lost and the client retries, only one charge occurs.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">📦</span>
+        <div class="tip-content">
+          <strong>Know the outbox pattern</strong><br/>
+          "The order and the event are written in the same database transaction. A relay process publishes to Kafka." This one sentence shows you understand reliable event publishing in microservices — a production-level concern most candidates miss.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🧠</span>
+        <div class="tip-content">
+          <strong>Frame tradeoffs, not answers</strong><br/>
+          Don't say "use Redis." Say "We chose Redis over database locking because the flash sale requirement demands 50K ops/sec on a single hot key. If we didn't have flash sales, the simpler atomic SQL UPDATE would suffice." This shows architectural maturity.
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 10 · SIMILAR PROBLEMS ═══════════════ -->
+    <div class="section" id="similar">
+      <div class="section-number">10</div>
+      <h2>Similar Problems</h2>
+
+      <div class="similar-grid">
+        <a href="../uber/index.html" class="similar-card">
+          <h4>Uber / Ride Sharing</h4>
+          <p>Same atomic-claim-under-concurrency pattern for driver matching. Saga for ride lifecycle.</p>
+        </a>
+        <a href="../whatsapp/index.html" class="similar-card">
+          <h4>WhatsApp / Chat</h4>
+          <p>Event-driven state machine for order tracking mirrors message delivery tracking. Idempotent event processing.</p>
+        </a>
+        <a href="../rate-limiter/index.html" class="similar-card">
+          <h4>Rate Limiter</h4>
+          <p>Redis atomic counter pattern is structurally identical — check threshold, increment/decrement atomically.</p>
+        </a>
+        <a href="../notification-system/index.html" class="similar-card">
+          <h4>Notification System</h4>
+          <p>Kafka fan-out from order events to email/SMS/push. Multi-channel delivery with idempotent consumers.</p>
+        </a>
+        <a href="../search-autocomplete/index.html" class="similar-card">
+          <h4>Search Autocomplete</h4>
+          <p>Elasticsearch completion suggester, sub-100ms latency, debounced client requests.</p>
+        </a>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 11 · EVOLUTION ═══════════════ -->
+    <div class="section" id="evolution">
+      <div class="section-number">11</div>
+      <h2>Evolution</h2>
+      <p>How this design grows from MVP to planet-scale. Each stage is triggered by a specific bottleneck — complexity is added only when the numbers demand it.</p>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">1</div>
+        <div class="evolution-content">
+          <h4>MVP Monolith (0–10K DAU)</h4>
+          <p>Django/Rails monolith + PostgreSQL + local disk for images. Search is SQL <code>ILIKE</code>. Cart is a DB table. Checkout is a single database transaction. Simple, deployable, sufficient.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">2</div>
+        <div class="evolution-content">
+          <h4>Cache + CDN (10K–100K DAU)</h4>
+          <p>Add <span class="hl-accent">Redis</span> as cache layer (90%+ hit rate). Move images to <span class="hl-accent">S3 + CloudFront</span>. Add background job framework (Celery) for async tasks. Still a monolith, still one DB.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">3</div>
+        <div class="evolution-content">
+          <h4>Search + First Split (100K–1M DAU)</h4>
+          <p>Add <span class="hl-accent">Elasticsearch</span> for product search (async sync from PostgreSQL). Extract <span class="hl-accent">Payment Service</span> for PCI isolation. Add monitoring (APM, Sentry, log aggregation).</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">4</div>
+        <div class="evolution-content">
+          <h4>Full Microservices + Events (1M–10M DAU)</h4>
+          <p>Split into 7 services. Add <span class="hl-accent">Kafka</span> for event-driven side effects. Redis atomic inventory with 2-phase reservation. <span class="hl-accent">Saga pattern</span> for checkout. Kubernetes for orchestration. Outbox pattern for reliable publishing.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">5</div>
+        <div class="evolution-content">
+          <h4>Sharding + CQRS (10M–50M DAU)</h4>
+          <p>Shard orders DB by <code>user_id</code>. <span class="hl-accent">CQRS</span>: write to transactional DB, read from data warehouse (BigQuery) for analytics. Redis Cluster for HA. Read replicas per service.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">6</div>
+        <div class="evolution-content">
+          <h4>Multi-Region / Planet-Scale (50M+ DAU)</h4>
+          <p>Regional read replicas (catalog, search, CDN) in US, EU, Asia. Active-passive writes or region-specific inventory. Global load balancer (Route 53). Chaos engineering. You're Amazon now.</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SCRIPTS
+     ═══════════════════════════════════════════════════════ -->
+<script>
+  // ── Mermaid Init ──
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: 'hsl(38, 80%, 94%)',
+      primaryTextColor: '#111110',
+      primaryBorderColor: 'hsl(38, 60%, 80%)',
+      lineColor: '#ccc9c4',
+      secondaryColor: '#f7f7f5',
+      tertiaryColor: '#f0eeeb',
+      fontFamily: 'Geist, system-ui, sans-serif',
+      fontSize: '13px'
+    }
+  });
+
+  // ── Sidebar Scroll Observer ──
+  (function() {
+    const sections = document.querySelectorAll('.section[id]');
+    const navLinks = document.querySelectorAll('#sidebar-nav a');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+          navLinks.forEach(link => {
+            link.classList.toggle('active', link.getAttribute('href') === '#' + id);
+          });
+        }
+      });
+    }, { rootMargin: '-80px 0px -60% 0px', threshold: 0 });
+    sections.forEach(s => observer.observe(s));
+  })();
+
+  // ── Architecture Node Highlight ──
+  let highlightedNode = null;
+  function hlNode(id) {
+    if (highlightedNode) document.getElementById(highlightedNode).classList.remove('node-highlight');
+    if (highlightedNode === id) { highlightedNode = null; return; }
+    document.getElementById(id).classList.add('node-highlight');
+    highlightedNode = id;
+  }
+
+  // ── Flow Stepper ──
+  const FLOW_NODES = [
+    'Client',
+    'API Gateway',
+    'Order Svc',
+    'Inventory (Redis)',
+    'Payment Svc',
+    'Order DB',
+    'Kafka',
+    'Consumers'
+  ];
+
+  const FLOW_DESCS = [
+    'User clicks "Place Order." The client sends a POST request with the checkout session ID, payment method, and an idempotency key.',
+    'The API Gateway validates the JWT, checks rate limits, and routes the request to the Order Service.',
+    'The Order Service (saga orchestrator) begins the checkout saga. It validates the checkout session and confirms the reservation is still active.',
+    'The Order Service calls the Inventory Service, which executes a Lua script in Redis to atomically verify and confirm the reservation. If the reservation expired, it attempts a re-reserve.',
+    'On successful inventory confirmation, the Order Service calls the Payment Service with the idempotency key. Stripe charges the card. If payment fails, compensating transactions release the inventory.',
+    'On payment success, the Order Service writes the order + order items + outbox event in a single PostgreSQL transaction. This guarantees the order and event are never out of sync.',
+    'The Outbox Relay picks up the pending event and publishes "order.created" to Kafka. The event is guaranteed at-least-once delivery.',
+    'Kafka consumers process the event in parallel: Notification Service sends confirmation email, Search Indexer updates stock status in Elasticsearch, Cart Service clears the purchased items, Warehouse Service initiates fulfillment.'
+  ];
+
+  let flowStep = -1;
+  const flowStepsEl = document.getElementById('flow-steps');
+  const flowDescEl  = document.getElementById('flow-desc');
+  const flowCounter = document.getElementById('flow-counter');
+  const flowNextBtn = document.getElementById('flow-next');
+  const flowResetBtn = document.getElementById('flow-reset');
+
+  FLOW_NODES.forEach((name, i) => {
+    if (i > 0) {
+      const arrow = document.createElement('span');
+      arrow.className = 'flow-arrow';
+      arrow.textContent = '→';
+      flowStepsEl.appendChild(arrow);
+    }
+    const node = document.createElement('span');
+    node.className = 'flow-node';
+    node.id = 'fnode-' + i;
+    node.textContent = name;
+    flowStepsEl.appendChild(node);
+  });
+
+  function runFlow() {
+    flowStep++;
+    if (flowStep >= FLOW_NODES.length) {
+      flowNextBtn.disabled = true;
+      flowDescEl.innerHTML = '<strong>✓ Checkout complete.</strong> User sees order confirmation. All side effects processed asynchronously via Kafka.';
+      return;
+    }
+    flowResetBtn.disabled = false;
+    for (let i = 0; i < flowStep; i++) {
+      document.getElementById('fnode-' + i).classList.remove('active');
+      document.getElementById('fnode-' + i).classList.add('done');
+    }
+    document.getElementById('fnode-' + flowStep).classList.add('active');
+    document.getElementById('fnode-' + flowStep).scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    flowDescEl.innerHTML = FLOW_DESCS[flowStep];
+    flowCounter.textContent = `Step ${flowStep + 1} of ${FLOW_NODES.length}`;
+    if (flowStep === FLOW_NODES.length - 1) flowNextBtn.textContent = 'Finish ✓';
+  }
+
+  function resetFlow() {
+    flowStep = -1;
+    FLOW_NODES.forEach((_, i) => {
+      document.getElementById('fnode-' + i).classList.remove('active', 'done');
+    });
+    flowDescEl.innerHTML = 'Click <strong>Next Step</strong> to walk through the checkout request flow.';
+    flowCounter.textContent = '';
+    flowNextBtn.disabled = false;
+    flowNextBtn.textContent = 'Next Step →';
+    flowResetBtn.disabled = true;
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,65 @@
+{
+  "slug": "cache-eviction",
+  "title": "Cache Eviction",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 15,
+    "s": 70,
+    "l": 50
+  },
+  "category": "Caching",
+  "blurb": "Your cache has 16 GB of RAM. Your working set grows to 20 GB. Something must go. Which entries you evict — and which you keep — is the difference between a 95% hit rate and a 50% hit rate. At scale, that gap is millions ",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>Your cache has 16 GB of RAM. Your working set grows to 20 GB. Something must go. Which entries you <span class=\"hl\">evict</span> — and which you keep — is the difference between a 95% hit rate and a 50% hit rate. At scale, that gap is millions of dollars of backend load and seconds of page latency.</p>\n      <p>The policy that decides is the <strong>eviction algorithm</strong>. LRU dominates, but it's not always the right choice. Know the menu and when each one wins.</p>\n    </div>"
+    },
+    {
+      "id": "variants",
+      "label": "The five main policies",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">The five main policies</h2></div>\n    <table class=\"algo-table\">\n      <thead><tr><th>Policy</th><th>Evicts</th><th>Best for</th><th>Weakness</th></tr></thead>\n      <tbody>\n        <tr><td class=\"algo-name\">LRU</td><td>Least recently used</td><td>Temporal locality — hot data stays hot for a while</td><td>One-time scan (e.g., big export) wipes your cache</td></tr>\n        <tr><td class=\"algo-name\">LFU</td><td>Least frequently used</td><td>Long-tail popularity — top 10% served 90% of traffic</td><td>New items that haven't had time to accumulate hits get evicted instantly</td></tr>\n        <tr><td class=\"algo-name\">FIFO</td><td>Oldest inserted</td><td>Simple, low-overhead</td><td>Ignores access patterns entirely; poor hit rate</td></tr>\n        <tr><td class=\"algo-name\">ARC</td><td>Adaptive — blends LRU and LFU</td><td>Mixed workloads, unknown access pattern</td><td>Patented for years (IBM); now available in some systems (ZFS)</td></tr>\n        <tr><td class=\"algo-name\">TinyLFU / W-TinyLFU</td><td>Frequency-based with scan protection</td><td>Modern default — Caffeine, Redis 4+</td><td>More complex to implement</td></tr>\n      </tbody>\n    </table>"
+    },
+    {
+      "id": "how-it-works",
+      "label": "LRU in one paragraph",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">LRU in one paragraph</h2></div>\n    <div class=\"prose\">\n      <p>Every access moves the entry to the head of a doubly-linked list. When space is needed, drop the tail. O(1) insert, access, and evict. The structure: hash map (key → list node) + doubly-linked list. Every major language has a standard implementation. Redis's <code>maxmemory-policy allkeys-lru</code> is exactly this.</p>\n      <p>LRU's Achilles' heel: one-time sequential scans. A nightly job that reads 10M rows in order will kick every useful entry out of the cache. Every morning, you wake up to a cold cache and a degraded first hour.</p>\n    \n      <div class=\"code-caption\" data-code-snippet=\"1\">LRU cache — hashmap + doubly-linked list</div>\n      <pre><code class=\"lang-python\">class Node:\n    __slots__ = \"k\", \"v\", \"prev\", \"next\"\n    def __init__(self, k, v):\n        self.k, self.v = k, v\n        self.prev = self.next = None\n\nclass LRU:\n    def __init__(self, cap):\n        self.cap, self.map = cap, {}\n        self.head, self.tail = Node(0, 0), Node(0, 0)  # sentinels\n        self.head.next, self.tail.prev = self.tail, self.head\n\n    def _remove(self, n):\n        n.prev.next, n.next.prev = n.next, n.prev\n\n    def _add(self, n):  # insert right after head\n        n.next = self.head.next; n.prev = self.head\n        self.head.next.prev = n; self.head.next = n\n\n    def get(self, k):\n        if k not in self.map: return -1\n        n = self.map[k]; self._remove(n); self._add(n)\n        return n.v\n\n    def put(self, k, v):\n        if k in self.map: self._remove(self.map[k])\n        elif len(self.map) == self.cap:\n            lru = self.tail.prev; self._remove(lru); del self.map[lru.k]\n        n = Node(k, v); self._add(n); self.map[k] = n</code></pre>\n  </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "Deep dive — why TinyLFU beats LRU in modern systems",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Deep dive — why TinyLFU beats LRU in modern systems</h2></div>\n    <div class=\"prose\">\n      <p>LRU treats one-time and popular items the same: if you saw it recently, it stays. TinyLFU (2015) separates the two by using a <strong>frequency sketch</strong> (Count-Min Sketch) to estimate how often each key has been seen overall.</p>\n      <p>Admission policy: when a new item arrives and you need to evict something to fit it, compare the new item's <em>global frequency</em> to the victim's. Only admit if the new item is more popular. A one-time scan adds items with frequency 1 — they fail the admission check, so the scan doesn't evict hot items.</p>\n      <p>Hit rate gains are real: Caffeine (Java) reports 20–40% higher hit rates than LRU on production traces. Redis adopted the approach in its LFU mode from 4.0 onward (<code>allkeys-lfu</code>). In 2025, the defensible default for a new cache is <strong>W-TinyLFU</strong> (Caffeine) or <strong>LFU with decay</strong> (Redis), not plain LRU.</p>\n      <div class=\"callout\">\n        <div class=\"callout-label\">Rule of thumb</div>\n        <p>If your workload has stable \"hot items\" (product catalog, celebrity accounts, popular searches), switch to LFU. If you primarily see temporal locality without a long-tail popularity curve, LRU is fine.</p>\n      </div>\n    </div>"
+    },
+    {
+      "id": "tradeoffs",
+      "label": "TTL as a form of eviction",
+      "number": "05",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">05</span><h2 class=\"section-title\">TTL as a form of eviction</h2></div>\n    <div class=\"prose\">\n      <p>Besides memory-pressure eviction, most caches evict on <strong>time-to-live (TTL)</strong>. An entry set with <code>SET key value EX 300</code> lives 5 minutes regardless of access frequency.</p>\n      <p>TTL is your tool for <em>bounded staleness</em> — you're saying \"I accept at most this much out-of-date data.\" Lower TTL = fresher data, lower hit rate. Higher TTL = stale data risk, higher hit rate. See <a href=\"/concepts/cache-strategies\">cache strategies</a> for how TTL interacts with cache-aside vs write-through.</p>\n    </div>"
+    },
+    {
+      "id": "real-world",
+      "label": "Real-world",
+      "number": "06",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">06</span><h2 class=\"section-title\">Real-world</h2></div>\n    <div class=\"real-world-grid\">\n      <div class=\"rw-card\"><div class=\"rw-name\">Redis</div><h4>Configurable policy</h4><p><code>allkeys-lru</code>, <code>allkeys-lfu</code>, <code>volatile-lru</code> (only entries with TTL), <code>noeviction</code> (refuse writes when full). LFU recommended for most workloads.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Memcached</div><h4>LRU only</h4><p>Simple, fast, no frills. Segmented LRU with 4 queues to approximate LFU behavior.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">Caffeine (Java)</div><h4>W-TinyLFU default</h4><p>The default in Spring. Industry-leading hit rates. Adaptive window sizing.</p></div>\n      <div class=\"rw-card\"><div class=\"rw-name\">OS page cache</div><h4>Variant of LRU (clock algorithm)</h4><p>Linux page cache uses a clock-based approximation of LRU — cheaper than exact LRU. All file I/O benefits from it.</p></div>\n    </div>"
+    },
+    {
+      "id": "used-in",
+      "label": "Used in problems",
+      "number": "07",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>URL shortener uses LRU for redirect cache (temporal locality). News feed uses LFU for feed cache (hot-user skew). Typeahead uses LFU for prefix suggestions (popular queries dominate).</p></div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 4
+}

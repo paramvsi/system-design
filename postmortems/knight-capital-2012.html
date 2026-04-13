@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Knight Capital — August 1, 2012 — $440M Trading Glitch</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 0; --accent-s: 75%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <div class="hero" id="problem">
+    <div class="hero-kicker">Post-mortem · 2012-08-01 · Knight Capital</div>
+    <h1 class="hero-title"><em>Knight Capital</em> $440M in 45 Minutes</h1>
+    <p class="hero-desc">A stale deployment on 1 of 8 trading servers caused Knight's algorithm to submit millions of unintended orders in 45 minutes. Loss: $440 million. The firm was insolvent by end of day; absorbed by a competitor within weeks.</p>
+    <div class="hero-tags">
+      <span class="tag">Stale deploy</span>
+      <span class="tag">Trading</span>
+      <span class="tag">$440M loss</span>
+      <span class="tag">Firm-ending</span>
+    </div>
+  </div>
+
+  <section class="section" id="tldr">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">TL;DR</h2></div>
+    <div class="prose">
+      <p>Engineers deployed a new trading feature ("RLP" — retail liquidity program) to Knight's 8 SMARS trading servers. One server was missed. On that server, a flag named <code>PowerPeg</code> (an old test routine from 2003 that had been dormant for 9 years) was accidentally repurposed to control the new RLP feature. When market opened, the 7 updated servers ran RLP; the 1 stale server ran PowerPeg — which buys high and sells low as fast as possible, in a test scenario. There was no kill switch. 45 minutes to realize + stop. $440M net loss on ~4M trades.</p>
+    </div>
+  </section>
+
+  <section class="section" id="timeline">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Timeline</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Late July 2012</strong> — Engineers begin deploying new RLP (Retail Liquidity Program) feature.</li>
+        <li><strong>July 31 evening</strong> — Deploy to 7 of 8 trading servers. 8th missed. No automated check catches it.</li>
+        <li><strong>Aug 1, 09:30 ET</strong> — US market opens. RLP flag turns on via exchange message. On the 7 updated servers: RLP activates. On the stale 8th: the <code>PowerPeg</code> test code (re-purposed flag on stale server) fires.</li>
+        <li><strong>09:30–10:15 ET</strong> — PowerPeg rapidly sends millions of marketable orders into ~150 NYSE securities. Each trade nets a small loss. Knight accumulates $440M of losses.</li>
+        <li><strong>~10:15 ET</strong> — Engineers identify stale server, shut it down. Knight now holds massive unwanted positions; unwinding over the next days.</li>
+        <li><strong>Aug 2</strong> — Knight announces $440M pre-tax loss. Stock drops ~75% in 2 days.</li>
+        <li><strong>Dec 2012</strong> — Knight merged with Getco in rescue deal.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="rootcause">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Root cause</h2></div>
+    <div class="prose">
+      <p>Multiple compounding failures:</p>
+      <ol>
+        <li><strong>Dead code not deleted.</strong> The PowerPeg test function from 2003 was still in the codebase 9 years later. When its flag name got reused, the dead code reanimated.</li>
+        <li><strong>Manual deploy, no automated verification.</strong> The deploy was eight separate actions; missing one went unnoticed. No post-deploy "all 8 servers on same build" check.</li>
+        <li><strong>No kill switch for algos.</strong> When the runaway trading started, there was no "halt all trading" button. Engineers had to identify and kill the process manually.</li>
+        <li><strong>No position limits.</strong> The rogue algo could take arbitrarily large positions without hitting a firm-level risk limit.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="impact">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Blast radius</h2></div>
+    <div class="prose">
+      <p>$440M loss in 45 minutes. Knight Capital, a major HFT + market-making firm ($400M+ revenue/year), became insolvent the same day. Forced to raise $400M emergency capital at distressed terms; merged with Getco within months. 1,400 employees affected. Market-wide impact was smaller (no system failure, just one participant's P&L), but regulatory scrutiny of HFT intensified. SEC later fined Knight $12M for rule violations.</p>
+    </div>
+  </section>
+
+  <section class="section" id="lessons">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Lessons</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>Delete dead code.</strong> Not "mark as deprecated" — delete. Dead code is a loaded gun with an unlabeled safety.</li>
+        <li><strong>Automate deploys; verify symmetry.</strong> If you have N servers, build verifies all N running same build before traffic returns. Don't trust humans with multi-server sequences.</li>
+        <li><strong>Kill switches for algorithmic trading.</strong> Now regulatory-required for most US venues. Firm-level limits on notional exposure, order rate, P&L drawdown — if exceeded, algo halts.</li>
+        <li><strong>Reuse of config flag names is dangerous.</strong> Namespace feature flags. Never reuse a flag name that once referenced a different code path.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="concepts-used">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Concepts in play</h2></div>
+    <div class="prose">
+      <ul>
+        <li><a href="/concepts/deployment-strategies-blue-green-canary">Deployment strategies</a> — the canonical "partial deploy" nightmare.</li>
+        <li><a href="/concepts/feature-flags-rollouts">Feature flags</a> — flag-name reuse is an anti-pattern.</li>
+        <li><a href="/concepts/circuit-breaker">Circuit breaker</a> — what "kill switch" means in practice.</li>
+        <li><a href="/concepts/stock-exchange">Stock exchange</a> — context for matching engine + client trading flows.</li>
+        <li><a href="/concepts/monitoring-alerting">Monitoring</a> — position + P&L drawdown limits as alarms.</li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

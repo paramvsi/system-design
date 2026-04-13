@@ -1,0 +1,1475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Search Autocomplete — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+
+  <style>
+/* ux-v2-bumped */
+
+  :root {
+    --accent-h:       175;
+    --accent-s:       62%;
+    --accent-l:       38%;
+    --accent:         hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+    --accent-light:   hsl(var(--accent-h), 80%, 94%);
+    --accent-mid:     hsl(var(--accent-h), 70%, 88%);
+    --accent-text:    hsl(var(--accent-h), var(--accent-s), 28%);
+    --accent-border:  hsl(var(--accent-h), 60%, 78%);
+
+    --hl-yellow:      #fff0a0;
+    --hl-yellow-dark: #a07a00;
+    --hl-accent:      hsl(var(--accent-h), 90%, 88%);
+    --hl-accent-dark: hsl(var(--accent-h), 70%, 25%);
+
+    --bg:             #ffffff;
+    --bg-subtle:      #f7f7f5;
+    --bg-raised:      #f0eeeb;
+    --bg-code:        #f4f3f0;
+    --border:         #e4e2de;
+    --border-strong:  #ccc9c4;
+    --text-primary:   #111110;
+    --text-secondary: #4a4845;
+    --text-muted:     #878480;
+    --text-code:      #2d2c2b;
+    --red:            #c0392b;
+    --green:          #1a7a4a;
+    --amber:          #92601a;
+
+    --font-serif:     'Instrument Serif', Georgia, serif;
+    --font-sans:      'Geist', system-ui, sans-serif;
+    --font-mono:      'JetBrains Mono', 'Fira Code', monospace;
+
+    --radius-sm:      4px;
+    --radius-md:      8px;
+    --radius-lg:      12px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; font-size: 15px; }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text-primary);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection { background: var(--hl-yellow); color: var(--text-primary); }
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg-subtle); }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 228px 1fr;
+    grid-template-rows: 52px 1fr;
+    min-height: 100vh;
+  }
+
+  .topbar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1.5rem;
+    height: 52px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(10px);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+
+  .back-link {
+    display: flex; align-items: center; gap: 5px;
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-muted); text-decoration: none;
+    padding: 4px 8px; border-radius: var(--radius-sm);
+    transition: all 0.15s; letter-spacing: 0.02em;
+  }
+  .back-link:hover { color: var(--text-primary); background: var(--bg-subtle); }
+
+  .topbar-sep { width: 1px; height: 16px; background: var(--border); }
+  .topbar-problem { font-family: var(--font-sans); font-size: 15px; font-weight: 500; color: var(--text-primary); }
+  .topbar-right { display: flex; align-items: center; gap: 8px; }
+
+  .badge {
+    font-family: var(--font-mono); font-size: 11px;
+    letter-spacing: 0.06em; padding: 3px 9px;
+    border-radius: 20px; font-weight: 500; text-transform: uppercase;
+  }
+  .badge-accent { background: var(--accent-light); color: var(--accent-text); border: 1px solid var(--accent-border); }
+  .badge-muted  { background: var(--bg-subtle); color: var(--text-muted); border: 1px solid var(--border); }
+
+  .sidebar {
+    position: sticky; top: 52px;
+    height: calc(100vh - 52px); overflow-y: auto;
+    border-right: 1px solid var(--border);
+    padding: 1.25rem 0; background: var(--bg-subtle);
+  }
+
+  .sidebar-group-label {
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-muted); padding: 0 1rem 6px;
+    margin-top: 1.25rem;
+  }
+  .sidebar-group-label:first-child { margin-top: 0; }
+
+  .sidebar a {
+    display: flex; align-items: center; gap: 9px;
+    padding: 5px 1rem; font-size: 14.5px;
+    font-family: var(--font-sans); font-weight: 400;
+    color: var(--text-secondary); text-decoration: none;
+    border-left: 2px solid transparent; transition: all 0.12s; line-height: 1.4;
+  }
+  .sidebar a:hover { color: var(--text-primary); background: var(--bg-raised); }
+  .sidebar a.active {
+    color: var(--accent-text); border-left-color: var(--accent);
+    background: var(--accent-light); font-weight: 500;
+  }
+  .sidebar-n { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-muted); min-width: 16px; flex-shrink: 0; }
+  .sidebar a.active .sidebar-n { color: var(--accent); }
+
+  .main { padding: 2.5rem 3rem 4rem; max-width: 840px; }
+
+  .hero { padding-bottom: 2rem; margin-bottom: 2rem; border-bottom: 1px solid var(--border); }
+
+  .hero-kicker {
+    font-family: var(--font-mono); font-size: 12px;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 10px;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .hero-kicker::before {
+    content: ''; display: inline-block;
+    width: 18px; height: 1.5px;
+    background: var(--accent); border-radius: 1px;
+  }
+
+  .hero-title {
+    font-family: var(--font-serif); font-size: clamp(2rem, 3.5vw, 2.8rem);
+    font-weight: 400; line-height: 1.15; letter-spacing: -0.01em;
+    color: var(--text-primary); margin-bottom: 12px;
+  }
+  .hero-title em { font-style: italic; color: var(--accent-text); }
+
+  .hero-desc {
+    font-size: 14.5px; color: var(--text-secondary);
+    max-width: 600px; line-height: 1.75; font-weight: 300; margin-bottom: 1.25rem;
+  }
+
+  .hero-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  .tag {
+    font-family: var(--font-mono); font-size: 12px;
+    padding: 3px 10px; border-radius: 20px;
+    border: 1px solid var(--border); color: var(--text-secondary);
+    background: var(--bg-subtle); letter-spacing: 0.02em;
+  }
+  .tag.accent { background: var(--accent-light); color: var(--accent-text); border-color: var(--accent-border); font-weight: 500; }
+
+  .section { margin-bottom: 3rem; scroll-margin-top: 72px; }
+
+  .section-head {
+    display: flex; align-items: baseline; gap: 10px;
+    margin-bottom: 1.25rem; padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+  .section-n { font-family: var(--font-mono); font-size: 11px; color: var(--accent); opacity: 0.7; min-width: 22px; letter-spacing: 0.04em; }
+  .section-title { font-family: var(--font-sans); font-size: 15px; font-weight: 600; color: var(--text-primary); letter-spacing: -0.01em; }
+
+  .hl         { background: var(--hl-yellow); color: var(--text-primary); padding: 1px 4px; border-radius: 3px; font-weight: 500; }
+  .hl-accent  { background: var(--hl-accent); color: var(--hl-accent-dark); padding: 1px 4px; border-radius: 3px; font-weight: 500; }
+  .hl-red     { background: #fce8e6; color: #8b1a12; padding: 1px 4px; border-radius: 3px; font-weight: 500; }
+  .hl-green   { background: #e4f5ec; color: #1a5c38; padding: 1px 4px; border-radius: 3px; font-weight: 500; }
+
+  .prose { font-size: 16px; color: var(--text-secondary); font-weight: 300; line-height: 1.75; }
+  .prose p { margin-bottom: 0.85em; }
+  .prose p:last-child { margin-bottom: 0; }
+  .prose strong { color: var(--text-primary); font-weight: 600; }
+  .prose code {
+    font-family: var(--font-mono); font-size: 13.5px;
+    background: var(--bg-code); border: 1px solid var(--border);
+    border-radius: 3px; padding: 1px 5px; color: var(--text-code);
+  }
+
+  .callout {
+    border-left: 3px solid var(--accent); background: var(--accent-light);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 10px 14px; margin: 1rem 0;
+  }
+  .callout-label { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-text); margin-bottom: 4px; font-weight: 500; }
+  .callout p { font-size: 15.5px; color: var(--text-secondary); font-weight: 300; line-height: 1.65; }
+  .callout-warn { border-left-color: #c0392b; background: #fce8e6; }
+  .callout-warn .callout-label { color: #8b1a12; }
+  .callout-good { border-left-color: #1a7a4a; background: #e4f5ec; }
+  .callout-good .callout-label { color: #1a5c38; }
+
+  .req-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .req-box { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.1rem; background: var(--bg); }
+  .req-box-head { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .req-box-head.func    { color: var(--accent-text); }
+  .req-box-head.nonfunc { color: var(--text-muted); }
+  .req-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.5; flex-shrink: 0; }
+  .req-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .req-list li { font-size: 15px; color: var(--text-secondary); font-weight: 300; display: flex; align-items: flex-start; gap: 7px; line-height: 1.5; }
+  .req-list li::before { content: ''; width: 4px; height: 4px; border-radius: 50%; background: var(--accent); margin-top: 6px; flex-shrink: 0; opacity: 0.5; }
+
+  .table-wrap { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 1rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  thead th { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); padding: 8px 14px; text-align: left; background: var(--bg-subtle); border-bottom: 1px solid var(--border); font-weight: 400; }
+  tbody td { padding: 9px 14px; border-bottom: 1px solid var(--border); color: var(--text-secondary); font-weight: 300; vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--bg-subtle); }
+  td.t-metric { color: var(--text-primary); font-weight: 500; font-size: 14.5px; }
+  td.t-value  { font-family: var(--font-mono); font-size: 13.5px; color: var(--accent-text); font-weight: 500; }
+  td.t-calc   { font-family: var(--font-mono); font-size: 13px; color: var(--text-muted); }
+
+  .endpoint { border: 1px solid var(--border); border-radius: var(--radius-lg); margin-bottom: 8px; overflow: hidden; }
+  .endpoint-head { display: flex; align-items: center; gap: 10px; padding: 9px 14px; background: var(--bg-subtle); border-bottom: 1px solid var(--border); }
+  .method { font-family: var(--font-mono); font-size: 12px; font-weight: 500; padding: 2px 7px; border-radius: 4px; letter-spacing: 0.04em; min-width: 46px; text-align: center; }
+  .method.get    { background: #dcfce7; color: #166534; }
+  .method.post   { background: #dbeafe; color: #1e40af; }
+  .method.put    { background: #fef9c3; color: #854d0e; }
+  .method.delete { background: #fee2e2; color: #991b1b; }
+  .ep-path { font-family: var(--font-mono); font-size: 14.5px; color: var(--text-primary); }
+  .ep-desc { font-size: 13.5px; color: var(--text-muted); margin-left: auto; font-style: italic; }
+  .endpoint-body { padding: 10px 14px; }
+
+  .code { background: var(--bg-code); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; font-family: var(--font-mono); font-size: 13.5px; color: var(--text-code); overflow-x: auto; line-height: 1.8; margin: 6px 0; }
+  .c-comment { color: var(--text-muted); font-style: italic; }
+  .c-key     { color: var(--accent-text); font-weight: 500; }
+  .c-str     { color: #1a6b3a; }
+  .c-num     { color: #92601a; }
+  .c-kw      { color: #6b21a8; }
+
+  .diagram-wrap { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 1rem; background: var(--bg); }
+  .diagram-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; background: var(--bg-subtle); border-bottom: 1px solid var(--border); }
+  .diagram-label { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+  .diagram-type  { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.04em; }
+  .diagram-body  { padding: 1.5rem; }
+  .arch-svg { width: 100%; height: auto; display: block; }
+
+  .anim-wrap { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 1rem; }
+  .anim-head { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--bg-subtle); border-bottom: 1px solid var(--border); }
+  .anim-title { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin-right: auto; }
+  .btn { padding: 4px 12px; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.04em; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--bg); color: var(--text-secondary); cursor: pointer; transition: all 0.12s; }
+  .btn:hover { background: var(--bg-raised); color: var(--text-primary); }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn.primary:hover { opacity: 0.88; }
+  .anim-body { padding: 1.5rem; min-height: 180px; }
+
+  .flow { display: flex; align-items: center; gap: 0; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+  .flow-node { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .flow-box { padding: 8px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary); background: var(--bg-subtle); white-space: nowrap; transition: all 0.25s; font-weight: 400; }
+  .flow-box.active { border-color: var(--accent); background: var(--accent-light); color: var(--accent-text); font-weight: 500; }
+  .flow-sub { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-muted); white-space: nowrap; }
+  .flow-connector { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
+  .flow-line { width: 36px; height: 1px; background: var(--border-strong); position: relative; transition: background 0.25s; }
+  .flow-line.active { background: var(--accent); }
+  .flow-pkt { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); position: absolute; top: -3px; left: -3.5px; opacity: 0; }
+  .flow-pkt.go { animation: pktMove 0.55s ease forwards; }
+  @keyframes pktMove { 0% { left: -3.5px; opacity: 1; } 100% { left: 33px; opacity: 1; } }
+  .flow-step-n { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); margin-top: 3px; }
+  .anim-desc { margin-top: 1rem; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); min-height: 18px; text-align: center; letter-spacing: 0.02em; }
+
+  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1rem; }
+  .card { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.1rem; background: var(--bg); transition: border-color 0.15s; }
+  .card:hover { border-color: var(--border-strong); }
+  .card-head { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
+  .card-dot  { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .card-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+  .card p, .card li { font-size: 15px; color: var(--text-secondary); font-weight: 300; line-height: 1.65; }
+  .card ul { padding-left: 1rem; }
+  .card li { margin-bottom: 3px; }
+
+  .tradeoff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .tradeoff { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.1rem; }
+  .tradeoff.chosen { border-color: var(--accent-border); background: var(--accent-light); }
+  .tradeoff-kicker { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 5px; }
+  .tradeoff.chosen .tradeoff-kicker { color: var(--accent-text); }
+  .tradeoff-name { font-size: 15.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+  .tradeoff p { font-size: 15px; color: var(--text-secondary); font-weight: 300; line-height: 1.65; }
+  .verdict { display: inline-block; margin-top: 8px; font-family: var(--font-mono); font-size: 11px; padding: 2px 8px; border-radius: 3px; letter-spacing: 0.03em; }
+  .verdict-yes   { background: #dcfce7; color: #166534; }
+  .verdict-maybe { background: #fef9c3; color: #854d0e; }
+  .verdict-no    { background: #fee2e2; color: #991b1b; }
+
+  .failure { display: grid; grid-template-columns: 36px 1fr; gap: 0 12px; margin-bottom: 1.5rem; align-items: start; }
+  .failure-icon { width: 36px; height: 36px; border-radius: var(--radius-md); background: #fee2e2; border: 1px solid #fca5a5; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .failure-title { font-size: 15.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 3px; }
+  .failure-desc  { font-size: 15px; color: var(--text-secondary); font-weight: 300; line-height: 1.65; margin-bottom: 6px; }
+  .mitigation { font-family: var(--font-mono); font-size: 12px; color: #166534; background: #dcfce7; border: 1px solid #86efac; padding: 3px 9px; border-radius: 4px; display: inline-block; }
+
+  .tips { display: flex; flex-direction: column; gap: 8px; }
+  .tip { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg); transition: border-color 0.12s; }
+  .tip:hover { border-color: var(--accent-border); }
+  .tip-n { font-family: var(--font-mono); font-size: 11px; color: var(--accent); min-width: 18px; padding-top: 1px; font-weight: 500; }
+  .tip-text { font-size: 15px; color: var(--text-secondary); font-weight: 300; line-height: 1.65; }
+  .tip-text strong { color: var(--text-primary); font-weight: 600; }
+
+  .similar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 8px; }
+  .similar-card { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 10px 12px; text-decoration: none; transition: all 0.15s; display: block; background: var(--bg); }
+  .similar-card:hover { border-color: var(--accent-border); background: var(--accent-light); transform: translateY(-1px); }
+  .similar-name   { font-size: 14.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 3px; }
+  .similar-reason { font-size: 13px; color: var(--text-muted); font-weight: 300; line-height: 1.5; }
+
+  .timeline { position: relative; padding-left: 1.75rem; }
+  .timeline::before { content: ''; position: absolute; left: 5px; top: 10px; bottom: 10px; width: 1px; background: linear-gradient(to bottom, var(--accent), var(--border)); }
+  .timeline-step { position: relative; margin-bottom: 1.75rem; }
+  .timeline-step:last-child { margin-bottom: 0; }
+  .timeline-step::before { content: ''; position: absolute; left: -1.45rem; top: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); box-shadow: 0 0 0 1.5px var(--accent); }
+  .timeline-phase { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin-bottom: 3px; }
+  .timeline-title { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+  .timeline-desc  { font-size: 15px; color: var(--text-secondary); font-weight: 300; line-height: 1.65; }
+
+  /* Trie Visualizer */
+  .trie-demo {
+    border: 1px solid var(--border); border-radius: var(--radius-lg);
+    overflow: hidden; margin-bottom: 1rem;
+  }
+  .trie-demo-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; background: var(--bg-subtle);
+    border-bottom: 1px solid var(--border);
+  }
+  .trie-input {
+    flex: 1; font-family: var(--font-mono); font-size: 15px;
+    padding: 6px 10px; border: 1px solid var(--border);
+    border-radius: var(--radius-sm); background: var(--bg);
+    color: var(--text-primary); outline: none;
+    transition: border-color 0.15s;
+  }
+  .trie-input:focus { border-color: var(--accent); }
+  .trie-demo-body { padding: 1.25rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+  .trie-tree { font-family: var(--font-mono); font-size: 13.5px; line-height: 1.9; color: var(--text-secondary); }
+  .trie-node { display: block; }
+  .trie-node.match { color: var(--accent-text); font-weight: 600; }
+  .trie-node.active-path { color: var(--accent); font-weight: 700; }
+  .trie-suggestions { display: flex; flex-direction: column; gap: 6px; }
+  .trie-suggestion {
+    padding: 7px 12px; border: 1px solid var(--border);
+    border-radius: var(--radius-sm); font-size: 15px;
+    color: var(--text-secondary); background: var(--bg);
+    display: flex; align-items: center; gap: 8px;
+    transition: all 0.15s; font-family: var(--font-sans);
+  }
+  .trie-suggestion.highlighted {
+    border-color: var(--accent-border); background: var(--accent-light);
+    color: var(--accent-text);
+  }
+  .trie-suggestion-score {
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-muted); margin-left: auto;
+  }
+  .trie-suggestion-prefix { font-weight: 600; color: var(--accent-text); }
+  .trie-label { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; }
+
+  /* Pipeline diagram */
+  .pipeline {
+    display: flex; align-items: stretch; gap: 0;
+    overflow-x: auto; padding-bottom: 4px; margin-bottom: 1rem;
+  }
+  .pipe-stage {
+    display: flex; flex-direction: column;
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    padding: 10px 14px; background: var(--bg);
+    min-width: 120px; flex-shrink: 0;
+  }
+  .pipe-stage.accent { border-color: var(--accent-border); background: var(--accent-light); }
+  .pipe-stage-label { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+  .pipe-stage.accent .pipe-stage-label { color: var(--accent-text); }
+  .pipe-stage-name { font-size: 14.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 3px; }
+  .pipe-stage-sub  { font-size: 12px; color: var(--text-muted); font-weight: 300; }
+  .pipe-arrow {
+    display: flex; align-items: center; justify-content: center;
+    padding: 0 6px; color: var(--text-muted); font-size: 16px; flex-shrink: 0;
+  }
+  .pipe-arrow.down { padding: 4px 0; writing-mode: vertical-lr; font-size: 13.5px; }
+
+  .mermaid { display: flex; justify-content: center; }
+  .mermaid svg { max-width: 100%; }
+
+  @media (max-width: 820px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .main { padding: 1.5rem 1.1rem 3rem; }
+    .req-grid, .tradeoff-grid, .card-grid, .trie-demo-body { grid-template-columns: 1fr; }
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .hero                { animation: fadeUp 0.4s ease both; }
+  .section:nth-child(1){ animation: fadeUp 0.4s 0.04s ease both; }
+  .section:nth-child(2){ animation: fadeUp 0.4s 0.08s ease both; }
+  .section:nth-child(3){ animation: fadeUp 0.4s 0.12s ease both; }
+  .section:nth-child(4){ animation: fadeUp 0.4s 0.16s ease both; }
+  .section:nth-child(5){ animation: fadeUp 0.4s 0.20s ease both; }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- TOP BAR -->
+  <nav class="topbar">
+    <div class="topbar-left">
+      <a href="../index.html" class="back-link">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 2L4 6l4 4"/></svg>
+        All Problems
+      </a>
+      <div class="topbar-sep"></div>
+      <span class="topbar-problem">Search Autocomplete</span>
+    </div>
+    <div class="topbar-right">
+      <span class="badge badge-accent">System Design</span>
+      <span class="badge badge-muted">Intermediate</span>
+    </div>
+  </nav>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-group-label">On this page</div>
+    <a href="#problem"       class="active"><span class="sidebar-n">01</span>Problem Statement</a>
+    <a href="#requirements">                <span class="sidebar-n">02</span>Requirements</a>
+    <a href="#scale">                       <span class="sidebar-n">03</span>Scale Estimation</a>
+    <a href="#api">                         <span class="sidebar-n">04</span>API Design</a>
+    <a href="#architecture">                <span class="sidebar-n">05</span>Architecture</a>
+    <a href="#deep-dive">                   <span class="sidebar-n">06</span>Deep Dive — Trie</a>
+    <a href="#pipeline">                    <span class="sidebar-n">07</span>Data Pipeline</a>
+    <a href="#tradeoffs">                   <span class="sidebar-n">08</span>Tradeoffs</a>
+    <a href="#failures">                    <span class="sidebar-n">09</span>Failure Scenarios</a>
+    <a href="#interview-tips">              <span class="sidebar-n">10</span>Interview Tips</a>
+    <a href="#similar">                     <span class="sidebar-n">11</span>Similar Problems</a>
+    <a href="#evolution">                   <span class="sidebar-n">12</span>Evolution</a>
+
+    <div class="sidebar-group-label">Related</div>
+    <a href="../url-shortener/index.html">  <span class="sidebar-n">→</span>URL Shortener</a>
+    <a href="../rate-limiter/index.html">   <span class="sidebar-n">→</span>Rate Limiter</a>
+    <a href="../twitter-feed/index.html">   <span class="sidebar-n">→</span>Twitter Feed</a>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- HERO -->
+    <div class="hero" id="problem">
+      <div class="hero-kicker">System Design Reference</div>
+      <h1 class="hero-title">Design <em>Search Autocomplete</em></h1>
+      <p class="hero-desc">
+        A typeahead system that returns ranked suggestions on every keystroke — at sub-100ms latency, for billions of daily searches. The challenge isn't finding matches. It's pre-organizing data so matches are already waiting.
+      </p>
+      <div class="hero-tags">
+        <span class="tag accent">⚡ Core: Trie + Top-K caching</span>
+        <span class="tag">5B searches/day</span>
+        <span class="tag">Read-heavy</span>
+        <span class="tag">&lt;100ms p99</span>
+        <span class="tag">Eventually consistent</span>
+        <span class="tag">Regional Tries</span>
+      </div>
+    </div>
+
+
+    <!-- 02 REQUIREMENTS -->
+    <section class="section" id="requirements">
+      <div class="section-head">
+        <span class="section-n">02</span>
+        <h2 class="section-title">Requirements</h2>
+      </div>
+
+      <div class="req-grid">
+        <div class="req-box">
+          <div class="req-box-head func"><span class="req-dot"></span>Functional</div>
+          <ul class="req-list">
+            <li>Return <span class="hl-accent">top 5–8 suggestions</span> for any prefix as the user types</li>
+            <li>Suggestions ranked by <span class="hl-accent">global search frequency</span></li>
+            <li>Personal history boosts relevant suggestions for logged-in users</li>
+            <li>Trending terms surface within minutes of a breaking event</li>
+            <li>Regional relevance — suggestions differ by geography</li>
+          </ul>
+        </div>
+        <div class="req-box">
+          <div class="req-box-head nonfunc"><span class="req-dot"></span>Non-Functional</div>
+          <ul class="req-list">
+            <li>Latency <span class="hl">&lt;100ms p99</span> end-to-end per keystroke</li>
+            <li><span class="hl">99.99% availability</span> — suggestions are user-facing</li>
+            <li>Eventual consistency is fine — stale suggestions are harmless</li>
+            <li>Horizontally scalable reads — Trie servers are stateless replicas</li>
+            <li>Trie freshness: full rebuild every 6h, hot patches every ~60s</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="callout">
+        <div class="callout-label">Scope Decision</div>
+        <p>We <span class="hl-green">exclude</span> spell correction and semantic search — those are separate systems that run before the Trie query, not part of the Trie itself. Typeahead is strictly prefix matching + ranking.</p>
+      </div>
+    </section>
+
+
+    <!-- 03 SCALE ESTIMATION -->
+    <section class="section" id="scale">
+      <div class="section-head">
+        <span class="section-n">03</span>
+        <h2 class="section-title">Scale Estimation</h2>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Metric</th><th>Calculation</th><th>Result</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="t-metric">Daily searches</td>
+              <td>Google benchmark</td>
+              <td class="t-value">5B / day</td>
+            </tr>
+            <tr>
+              <td class="t-metric">Keystroke events / day</td>
+              <td class="t-calc">5B searches × 20 chars avg</td>
+              <td class="t-value">100B / day</td>
+            </tr>
+            <tr>
+              <td class="t-metric">Raw RPS (before debounce)</td>
+              <td class="t-calc">100B ÷ 86,400s</td>
+              <td class="t-value">~1M RPS</td>
+            </tr>
+            <tr>
+              <td class="t-metric">Actual RPS (after debounce)</td>
+              <td class="t-calc">1M ÷ 5–10× debounce reduction</td>
+              <td class="t-value">~100–200K RPS</td>
+            </tr>
+            <tr>
+              <td class="t-metric">Unique queries in Trie</td>
+              <td>Top popular queries only</td>
+              <td class="t-value">~10M</td>
+            </tr>
+            <tr>
+              <td class="t-metric">Trie size in memory</td>
+              <td class="t-calc">100M nodes × 150B (top-5 suggestions each)</td>
+              <td class="t-value">~15 GB</td>
+            </tr>
+            <tr>
+              <td class="t-metric">Global Trie servers</td>
+              <td>Multiple replicas per region</td>
+              <td class="t-value">50–100 servers</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <div class="callout-label">Key Insight — Debouncing</div>
+        <p>
+          The client waits <span class="hl">100–150ms</span> after the last keystroke before firing a request. Fast typists generate a burst of keystrokes in 300ms — without debouncing, 5 requests fire but only the last one matters. Debouncing alone reduces server load by <span class="hl">5–10×</span> at zero cost.
+        </p>
+      </div>
+
+      <div class="callout">
+        <div class="callout-label">Key Insight — Trie fits in RAM</div>
+        <p>
+          15 GB per Trie is large but fits comfortably on a single modern server. This is why the Trie lives <span class="hl-accent">entirely in memory</span> — no disk reads on the hot path. The entire read path is pure in-memory lookup.
+        </p>
+      </div>
+    </section>
+
+
+    <!-- 04 API DESIGN -->
+    <section class="section" id="api">
+      <div class="section-head">
+        <span class="section-n">04</span>
+        <h2 class="section-title">API Design</h2>
+      </div>
+
+      <div class="endpoint">
+        <div class="endpoint-head">
+          <span class="method get">GET</span>
+          <span class="ep-path">/v1/suggestions</span>
+          <span class="ep-desc">Fetch top-K suggestions for a prefix</span>
+        </div>
+        <div class="endpoint-body">
+          <div class="code">
+<span class="c-comment">// Request — fires on every (debounced) keystroke</span>
+GET /v1/suggestions?q=<span class="c-str">app</span>&limit=<span class="c-num">8</span>&region=<span class="c-str">us</span>&uid=<span class="c-str">u_abc123</span>
+
+<span class="c-comment">// Response 200 — served from Trie in &lt;5ms</span>
+{
+  <span class="c-key">"query"</span>: <span class="c-str">"app"</span>,
+  <span class="c-key">"suggestions"</span>: [
+    { <span class="c-key">"text"</span>: <span class="c-str">"apple"</span>,       <span class="c-key">"score"</span>: <span class="c-num">500000000</span>, <span class="c-key">"source"</span>: <span class="c-str">"global"</span>   },
+    { <span class="c-key">"text"</span>: <span class="c-str">"app store"</span>,   <span class="c-key">"score"</span>: <span class="c-num">320000000</span>, <span class="c-key">"source"</span>: <span class="c-str">"global"</span>   },
+    { <span class="c-key">"text"</span>: <span class="c-str">"apple music"</span>, <span class="c-key">"score"</span>: <span class="c-num">180000000</span>, <span class="c-key">"source"</span>: <span class="c-str">"personal"</span> }
+  ],
+  <span class="c-key">"latency_ms"</span>: <span class="c-num">4</span>
+}</div>
+        </div>
+      </div>
+
+      <div class="endpoint">
+        <div class="endpoint-head">
+          <span class="method post">POST</span>
+          <span class="ep-path">/v1/search-event</span>
+          <span class="ep-desc">Record a completed search (async, fire-and-forget)</span>
+        </div>
+        <div class="endpoint-body">
+          <div class="code">
+<span class="c-comment">// Fires when user hits Enter / selects a result — NOT on every keystroke</span>
+{ <span class="c-key">"query"</span>: <span class="c-str">"apple music"</span>, <span class="c-key">"uid"</span>: <span class="c-str">"u_abc123"</span>, <span class="c-key">"region"</span>: <span class="c-str">"us"</span>, <span class="c-key">"ts"</span>: <span class="c-num">1704067200</span> }
+
+<span class="c-comment">// Response 202 Accepted — fire-and-forget, written to Kafka</span>
+{ <span class="c-key">"accepted"</span>: <span class="c-kw">true</span> }</div>
+        </div>
+      </div>
+
+      <div class="callout">
+        <div class="callout-label">Design Note</div>
+        <p>The GET and POST endpoints are <span class="hl">completely decoupled</span>. Reads hit the Trie servers. Writes go to Kafka. They never touch the same system. This is what makes the architecture scalable — read path and write path scale independently.</p>
+      </div>
+    </section>
+
+
+    <!-- 05 ARCHITECTURE -->
+    <section class="section" id="architecture">
+      <div class="section-head">
+        <span class="section-n">05</span>
+        <h2 class="section-title">High-Level Architecture</h2>
+      </div>
+
+      <div class="diagram-wrap">
+        <div class="diagram-head">
+          <span class="diagram-label">Architecture — Read Path + Write Path</span>
+          <span class="diagram-type">SVG Diagram</span>
+        </div>
+        <div class="diagram-body">
+          <svg class="arch-svg" viewBox="0 0 780 380" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                <polygon points="0 0,8 3,0 6" fill="#9ca3af"/>
+              </marker>
+              <marker id="arr-accent" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                <polygon points="0 0,8 3,0 6" fill="#0f766e"/>
+              </marker>
+            </defs>
+
+            <!-- Labels -->
+            <text x="16" y="20" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.08em" text-transform="uppercase">READ PATH</text>
+            <text x="16" y="230" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.08em">WRITE PATH</text>
+            <line x1="16" y1="26" x2="760" y2="26" stroke="#e4e2de" stroke-width="1"/>
+            <line x1="16" y1="236" x2="760" y2="236" stroke="#e4e2de" stroke-width="1" stroke-dasharray="4,3"/>
+
+            <!-- READ PATH -->
+            <!-- Client -->
+            <g style="cursor:pointer" onclick="hlNode(this)">
+              <rect x="16" y="42" width="100" height="64" rx="8" fill="#f7f7f5" stroke="#e4e2de" stroke-width="1"/>
+              <text x="66" y="68" text-anchor="middle" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">CLIENT</text>
+              <text x="66" y="84" text-anchor="middle" fill="#111110" font-size="12" font-family="Geist,sans-serif" font-weight="600">Browser</text>
+              <text x="66" y="97" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">debounce 150ms</text>
+            </g>
+
+            <line x1="118" y1="74" x2="150" y2="74" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+            <text x="134" y="68" text-anchor="middle" fill="#9ca3af" font-size="8" font-family="JetBrains Mono,monospace">GET /suggestions</text>
+
+            <!-- CDN -->
+            <g style="cursor:pointer" onclick="hlNode(this)">
+              <rect x="152" y="42" width="100" height="64" rx="8" fill="#f7f7f5" stroke="#e4e2de" stroke-width="1"/>
+              <text x="202" y="68" text-anchor="middle" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">EDGE</text>
+              <text x="202" y="84" text-anchor="middle" fill="#111110" font-size="12" font-family="Geist,sans-serif" font-weight="600">CDN / Cache</text>
+              <text x="202" y="97" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">Regional PoPs</text>
+            </g>
+
+            <line x1="254" y1="74" x2="286" y2="74" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+            <text x="270" y="68" text-anchor="middle" fill="#9ca3af" font-size="8" font-family="JetBrains Mono,monospace">cache miss</text>
+
+            <!-- Load Balancer -->
+            <g style="cursor:pointer" onclick="hlNode(this)">
+              <rect x="288" y="42" width="100" height="64" rx="8" fill="#f7f7f5" stroke="#e4e2de" stroke-width="1"/>
+              <text x="338" y="68" text-anchor="middle" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">INFRA</text>
+              <text x="338" y="84" text-anchor="middle" fill="#111110" font-size="12" font-family="Geist,sans-serif" font-weight="600">Load Balancer</text>
+              <text x="338" y="97" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">Round-robin</text>
+            </g>
+
+            <line x1="390" y1="74" x2="422" y2="74" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+
+            <!-- Trie Servers — highlighted -->
+            <g style="cursor:pointer" onclick="hlNode(this)">
+              <rect x="424" y="30" width="130" height="88" rx="8" fill="#f0fdfc" stroke="#5eead4" stroke-width="1.5"/>
+              <text x="489" y="56" text-anchor="middle" fill="#0f766e" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">CORE COMPONENT</text>
+              <text x="489" y="74" text-anchor="middle" fill="#111110" font-size="12" font-family="Geist,sans-serif" font-weight="600">Trie Servers</text>
+              <text x="489" y="88" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">Trie in memory</text>
+              <text x="489" y="101" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">Top-K at each node</text>
+            </g>
+
+            <!-- Personal index -->
+            <g style="cursor:pointer" onclick="hlNode(this)">
+              <rect x="614" y="42" width="112" height="64" rx="8" fill="#f7f7f5" stroke="#e4e2de" stroke-width="1"/>
+              <text x="670" y="64" text-anchor="middle" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">PERSONAL</text>
+              <text x="670" y="80" text-anchor="middle" fill="#111110" font-size="12" font-family="Geist,sans-serif" font-weight="600">User History</text>
+              <text x="670" y="93" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">Redis per-user</text>
+            </g>
+
+            <line x1="556" y1="65" x2="612" y2="65" stroke="#d1d5db" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+            <text x="584" y="59" text-anchor="middle" fill="#9ca3af" font-size="8" font-family="JetBrains Mono,monospace">merge+rank</text>
+
+            <!-- WRITE PATH -->
+            <!-- Client write -->
+            <g style="cursor:pointer" onclick="hlNode(this)">
+              <rect x="16" y="252" width="100" height="64" rx="8" fill="#f7f7f5" stroke="#e4e2de" stroke-width="1"/>
+              <text x="66" y="276" text-anchor="middle" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">CLIENT</text>
+              <text x="66" y="292" text-anchor="middle" fill="#111110" font-size="12" font-family="Geist,sans-serif" font-weight="600">Search Event</text>
+              <text x="66" y="305" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">on Enter key</text>
+            </g>
+
+            <line x1="118" y1="284" x2="150" y2="284" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+
+            <!-- Kafka -->
+            <g style="cursor:pointer" onclick="hlNode(this)">
+              <rect x="152" y="252" width="100" height="64" rx="8" fill="#f7f7f5" stroke="#e4e2de" stroke-width="1"/>
+              <text x="202" y="276" text-anchor="middle" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">QUEUE</text>
+              <text x="202" y="292" text-anchor="middle" fill="#111110" font-size="12" font-family="Geist,sans-serif" font-weight="600">Kafka</text>
+              <text x="202" y="305" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">Async ingestion</text>
+            </g>
+
+            <!-- Kafka forks to two consumers -->
+            <line x1="254" y1="275" x2="286" y2="265" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+            <line x1="254" y1="295" x2="286" y2="305" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+
+            <!-- Cassandra -->
+            <g style="cursor:pointer" onclick="hlNode(this)">
+              <rect x="288" y="248" width="110" height="64" rx="8" fill="#f7f7f5" stroke="#e4e2de" stroke-width="1"/>
+              <text x="343" y="270" text-anchor="middle" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">STORAGE</text>
+              <text x="343" y="286" text-anchor="middle" fill="#111110" font-size="12" font-family="Geist,sans-serif" font-weight="600">Cassandra</text>
+              <text x="343" y="299" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">Raw search logs</text>
+            </g>
+
+            <!-- Flink -->
+            <g style="cursor:pointer" onclick="hlNode(this)">
+              <rect x="288" y="323" width="110" height="48" rx="8" fill="#f7f7f5" stroke="#e4e2de" stroke-width="1"/>
+              <text x="343" y="343" text-anchor="middle" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">STREAMING</text>
+              <text x="343" y="359" text-anchor="middle" fill="#111110" font-size="12" font-family="Geist,sans-serif" font-weight="600">Flink</text>
+            </g>
+
+            <line x1="400" y1="280" x2="432" y2="270" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+            <line x1="400" y1="347" x2="432" y2="340" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+
+            <!-- Spark -->
+            <g style="cursor:pointer" onclick="hlNode(this)">
+              <rect x="434" y="248" width="110" height="64" rx="8" fill="#f7f7f5" stroke="#e4e2de" stroke-width="1"/>
+              <text x="489" y="270" text-anchor="middle" fill="#878480" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">BATCH</text>
+              <text x="489" y="286" text-anchor="middle" fill="#111110" font-size="12" font-family="Geist,sans-serif" font-weight="600">Spark Job</text>
+              <text x="489" y="299" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">Every 6 hours</text>
+            </g>
+
+            <!-- Flink hot patch -->
+            <g style="cursor:pointer" onclick="hlNode(this)">
+              <rect x="434" y="323" width="110" height="48" rx="8" fill="#fff7ed" stroke="#fed7aa" stroke-width="1"/>
+              <text x="489" y="343" text-anchor="middle" fill="#92400e" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">HOT PATCH</text>
+              <text x="489" y="359" text-anchor="middle" fill="#111110" font-size="12" font-family="Geist,sans-serif" font-weight="600">Trending</text>
+            </g>
+
+            <!-- Both feed Trie Builder -->
+            <line x1="546" y1="280" x2="586" y2="270" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+            <line x1="546" y1="347" x2="586" y2="330" stroke="#d1d5db" stroke-width="1" marker-end="url(#arr)"/>
+
+            <!-- Trie Builder -->
+            <g style="cursor:pointer" onclick="hlNode(this)">
+              <rect x="588" y="248" width="110" height="64" rx="8" fill="#f0fdfc" stroke="#5eead4" stroke-width="1.5"/>
+              <text x="643" y="268" text-anchor="middle" fill="#0f766e" font-size="9" font-family="JetBrains Mono,monospace" letter-spacing="0.06em">BUILDER</text>
+              <text x="643" y="284" text-anchor="middle" fill="#111110" font-size="12" font-family="Geist,sans-serif" font-weight="600">Trie Builder</text>
+              <text x="643" y="298" text-anchor="middle" fill="#878480" font-size="8.5" font-family="JetBrains Mono,monospace">Blue/Green swap</text>
+            </g>
+
+            <!-- Trie Builder → Trie Servers (cross-path arrow) -->
+            <path d="M643 248 Q643 160 556 118" stroke="#5eead4" stroke-width="1.5" fill="none" stroke-dasharray="5,3" marker-end="url(#arr-accent)"/>
+            <text x="630" y="185" fill="#0f766e" font-size="8" font-family="JetBrains Mono,monospace">swap Trie</text>
+
+            <!-- Legend -->
+            <line x1="16" y1="375" x2="42" y2="375" stroke="#d1d5db" stroke-width="1"/>
+            <text x="48" y="378" fill="#9ca3af" font-size="9" font-family="JetBrains Mono,monospace">Sync</text>
+            <line x1="100" y1="375" x2="126" y2="375" stroke="#d1d5db" stroke-width="1" stroke-dasharray="4,3"/>
+            <text x="132" y="378" fill="#9ca3af" font-size="9" font-family="JetBrains Mono,monospace">Async / periodic</text>
+            <line x1="250" y1="375" x2="276" y2="375" stroke="#5eead4" stroke-width="1.5" stroke-dasharray="5,3"/>
+            <text x="282" y="378" fill="#0f766e" font-size="9" font-family="JetBrains Mono,monospace">Trie swap</text>
+          </svg>
+        </div>
+      </div>
+
+      <div class="card-grid">
+        <div class="card">
+          <div class="card-head"><span class="card-dot"></span><span class="card-title">CDN / Edge Cache</span></div>
+          <p>Popular prefix queries are cached at edge PoPs close to users. "app" is searched billions of times — the CDN absorbs most of this traffic before it even reaches the Trie servers. Cache TTL: <span class="hl">60 seconds</span>.</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><span class="card-dot"></span><span class="card-title">Trie Servers</span></div>
+          <p>The entire Trie lives <span class="hl">in memory</span> (~15 GB). Each server is a read-only replica — no writes, no coordination. A query walks 3–20 edges and returns pre-computed top-K. Average response: <span class="hl">&lt;5ms</span>.</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><span class="card-dot"></span><span class="card-title">Kafka + Cassandra</span></div>
+          <p>Every completed search fires an async event into Kafka — <span class="hl-accent">fire-and-forget</span>, no blocking the user. Kafka consumers write to Cassandra for durable storage. Billions of rows per day, pure append workload.</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><span class="card-dot"></span><span class="card-title">Spark + Flink</span></div>
+          <p><span class="hl-accent">Spark</span> runs a batch job every 6 hours — reads Cassandra, computes frequencies, rebuilds the full Trie. <span class="hl-accent">Flink</span> runs continuously — detects sudden spikes (breaking news) and injects hot patches into the live Trie.</p>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- 06 DEEP DIVE — TRIE -->
+    <section class="section" id="deep-dive">
+      <div class="section-head">
+        <span class="section-n">06</span>
+        <h2 class="section-title">Deep Dive — <em style="font-family:var(--font-serif);font-weight:400">The Trie</em></h2>
+      </div>
+
+      <div class="callout">
+        <div class="callout-label">The Core Insight</div>
+        <p>A Trie doesn't find matches by scanning — it <span class="hl">skips entire branches</span> that can't possibly match. To find all words starting with "app", you walk three edges (a→p→p) and everything beneath that node is your answer. The structure of the tree does the filtering.</p>
+      </div>
+
+      <!-- Interactive Trie Demo -->
+      <div class="trie-demo">
+        <div class="trie-demo-head">
+          <span style="font-family:var(--font-mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted)">Interactive Trie — type a prefix</span>
+          <input class="trie-input" id="trieInput" type="text" placeholder="Type: a, ap, app, appl..." maxlength="8" value=""/>
+        </div>
+        <div class="trie-demo-body">
+          <div>
+            <div class="trie-label">Trie structure</div>
+            <div class="trie-tree" id="trieTree"></div>
+          </div>
+          <div>
+            <div class="trie-label">Top suggestions returned</div>
+            <div class="trie-suggestions" id="trieSuggestions"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Flow animation -->
+      <div class="anim-wrap">
+        <div class="anim-head">
+          <span class="anim-title">Request lifecycle — step through</span>
+          <button class="btn primary" onclick="runFlow()">▶ Run</button>
+          <button class="btn"         onclick="resetFlow()">↺ Reset</button>
+        </div>
+        <div class="anim-body">
+          <div class="flow" id="flowWrap"></div>
+          <div class="anim-desc" id="flowDesc">Press Run to walk through the read path</div>
+        </div>
+      </div>
+
+      <!-- Mermaid sequence -->
+      <div class="diagram-wrap">
+        <div class="diagram-head">
+          <span class="diagram-label">Sequence — Cache Hit vs Cache Miss</span>
+          <span class="diagram-type">Mermaid.js</span>
+        </div>
+        <div class="diagram-body">
+          <div class="mermaid">
+sequenceDiagram
+    participant C   as Client
+    participant CDN as CDN Edge
+    participant LB  as Load Balancer
+    participant T   as Trie Server
+    participant R   as User History
+
+    C->>CDN: GET /suggestions?q=app
+    alt CDN Cache Hit (popular prefix)
+        CDN-->>C: 200 OK — cached suggestions (< 5ms)
+    else CDN Cache Miss
+        CDN->>LB: Forward request
+        LB->>T: Route to Trie server
+        T->>T: Walk Trie: root→a→p→p
+        T->>T: Read top-K from node cache
+        T->>R: Fetch user search history
+        R-->>T: Recent queries for this user
+        T->>T: Merge global + personal, re-rank
+        T-->>LB: Suggestions (< 5ms)
+        LB-->>CDN: Response
+        CDN->>CDN: Cache for 60s
+        CDN-->>C: 200 OK
+    end
+          </div>
+        </div>
+      </div>
+
+      <div class="prose">
+        <p>
+          The Trie stores <span class="hl">top-K suggestions pre-computed at every node</span>. This is the key optimization. Without it, a query for "app" would need to traverse every descendant node — potentially thousands — collect their scores, sort them, and return the top 5. At 100K RPS, that's catastrophically slow.
+        </p>
+        <p>
+          With top-K caching, arriving at the "app" node means the answer is <span class="hl-green">already sitting there</span>. The node contains <code>["apple", "app store", "application", "apple music", "applebees"]</code> — pre-sorted, pre-computed. Return it immediately.
+        </p>
+        <p>
+          The cost: writes become expensive. When "ChatGPT" trends, <span class="hl-red">every ancestor node must recompute its top-K</span> — "c", "ch", "cha", "chat", "chatg", "chatgp", "chatgpt". This is why we never update the Trie in real-time. We rebuild it offline and swap it in.
+        </p>
+      </div>
+    </section>
+
+
+    <!-- 07 DATA PIPELINE -->
+    <section class="section" id="pipeline">
+      <div class="section-head">
+        <span class="section-n">07</span>
+        <h2 class="section-title">Data Pipeline — How the Trie Learns</h2>
+      </div>
+
+      <div class="callout">
+        <div class="callout-label">Core Principle</div>
+        <p>Popularity is a <span class="hl">slow-moving trend</span>, not a real-time signal. "Apple" didn't become popular overnight. So we don't need to update frequencies on every search — we batch the work and rebuild periodically. Breaking news is handled separately by the streaming layer.</p>
+      </div>
+
+      <!-- Pipeline visual -->
+      <div style="overflow-x:auto;margin-bottom:1rem">
+        <div style="display:flex;align-items:center;gap:0;min-width:680px;padding:1rem 0">
+
+          <div class="pipe-stage">
+            <div class="pipe-stage-label">Source</div>
+            <div class="pipe-stage-name">Search Event</div>
+            <div class="pipe-stage-sub">User hits Enter</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+
+          <div class="pipe-stage">
+            <div class="pipe-stage-label">Ingest</div>
+            <div class="pipe-stage-name">Kafka</div>
+            <div class="pipe-stage-sub">Async, fire-forget</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+
+          <div class="pipe-stage">
+            <div class="pipe-stage-label">Store</div>
+            <div class="pipe-stage-name">Cassandra</div>
+            <div class="pipe-stage-sub">Raw search logs</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+
+          <div class="pipe-stage">
+            <div class="pipe-stage-label">Aggregate</div>
+            <div class="pipe-stage-name">Spark Batch</div>
+            <div class="pipe-stage-sub">Every 6 hours</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+
+          <div class="pipe-stage accent">
+            <div class="pipe-stage-label">Build</div>
+            <div class="pipe-stage-name">Trie Builder</div>
+            <div class="pipe-stage-sub">Staging slot</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+
+          <div class="pipe-stage accent">
+            <div class="pipe-stage-label">Deploy</div>
+            <div class="pipe-stage-name">Blue/Green Swap</div>
+            <div class="pipe-stage-sub">Zero downtime</div>
+          </div>
+
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem">
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+        <span style="font-family:var(--font-mono);font-size:9px;color:var(--text-muted);letter-spacing:0.08em">PARALLEL STREAMING TRACK</span>
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+      </div>
+
+      <div style="overflow-x:auto;margin-bottom:1rem">
+        <div style="display:flex;align-items:center;gap:0;min-width:500px;padding:0.5rem 0">
+          <div class="pipe-stage">
+            <div class="pipe-stage-label">Source</div>
+            <div class="pipe-stage-name">Kafka</div>
+            <div class="pipe-stage-sub">Same stream</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-stage">
+            <div class="pipe-stage-label">Stream</div>
+            <div class="pipe-stage-name">Flink</div>
+            <div class="pipe-stage-sub">Spike detection</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-stage" style="border-color:#fed7aa;background:#fff7ed">
+            <div class="pipe-stage-label" style="color:#92400e">Patch</div>
+            <div class="pipe-stage-name">Hot Terms</div>
+            <div class="pipe-stage-sub">Inject into live Trie</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-grid">
+        <div class="card">
+          <div class="card-head"><span class="card-dot"></span><span class="card-title">Why Cassandra for raw logs?</span></div>
+          <p>Billions of write-only rows per day. No joins, no transactions, pure append. Cassandra is designed exactly for this shape — <span class="hl">linear write throughput</span> that scales horizontally by adding nodes.</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><span class="card-dot"></span><span class="card-title">Why Spark for aggregation?</span></div>
+          <p>Counting frequencies across billions of rows is a classic <span class="hl-accent">MapReduce problem</span>. Spark distributes the COUNT GROUP BY across a cluster — what would take hours on one machine takes minutes across 100.</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><span class="card-dot"></span><span class="card-title">Blue/Green Trie Swap</span></div>
+          <p>New Trie is built in a staging slot. The load balancer flips all new traffic to it atomically. In-flight requests finish on the old Trie. <span class="hl">Zero dropped requests</span>. If the health check fails, the old Trie stays live.</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><span class="card-dot"></span><span class="card-title">Flink Hot Patches</span></div>
+          <p>"Earthquake in Tokyo" goes from 0 to 10K searches in 60 seconds — a detectable spike. Flink injects this as a <span class="hl-accent">boosted entry</span> directly into the live Trie without a full rebuild. Batch for accuracy, streaming for recency.</p>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- 08 TRADEOFFS -->
+    <section class="section" id="tradeoffs">
+      <div class="section-head">
+        <span class="section-n">08</span>
+        <h2 class="section-title">Key Design Decisions & Tradeoffs</h2>
+      </div>
+
+      <div class="tradeoff-grid">
+        <div class="tradeoff chosen">
+          <div class="tradeoff-kicker">Chosen</div>
+          <div class="tradeoff-name">Top-K cached at every node</div>
+          <p>Pre-compute and store the top 5–8 suggestions directly at each Trie node. Reads are <span class="hl">O(prefix length)</span> — just walk edges and return. No traversal, no sorting at query time.</p>
+          <span class="verdict verdict-yes">✓ O(1) reads — best for 100K RPS</span>
+        </div>
+        <div class="tradeoff">
+          <div class="tradeoff-kicker">Alternative</div>
+          <div class="tradeoff-name">Traverse at query time</div>
+          <p>Walk all descendants of the prefix node, collect scores, sort, return top-K. Simple to implement and update. But traversal cost is <span class="hl-red">unbounded</span> — "a" has millions of descendants.</p>
+          <span class="verdict verdict-no">✗ Too slow at scale</span>
+        </div>
+      </div>
+
+      <div class="tradeoff-grid">
+        <div class="tradeoff chosen">
+          <div class="tradeoff-kicker">Chosen</div>
+          <div class="tradeoff-name">Periodic batch rebuild (6h) + streaming hot patches</div>
+          <p>Batch for correctness and completeness. Streaming for recency on trending terms. Two tracks, each optimized for their job. <span class="hl">Eventual consistency</span> is acceptable — stale suggestions are harmless.</p>
+          <span class="verdict verdict-yes">✓ Best of both worlds</span>
+        </div>
+        <div class="tradeoff">
+          <div class="tradeoff-kicker">Alternative</div>
+          <div class="tradeoff-name">Real-time Trie updates</div>
+          <p>Update the Trie on every search event. Frequency changes propagate up all ancestor nodes instantly. But at 5B searches/day, this means <span class="hl-red">constant write storms</span> into a structure that serves 100K reads/second.</p>
+          <span class="verdict verdict-no">✗ Write-read contention is catastrophic</span>
+        </div>
+      </div>
+
+      <div class="tradeoff-grid">
+        <div class="tradeoff chosen">
+          <div class="tradeoff-kicker">Chosen</div>
+          <div class="tradeoff-name">Regional Tries</div>
+          <p>Separate Trie per geographic region, each trained on local search data. "Vi" in India suggests "Virat Kohli". "Vi" in Vietnam suggests "Vietnam Airlines". <span class="hl">Culturally relevant + low latency</span>.</p>
+          <span class="verdict verdict-yes">✓ Relevance + latency</span>
+        </div>
+        <div class="tradeoff">
+          <div class="tradeoff-kicker">Alternative</div>
+          <div class="tradeoff-name">Single Global Trie</div>
+          <p>One Trie for all users worldwide. Simpler to build and operate. But global popularity dominates regional taste, and serving from a single location means <span class="hl-red">high latency</span> for users far from the data center.</p>
+          <span class="verdict verdict-no">✗ Latency + poor regional relevance</span>
+        </div>
+      </div>
+
+      <div class="tradeoff-grid">
+        <div class="tradeoff chosen">
+          <div class="tradeoff-kicker">Chosen</div>
+          <div class="tradeoff-name">Client-side debouncing (150ms)</div>
+          <p>Fire the request only after the user pauses typing for 150ms. Fast typists generating 5 keystrokes in 300ms trigger <span class="hl">1 request, not 5</span>. 5–10× reduction in server load at zero infrastructure cost.</p>
+          <span class="verdict verdict-yes">✓ Free 10× scaling</span>
+        </div>
+        <div class="tradeoff">
+          <div class="tradeoff-kicker">Alternative</div>
+          <div class="tradeoff-name">Request on every keystroke</div>
+          <p>Maximum freshness — suggestions update on literally every character. But most intermediate requests are wasted. By the time "ap" response arrives, the user has typed "app". <span class="hl-red">1M RPS vs 100K RPS</span>.</p>
+          <span class="verdict verdict-no">✗ 10× unnecessary load</span>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- 09 FAILURE SCENARIOS -->
+    <section class="section" id="failures">
+      <div class="section-head">
+        <span class="section-n">09</span>
+        <h2 class="section-title">What Can Go Wrong</h2>
+      </div>
+
+      <div class="failure">
+        <div class="failure-icon">💥</div>
+        <div>
+          <div class="failure-title">Trie Server Crash</div>
+          <p class="failure-desc">A Trie server holding the entire index in memory goes down. Every user routed to that instance gets no suggestions — a blank dropdown on every keystroke.</p>
+          <span class="mitigation">→ Fix: Multiple read replicas per region behind a load balancer. Trie is read-only — replicas are trivially consistent. Failed node is removed from rotation automatically.</span>
+        </div>
+      </div>
+
+      <div class="failure">
+        <div class="failure-icon">🔨</div>
+        <div>
+          <div class="failure-title">Partial Trie Build Failure</div>
+          <p class="failure-desc">The Spark job crashes halfway through a rebuild. You have a half-built Trie in the staging slot. If it gets swapped in, users get broken or missing suggestions for half the alphabet.</p>
+          <span class="mitigation">→ Fix: Never swap without a health check. Build job writes to staging only. A post-build validation test queries 1,000 known prefixes. If any fail, the old Trie stays live. Stale is better than broken.</span>
+        </div>
+      </div>
+
+      <div class="failure">
+        <div class="failure-icon">📈</div>
+        <div>
+          <div class="failure-title">Cache Stampede on Trie Swap</div>
+          <p class="failure-desc">Immediately after a swap, CDN caches are cold. All previously cached popular prefixes ("a", "th", "go") miss simultaneously. A wall of traffic hits the Trie servers at once.</p>
+          <span class="mitigation">→ Fix: Gradual regional rollout — swap one region at a time. Pre-warm the new Trie by replaying top-1000 prefixes before the swap. Monitor p99 latency and roll back if it spikes.</span>
+        </div>
+      </div>
+
+      <div class="failure">
+        <div class="failure-icon">🤖</div>
+        <div>
+          <div class="failure-title">Artificial Trending Abuse</div>
+          <p class="failure-desc">A bad actor runs a bot that searches "buy cheap watches" a million times. Without filtering, this pollutes the Trie — it surfaces for prefix "bu" globally, pushing out legitimate suggestions.</p>
+          <span class="mitigation">→ Fix: Rate-limit writes to Kafka by IP. Deduplicate searches from the same user within a time window. Anomaly detection in the Spark job flags unnatural frequency spikes (growth rate &gt; 10× baseline triggers review).</span>
+        </div>
+      </div>
+
+      <div class="failure">
+        <div class="failure-icon">⏱️</div>
+        <div>
+          <div class="failure-title">Kafka Lag Spike</div>
+          <p class="failure-desc">A traffic surge causes Kafka consumers to fall behind. Raw search events pile up unprocessed. The next Spark run may miss recent data or read incomplete logs.</p>
+          <span class="mitigation">→ Fix: Kafka retains events durably for 7 days. Consumers catching up doesn't lose data — they just process it late. The next Trie rebuild will include everything. You lose recency, not correctness.</span>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- 10 INTERVIEW TIPS -->
+    
+  <section class="section" id="antipatterns">
+    <div class="section-head"><span class="section-n">⚠</span><h2 class="section-title">Anti-patterns</h2></div>
+    <div class="prose">
+      
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Scan full text of all suggestions per keystroke</div>
+        <p class="why">Linear in corpus size; 50K QPS on 100M entries is dead.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Pre-built trie or aho-corasick index; sublinear lookup.</div>
+    </div>
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Hit your authoritative DB on every keystroke</div>
+        <p class="why">Debounced or not, DB dies.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Dedicated suggestion service with in-memory trie; rebuilt from query logs offline.</div>
+    </div>
+    <div class="antipattern">
+      <div class="icon">🚫</div>
+      <div>
+        <div class="bad">Use generic search index (ElasticSearch) for autocomplete</div>
+        <p class="why">Overkill for the latency + ranking needs.</p>
+      </div>
+      <div class="good"><strong>✓ Better:</strong> Tiny dedicated index with heavy-hitter ranking from query logs.</div>
+    </div>
+    </div>
+  </section>
+
+  <section class="section" id="interview-tips">
+      <div class="section-head">
+        <span class="section-n">10</span>
+        <h2 class="section-title">Interview Tips</h2>
+      </div>
+
+      <div class="tips">
+        <div class="tip">
+          <span class="tip-n">01</span>
+          <p class="tip-text"><strong>Start with the Trie, not the pipeline.</strong> Interviewers want to know you understand the core data structure. Explain why a Trie beats a sorted array for prefix lookups before touching infrastructure. The pipeline is supporting cast — the Trie is the star.</p>
+        </div>
+        <div class="tip">
+          <span class="tip-n">02</span>
+          <p class="tip-text"><strong>Name the write-propagation problem proactively.</strong> Say <span class="hl">"storing top-K at each node makes reads O(1) but makes writes expensive — updating a single query's frequency requires walking all its ancestor nodes."</span> This shows you understand the tradeoff, not just the optimization.</p>
+        </div>
+        <div class="tip">
+          <span class="tip-n">03</span>
+          <p class="tip-text"><strong>The classic follow-up: "How do you keep the Trie fresh?"</strong> This is where most candidates get stuck. Have a clear answer: batch rebuild every 6 hours for accuracy, Flink streaming for hot patches on trending terms. Two tracks. Explain why real-time updates would destroy the read path.</p>
+        </div>
+        <div class="tip">
+          <span class="tip-n">04</span>
+          <p class="tip-text"><strong>Mention debouncing early.</strong> It's a simple client-side trick that reduces server load by 10×. Saying this unprompted signals that you think about the full system — not just the backend. Interviewers love it because most candidates forget the client exists.</p>
+        </div>
+        <div class="tip">
+          <span class="tip-n">05</span>
+          <p class="tip-text"><strong>"How would you make it personal?" is a common extension.</strong> Answer: a lightweight per-user history index in Redis, blended with the global Trie results at query time. The global Trie stays unchanged — personalization is a <span class="hl-accent">separate layer</span> on top, not baked into the Trie itself.</p>
+        </div>
+        <div class="tip">
+          <span class="tip-n">06</span>
+          <p class="tip-text"><strong>The Trie fits in RAM — say it explicitly.</strong> <span class="hl">~15 GB for 10M queries with top-K caching.</span> This justifies the in-memory architecture and kills the question "why not query a database on every keystroke?" before it's asked.</p>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- 11 SIMILAR PROBLEMS -->
+    <section class="section" id="similar">
+      <div class="section-head">
+        <span class="section-n">11</span>
+        <h2 class="section-title">Similar Problems</h2>
+      </div>
+
+      <p class="prose" style="margin-bottom:1rem">
+        Typeahead is really two patterns combined: <span class="hl">prefix tree lookup</span> + <span class="hl">top-K aggregation pipeline</span>. These problems share one or both.
+      </p>
+
+      <div class="similar-grid">
+        <a href="../url-shortener/index.html" class="similar-card">
+          <div class="similar-name">URL Shortener</div>
+          <div class="similar-reason">Same read-heavy, pre-computed lookup pattern. Hash table instead of Trie.</div>
+        </a>
+        <a href="../rate-limiter/index.html" class="similar-card">
+          <div class="similar-name">Rate Limiter</div>
+          <div class="similar-reason">Shared Redis counter pattern. Sliding window mirrors top-K frequency tracking.</div>
+        </a>
+        <a href="../twitter-feed/index.html" class="similar-card">
+          <div class="similar-name">Twitter Feed</div>
+          <div class="similar-reason">Same batch + streaming pipeline. Fan-out on write mirrors top-K pre-computation.</div>
+        </a>
+        <a href="../web-crawler/index.html" class="similar-card">
+          <div class="similar-name">Web Crawler</div>
+          <div class="similar-reason">Trie used for URL deduplication. Same Kafka + batch pipeline for scale.</div>
+        </a>
+      </div>
+    </section>
+
+
+    <!-- 12 EVOLUTION -->
+    <section class="section" id="evolution">
+      <div class="section-head">
+        <span class="section-n">12</span>
+        <h2 class="section-title">How the Design Evolves</h2>
+      </div>
+
+      <div class="timeline">
+
+        <div class="timeline-step">
+          <div class="timeline-phase">Phase 1 — Product / Prototype</div>
+          <div class="timeline-title">In-memory Trie, single server, manual updates</div>
+          <p class="timeline-desc">Build the Trie from a static word list. Store it in memory on one server. Rebuild it manually when you want to add new terms. <span class="hl">Ship in a week.</span> This is right for most early products — keyboard autocomplete, internal search, form field suggestions.</p>
+        </div>
+
+        <div class="timeline-step">
+          <div class="timeline-phase">Phase 2 — Growing Product (1M searches/day)</div>
+          <div class="timeline-title">Add the data pipeline — Kafka → Cassandra → Spark</div>
+          <p class="timeline-desc">The Trie now learns from real user searches. A nightly Spark job rebuilds it from the previous day's logs. Add a CDN in front for the most popular prefixes. <span class="hl">Most products live here their entire lives.</span> Daily rebuild is fine at this scale.</p>
+        </div>
+
+        <div class="timeline-step">
+          <div class="timeline-phase">Phase 3 — Scale (100M searches/day)</div>
+          <div class="timeline-title">Regional Tries + Blue/Green swaps + Flink streaming</div>
+          <p class="timeline-desc">One global Trie can no longer serve all regions with low latency. Deploy regional Tries. Spark runs every 6 hours instead of daily. Add Flink for trending term detection. Blue/Green swap ensures zero-downtime Trie updates. This is the architecture we designed above.</p>
+        </div>
+
+        <div class="timeline-step">
+          <div class="timeline-phase">Phase 4 — Google Scale (5B searches/day)</div>
+          <div class="timeline-title">Custom data structures, ML ranking, per-user models</div>
+          <p class="timeline-desc">The Trie is augmented with ML-based ranking — not just frequency but <span class="hl-accent">click-through rate</span>, session context, semantic similarity. Personalization becomes a full model per user, not just history lookup. Custom hardware for Trie storage. <span class="hl-red">Almost no engineers operate here</span> — but knowing it demonstrates architectural depth.</p>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+</div>
+
+
+<!-- SCRIPTS -->
+<script>
+/* Mermaid */
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'default',
+  themeVariables: {
+    background:         '#ffffff',
+    primaryColor:       '#f0fdfc',
+    primaryBorderColor: '#5eead4',
+    primaryTextColor:   '#111110',
+    lineColor:          '#9ca3af',
+    secondaryColor:     '#f7f7f5',
+    tertiaryColor:      '#f0eeeb',
+    fontFamily:         'JetBrains Mono, monospace',
+    fontSize:           '12px',
+  },
+  sequence: { actorMargin: 55, messageMargin: 28, mirrorActors: false }
+});
+
+/* Sidebar active state */
+const sidebarLinks = document.querySelectorAll('.sidebar a[href^="#"]');
+const sectionEls   = [...sidebarLinks]
+  .map(a => document.querySelector(a.getAttribute('href')))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (!e.isIntersecting) return;
+    sidebarLinks.forEach(l => l.classList.remove('active'));
+    const m = document.querySelector(`.sidebar a[href="#${e.target.id}"]`);
+    if (m) m.classList.add('active');
+  });
+}, { threshold: 0.3, rootMargin: '-52px 0px 0px 0px' });
+sectionEls.forEach(s => obs.observe(s));
+
+/* Arch diagram node highlight */
+function hlNode(g) {
+  document.querySelectorAll('[onclick="hlNode(this)"] rect').forEach(r => {
+    r.style.stroke = ''; r.style.fill = '';
+  });
+  const rect = g.querySelector('rect');
+  rect.style.stroke = 'var(--accent)';
+  rect.style.fill   = 'var(--accent-light)';
+}
+
+/* ── Interactive Trie Demo ── */
+const TRIE_DATA = {
+  '':      { suggestions: [{ text:'apple', score:'500M' },{ text:'amazon', score:'480M' },{ text:'youtube', score:'460M' },{ text:'google', score:'440M' },{ text:'facebook', score:'380M' }] },
+  'a':     { suggestions: [{ text:'apple', score:'500M' },{ text:'amazon', score:'480M' },{ text:'application', score:'210M' },{ text:'apple music', score:'190M' },{ text:'app store', score:'185M' }] },
+  'ap':    { suggestions: [{ text:'apple', score:'500M' },{ text:'application', score:'210M' },{ text:'apple music', score:'190M' },{ text:'app store', score:'185M' },{ text:'apply', score:'120M' }] },
+  'app':   { suggestions: [{ text:'apple', score:'500M' },{ text:'app store', score:'320M' },{ text:'application', score:'210M' },{ text:'apple music', score:'190M' },{ text:'apply', score:'120M' }] },
+  'appl':  { suggestions: [{ text:'apple', score:'500M' },{ text:'apple music', score:'190M' },{ text:'apple store', score:'175M' },{ text:'apply', score:'120M' },{ text:'appliance', score:'45M' }] },
+  'apple': { suggestions: [{ text:'apple', score:'500M' },{ text:'apple music', score:'190M' },{ text:'apple store', score:'175M' },{ text:'apple tv', score:'95M' },{ text:'apple id', score:'82M' }] },
+  'g':     { suggestions: [{ text:'google', score:'440M' },{ text:'gmail', score:'390M' },{ text:'google maps', score:'310M' },{ text:'google drive', score:'250M' },{ text:'games', score:'180M' }] },
+  'go':    { suggestions: [{ text:'google', score:'440M' },{ text:'google maps', score:'310M' },{ text:'google drive', score:'250M' },{ text:'google translate', score:'195M' },{ text:'google docs', score:'170M' }] },
+  'goo':   { suggestions: [{ text:'google', score:'440M' },{ text:'google maps', score:'310M' },{ text:'google drive', score:'250M' },{ text:'google translate', score:'195M' },{ text:'google docs', score:'170M' }] },
+  'goog':  { suggestions: [{ text:'google', score:'440M' },{ text:'google maps', score:'310M' },{ text:'google drive', score:'250M' },{ text:'google translate', score:'195M' },{ text:'google docs', score:'170M' }] },
+  'y':     { suggestions: [{ text:'youtube', score:'460M' },{ text:'yahoo', score:'120M' },{ text:'yelp', score:'95M' },{ text:'yotube music', score:'85M' },{ text:'yoga', score:'60M' }] },
+  'yo':    { suggestions: [{ text:'youtube', score:'460M' },{ text:'youtube music', score:'85M' },{ text:'yoga', score:'60M' },{ text:'yoga poses', score:'42M' },{ text:'youtube kids', score:'38M' }] },
+  'you':   { suggestions: [{ text:'youtube', score:'460M' },{ text:'youtube music', score:'85M' },{ text:'youtube kids', score:'38M' },{ text:'youtube tv', score:'32M' },{ text:'youtube studio', score:'28M' }] },
+};
+
+const TRIE_TREE_VISUAL = {
+  '':      `root\n├── a\n│   └── p\n│       └── p → ...\n├── g\n│   └── o → ...\n└── y\n    └── o → ...`,
+  'a':     `root\n<span class="trie-node active-path">└── a ←</span>\n    ├── p\n    │   └── p → ...\n    └── m → ...`,
+  'ap':    `root\n<span class="trie-node active-path">└── a</span>\n    <span class="trie-node active-path">└── p ←</span>\n        ├── p → ...\n        └── r → ...`,
+  'app':   `root\n<span class="trie-node active-path">└── a</span>\n    <span class="trie-node active-path">└── p</span>\n        <span class="trie-node active-path">└── p ← [you are here]</span>\n            ├── l → apple, apply\n            └── s → apps`,
+  'appl':  `root — a — p — p\n<span class="trie-node active-path">              └── l ← [you are here]</span>\n                  ├── e → apple\n                  ├── y → apply\n                  └── i → appliance`,
+  'apple': `root — a — p — p — l\n<span class="trie-node active-path">                    └── e ← [you are here]</span>\n                        ├── (end) ✓ apple\n                        ├── " music"\n                        └── " store"`,
+  'g':     `root\n<span class="trie-node active-path">└── g ←</span>\n    └── o\n        └── o → google\n    └── m → gmail`,
+  'go':    `root\n<span class="trie-node active-path">└── g</span>\n    <span class="trie-node active-path">└── o ←</span>\n        └── o\n            └── g → google`,
+  'y':     `root\n<span class="trie-node active-path">└── y ←</span>\n    └── o\n        └── u → youtube\n    └── a → yahoo`,
+  'yo':    `root\n<span class="trie-node active-path">└── y</span>\n    <span class="trie-node active-path">└── o ←</span>\n        └── u → youtube\n        └── g → yoga`,
+};
+
+function updateTrieDemo(query) {
+  const q = query.toLowerCase().slice(0, 8);
+  const data = TRIE_DATA[q] || TRIE_DATA[''];
+  const treeVisual = TRIE_TREE_VISUAL[q] || `root\n└── ${q || '(empty)'}\n    └── ...`;
+
+  // Update tree
+  const treeEl = document.getElementById('trieTree');
+  if (treeEl) treeEl.innerHTML = treeVisual;
+
+  // Update suggestions
+  const sugEl = document.getElementById('trieSuggestions');
+  if (!sugEl) return;
+  sugEl.innerHTML = '';
+  data.suggestions.forEach((s, i) => {
+    const div = document.createElement('div');
+    div.className = 'trie-suggestion' + (i === 0 ? ' highlighted' : '');
+    const prefix = q ? s.text.slice(0, q.length) : '';
+    const rest   = q ? s.text.slice(q.length) : s.text;
+    div.innerHTML = `
+      <span>${q ? `<span class="trie-suggestion-prefix">${prefix}</span>${rest}` : s.text}</span>
+      <span class="trie-suggestion-score">${s.score} searches</span>
+    `;
+    sugEl.appendChild(div);
+  });
+}
+
+updateTrieDemo('');
+
+const trieInput = document.getElementById('trieInput');
+if (trieInput) {
+  trieInput.addEventListener('input', e => updateTrieDemo(e.target.value));
+}
+
+/* ── Request flow animation ── */
+const FLOW_NODES = [
+  { label: 'Client',       sub: 'debounce 150ms' },
+  { label: 'CDN Edge',     sub: 'cache check'    },
+  { label: 'Load Balancer',sub: 'round-robin'    },
+  { label: 'Trie Server',  sub: 'in-memory'      },
+  { label: 'User History', sub: 'Redis'          },
+];
+
+const FLOW_DESCS = [
+  'User types — client waits 150ms after last keystroke (debounce)',
+  'CDN checks cache — popular prefixes served instantly from edge',
+  'Cache miss — load balancer routes to healthy Trie server',
+  'Trie server walks edges a→p→p, reads pre-computed top-K from node',
+  'Personal history merged with global suggestions, re-ranked, returned',
+];
+
+function buildFlow() {
+  const wrap = document.getElementById('flowWrap');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  FLOW_NODES.forEach((n, i) => {
+    const node = document.createElement('div');
+    node.className = 'flow-node';
+    node.innerHTML = `<div class="flow-box" id="fb${i}">${n.label}</div><div class="flow-sub">${n.sub}</div>`;
+    wrap.appendChild(node);
+    if (i < FLOW_NODES.length - 1) {
+      const conn = document.createElement('div');
+      conn.className = 'flow-connector';
+      conn.innerHTML = `<div class="flow-line" id="fl${i}"><div class="flow-pkt" id="fp${i}"></div></div><div class="flow-step-n">step ${i+1}</div>`;
+      wrap.appendChild(conn);
+    }
+  });
+}
+
+buildFlow();
+
+let flowTimer = null;
+
+function runFlow() {
+  resetFlow();
+  let step = 0;
+  function tick() {
+    if (step >= FLOW_NODES.length) return;
+    document.getElementById(`fb${step}`).classList.add('active');
+    document.getElementById('flowDesc').textContent = FLOW_DESCS[step] || '';
+    if (step > 0) {
+      const line = document.getElementById(`fl${step-1}`);
+      const pkt  = document.getElementById(`fp${step-1}`);
+      if (line) line.classList.add('active');
+      if (pkt) { pkt.classList.remove('go'); void pkt.offsetWidth; pkt.classList.add('go'); }
+    }
+    step++;
+    if (step < FLOW_NODES.length) flowTimer = setTimeout(tick, 680);
+  }
+  tick();
+}
+
+function resetFlow() {
+  clearTimeout(flowTimer);
+  FLOW_NODES.forEach((_, i) => {
+    const b = document.getElementById(`fb${i}`);
+    const l = document.getElementById(`fl${i}`);
+    const p = document.getElementById(`fp${i}`);
+    if (b) b.classList.remove('active');
+    if (l) l.classList.remove('active');
+    if (p) p.classList.remove('go');
+  });
+  const desc = document.getElementById('flowDesc');
+  if (desc) desc.textContent = 'Press Run to walk through the read path';
+}
+</script>
+
+</body>
+</html>

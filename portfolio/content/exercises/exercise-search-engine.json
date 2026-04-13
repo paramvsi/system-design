@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-search-engine",
+  "title": "Google Search — Web Search Engine",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 205,
+    "s": 75,
+    "l": 48
+  },
+  "category": "Search & Discovery",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>Design Google's web search. 100B pages indexed, 100K queries/sec, &lt; 200ms p99 query latency. Crawl + index + rank.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n      \n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Three independent pipelines: crawl (continuous), index build (batch), query serving (real-time). Don't conflate.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Document-sharded inverted index across ~1000 shards. Scatter-gather at query time.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Two-stage ranking: cheap BM25 over millions → heavy BERT rerank over top-1000.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+1</span> BoE: 100B pages × 100KB HTML = 10PB raw; ~100M unique terms; ~400PB stored with derivatives</li>\n      <li><span class=\"rubric-points\">+2</span> Document-sharded inverted index; ~1000 shards; scatter-gather query with aggregator merge</li>\n      <li><span class=\"rubric-points\">+2</span> Two-stage ranking: BM25 first-pass over candidates → BERT/cross-encoder rerank over top 1000</li>\n      <li><span class=\"rubric-points\">+1</span> Query cache absorbs ~30% of traffic (repeated queries); LRU with short TTL</li>\n      <li><span class=\"rubric-points\">+1</span> Crawler: URL frontier + fetchers + parser + dedup (SimHash); polite per-host rate limits</li>\n      <li><span class=\"rubric-points\">+1</span> Separate fresh-index for breaking-news content; merged at query time with main index</li>\n      <li><span class=\"rubric-points\">+1</span> Snippet generation + spell-correction + query expansion on the critical path</li>\n      <li><span class=\"rubric-points\">+1</span> Hedged requests to handle straggler shards: duplicate slow requests after N ms</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Term-sharded index without discussing hot-term problem</li>\n        <li>One massive inverted index on a single machine</li>\n        <li>Real-time index updates (no batch pipeline)</li>\n        <li>Rerank all results with BERT (too slow)</li>\n        <li>Ignores crawling / indexing; jumps straight to query serving</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 1
+}

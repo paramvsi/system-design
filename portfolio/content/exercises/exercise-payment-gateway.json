@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-payment-gateway",
+  "title": "Payment Gateway",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 145,
+    "s": 65,
+    "l": 42
+  },
+  "category": "Financial & Trading",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>Design a payment gateway like Stripe. Charge cards, handle refunds, webhooks to merchants, idempotent, ~100 TPS peak, PCI-DSS compliant.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n      \n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Never store card numbers. Tokenize via the card network; store only the token + last-4 + exp.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Every API call has an Idempotency-Key. Critical for retry safety.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Double-entry ledger. All value movements are atomic accounting transactions.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Idempotency-Key required on POST /charges; stored with response; duplicate = return stored response</li>\n      <li><span class=\"rubric-points\">+2</span> PCI tokenization: raw card → token via card network; never touch raw PAN; scope PCI to a narrow vault</li>\n      <li><span class=\"rubric-points\">+2</span> Double-entry ledger: each charge/refund is balanced debit/credit; all fund movement is atomic</li>\n      <li><span class=\"rubric-points\">+1</span> Auth vs capture: separate external calls; hold funds on auth; capture within 7 days</li>\n      <li><span class=\"rubric-points\">+1</span> Webhook delivery: at-least-once with exp-backoff retries over 3 days; signed payloads</li>\n      <li><span class=\"rubric-points\">+1</span> Fraud scoring on every charge — separate ML service; decision in &lt;100ms budget</li>\n      <li><span class=\"rubric-points\">+1</span> Saga for multi-step flows: auth → risk check → capture → notify; each step idempotent</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Stores raw card numbers in DB</li>\n        <li>No idempotency mechanism (double-charges on retry)</li>\n        <li>Synchronous webhooks blocking the API response</li>\n        <li>Single DB transaction across external card-network call (blocks too long)</li>\n        <li>No double-entry ledger; uses row-update for balances</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 1
+}

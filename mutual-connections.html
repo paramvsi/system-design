@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mutual Connections — System Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+  <style>
+/* ux-v2-bumped */
+
+    :root {
+      --accent-h:       203;
+      --accent-s:       89%;
+      --accent-l:       44%;
+      --accent:         hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+      --accent-light:   hsl(var(--accent-h), 80%, 94%);
+      --accent-mid:     hsl(var(--accent-h), 70%, 88%);
+      --accent-text:    hsl(var(--accent-h), var(--accent-s), 32%);
+      --accent-border:  hsl(var(--accent-h), 60%, 80%);
+
+      --hl-yellow:      #fff0a0;
+      --hl-yellow-dark: #a07a00;
+      --hl-accent:      hsl(var(--accent-h), 90%, 88%);
+      --hl-accent-dark: hsl(var(--accent-h), 70%, 30%);
+
+      --bg:             #ffffff;
+      --bg-subtle:      #f7f7f5;
+      --bg-raised:      #f0eeeb;
+      --bg-code:        #f4f3f0;
+      --border:         #e4e2de;
+      --border-strong:  #ccc9c4;
+
+      --text-primary:   #111110;
+      --text-secondary: #4a4845;
+      --text-muted:     #878480;
+      --text-code:      #2d2c2b;
+
+      --font-serif:     'Instrument Serif', Georgia, serif;
+      --font-sans:      'Geist', system-ui, sans-serif;
+      --font-mono:      'JetBrains Mono', 'Fira Code', monospace;
+
+      --radius-sm:      4px;
+      --radius-md:      8px;
+      --radius-lg:      12px;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+    body {
+      font-family: var(--font-sans);
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--text-primary);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      grid-template-rows: auto 1fr;
+      min-height: 100vh;
+    }
+
+    .topbar {
+      grid-column: 1 / -1;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 52px;
+      padding: 0 24px;
+      background: rgba(255,255,255,0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .topbar-left {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--font-mono); font-size: 13.5px; font-weight: 500;
+      letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted);
+    }
+    .topbar-left a { color: var(--text-muted); text-decoration: none; transition: color 0.2s; }
+    .topbar-left a:hover { color: var(--accent); }
+    .topbar-sep { color: var(--border-strong); user-select: none; }
+    .topbar-problem { color: var(--accent-text); font-weight: 500; }
+    .topbar-right { display: flex; align-items: center; gap: 16px; }
+    .topbar-tag {
+      font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      padding: 3px 8px; border-radius: var(--radius-sm);
+      background: var(--accent-light); color: var(--accent-text);
+    }
+
+    .sidebar {
+      position: sticky; top: 52px; height: calc(100vh - 52px);
+      overflow-y: auto; padding: 28px 20px 40px;
+      border-right: 1px solid var(--border); background: var(--bg-subtle);
+    }
+    .sidebar::-webkit-scrollbar { width: 3px; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+    .sidebar-label {
+      font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 12px;
+    }
+    .sidebar-nav { list-style: none; margin-bottom: 32px; }
+    .sidebar-nav li { margin-bottom: 2px; }
+    .sidebar-nav a {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 10px; border-radius: var(--radius-sm);
+      font-size: 15px; font-weight: 400; color: var(--text-secondary);
+      text-decoration: none; transition: all 0.15s ease; position: relative;
+    }
+    .sidebar-nav a::before {
+      content: ''; width: 4px; height: 4px; border-radius: 50%;
+      background: var(--border-strong); flex-shrink: 0; transition: all 0.2s ease;
+    }
+    .sidebar-nav a:hover { background: var(--bg-raised); color: var(--text-primary); }
+    .sidebar-nav a.active { background: var(--accent-light); color: var(--accent-text); font-weight: 500; }
+    .sidebar-nav a.active::before { background: var(--accent); width: 6px; height: 6px; }
+    .sidebar-related { list-style: none; margin-top: 8px; }
+    .sidebar-related li { margin-bottom: 4px; }
+    .sidebar-related a { font-size: 14.5px; color: var(--text-muted); text-decoration: none; transition: color 0.15s; }
+    .sidebar-related a:hover { color: var(--accent); }
+
+    .main { padding: 0 48px 120px; max-width: 860px; min-width: 0; }
+
+    .hero { padding: 56px 0 40px; border-bottom: 1px solid var(--border); margin-bottom: 48px; }
+    .hero-number {
+      font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 12px;
+    }
+    .hero h1 {
+      font-family: var(--font-serif); font-size: 48px; font-weight: 400;
+      line-height: 1.1; color: var(--text-primary); margin-bottom: 16px; letter-spacing: -0.02em;
+    }
+    .hero-desc { font-size: 17px; line-height: 1.65; color: var(--text-secondary); max-width: 600px; margin-bottom: 20px; }
+    .hero-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+    .hero-tag {
+      font-family: var(--font-mono); font-size: 12px; font-weight: 400;
+      letter-spacing: 0.04em; padding: 4px 10px; border-radius: var(--radius-sm);
+      background: var(--bg-raised); color: var(--text-muted); border: 1px solid var(--border);
+    }
+
+    .section {
+      margin-bottom: 56px; opacity: 0; transform: translateY(20px);
+      animation: fadeUp 0.5s ease forwards;
+    }
+    .section:nth-child(1)  { animation-delay: 0.05s; }
+    .section:nth-child(2)  { animation-delay: 0.10s; }
+    .section:nth-child(3)  { animation-delay: 0.15s; }
+    .section:nth-child(4)  { animation-delay: 0.20s; }
+    .section:nth-child(5)  { animation-delay: 0.25s; }
+    .section:nth-child(6)  { animation-delay: 0.30s; }
+    .section:nth-child(7)  { animation-delay: 0.35s; }
+    .section:nth-child(8)  { animation-delay: 0.40s; }
+    .section:nth-child(9)  { animation-delay: 0.45s; }
+    .section:nth-child(10) { animation-delay: 0.50s; }
+    .section:nth-child(11) { animation-delay: 0.55s; }
+    @keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
+
+    .section-number {
+      font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+      letter-spacing: 0.06em; color: var(--accent); margin-bottom: 6px;
+    }
+    .section h2 {
+      font-family: var(--font-serif); font-size: 30px; font-weight: 400;
+      color: var(--text-primary); margin-bottom: 20px; letter-spacing: -0.01em;
+    }
+    .section h3 {
+      font-family: var(--font-sans); font-size: 16px; font-weight: 600;
+      color: var(--text-primary); margin: 28px 0 10px;
+    }
+    .section p { color: var(--text-secondary); margin-bottom: 14px; max-width: 680px; }
+    .section ul, .section ol { padding-left: 20px; margin-bottom: 16px; color: var(--text-secondary); }
+    .section li { margin-bottom: 6px; }
+
+    .hl { background: var(--hl-yellow); color: var(--hl-yellow-dark); padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+    .hl-accent { background: var(--hl-accent); color: var(--hl-accent-dark); padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+    .hl-red { background: hsl(0, 85%, 93%); color: hsl(0, 70%, 35%); padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+    .hl-green { background: hsl(145, 60%, 90%); color: hsl(145, 55%, 28%); padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+
+    .card {
+      background: var(--bg-subtle); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 20px 24px; margin-bottom: 16px;
+    }
+    .card-accent { background: var(--accent-light); border-color: var(--accent-border); }
+    .card h4 { font-family: var(--font-sans); font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; }
+    .card p { font-size: 16px; color: var(--text-secondary); margin-bottom: 0; }
+    .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+
+    .code-block {
+      background: var(--bg-code); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 16px 20px; margin-bottom: 16px; overflow-x: auto;
+    }
+    .code-block code { font-family: var(--font-mono); font-size: 14.5px; font-weight: 400; color: var(--text-code); line-height: 1.7; }
+    .code-label {
+      font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+      letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px;
+    }
+    .inline-code {
+      font-family: var(--font-mono); font-size: 15px; background: var(--bg-code);
+      border: 1px solid var(--border); padding: 1px 6px; border-radius: var(--radius-sm); color: var(--text-code);
+    }
+
+    .table-wrap { overflow-x: auto; margin-bottom: 16px; border: 1px solid var(--border); border-radius: var(--radius-md); }
+    .table-wrap table { width: 100%; border-collapse: collapse; font-size: 15.5px; }
+    .table-wrap th {
+      font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+      letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted);
+      text-align: left; padding: 10px 16px; background: var(--bg-subtle); border-bottom: 1px solid var(--border);
+    }
+    .table-wrap td { padding: 10px 16px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
+    .table-wrap tr:last-child td { border-bottom: none; }
+
+    .scale-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .scale-card {
+      background: var(--bg-subtle); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 16px; text-align: center;
+    }
+    .scale-card .number { font-family: var(--font-mono); font-size: 22px; font-weight: 500; color: var(--accent-text); margin-bottom: 2px; }
+    .scale-card .label { font-size: 13.5px; color: var(--text-muted); }
+
+    .arch-diagram {
+      background: var(--bg-subtle); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 32px; margin-bottom: 20px; overflow-x: auto;
+    }
+    .arch-diagram svg { display: block; margin: 0 auto; }
+    .arch-diagram .node { cursor: pointer; transition: filter 0.2s; }
+    .arch-diagram .node:hover { filter: brightness(0.95); }
+    .arch-diagram .node rect, .arch-diagram .node-rect { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arch-diagram .node-label {
+      font-family: 'Geist', system-ui, sans-serif; font-size: 13.5px; font-weight: 500;
+      fill: var(--text-primary); text-anchor: middle; dominant-baseline: central; pointer-events: none;
+    }
+    .arch-diagram .node-sublabel {
+      font-family: 'JetBrains Mono', monospace; font-size: 10.5px;
+      fill: var(--text-muted); text-anchor: middle; dominant-baseline: central; pointer-events: none;
+    }
+    .arch-diagram .edge { stroke: var(--border-strong); stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+    .arch-diagram .edge-label { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; fill: var(--text-muted); text-anchor: middle; }
+    .node-highlight rect { stroke: var(--accent) !important; stroke-width: 2.5 !important; }
+    .node-highlight .node-label { fill: var(--accent-text) !important; }
+
+    .flow-stepper {
+      background: var(--bg-subtle); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 24px; margin-bottom: 20px;
+    }
+    .flow-stepper-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .flow-stepper-title {
+      font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+      letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted);
+    }
+    .flow-stepper-controls { display: flex; gap: 8px; }
+    .flow-btn {
+      font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+      padding: 5px 14px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border); background: var(--bg);
+      color: var(--text-secondary); cursor: pointer; transition: all 0.15s;
+    }
+    .flow-btn:hover { background: var(--accent-light); border-color: var(--accent-border); color: var(--accent-text); }
+    .flow-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .flow-btn-primary { background: var(--accent); border-color: var(--accent); color: white; }
+    .flow-btn-primary:hover { opacity: 0.9; background: var(--accent); color: white; }
+    .flow-steps { display: flex; gap: 4px; align-items: center; margin-bottom: 16px; overflow-x: auto; padding-bottom: 4px; }
+    .flow-node {
+      font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+      padding: 6px 14px; border-radius: var(--radius-sm);
+      background: var(--bg); border: 1px solid var(--border);
+      color: var(--text-muted); white-space: nowrap; transition: all 0.3s ease;
+    }
+    .flow-node.active { background: var(--accent-light); border-color: var(--accent); color: var(--accent-text); box-shadow: 0 0 0 3px var(--accent-mid); }
+    .flow-node.done { background: var(--accent-light); border-color: var(--accent-border); color: var(--accent-text); }
+    .flow-arrow { color: var(--border-strong); font-size: 16px; flex-shrink: 0; }
+    .flow-desc {
+      font-size: 16px; color: var(--text-secondary); line-height: 1.6;
+      padding: 14px 16px; background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius-md); min-height: 52px;
+    }
+    .flow-counter { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); margin-top: 10px; text-align: right; }
+
+    .mermaid-wrap {
+      background: var(--bg-subtle); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 24px; margin-bottom: 20px; overflow-x: auto;
+    }
+    .mermaid { text-align: center; }
+
+    .tradeoff { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .tradeoff-option {
+      background: var(--bg-subtle); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 16px 20px;
+    }
+    .tradeoff-option.chosen { border-color: var(--accent-border); background: var(--accent-light); }
+    .tradeoff-label {
+      font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+      letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px;
+    }
+    .tradeoff-label.yes { color: hsl(145, 55%, 32%); }
+    .tradeoff-label.no  { color: var(--text-muted); }
+    .tradeoff-option h4 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+    .tradeoff-option p { font-size: 15px; color: var(--text-secondary); margin-bottom: 0; }
+
+    .callout {
+      border-left: 3px solid var(--accent); padding: 14px 18px;
+      background: var(--accent-light); border-radius: 0 var(--radius-md) var(--radius-md) 0; margin-bottom: 16px;
+    }
+    .callout p { font-size: 16px; color: var(--accent-text); margin-bottom: 0; }
+    .callout-warn { border-left-color: hsl(38, 92%, 50%); background: hsl(38, 80%, 94%); }
+    .callout-warn p { color: hsl(38, 70%, 28%); }
+    .callout-danger { border-left-color: hsl(0, 72%, 52%); background: hsl(0, 80%, 95%); }
+    .callout-danger p { color: hsl(0, 65%, 32%); }
+
+    .tip-card {
+      display: flex; gap: 14px; padding: 16px 20px;
+      background: var(--bg-subtle); border: 1px solid var(--border);
+      border-radius: var(--radius-md); margin-bottom: 10px;
+    }
+    .tip-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+    .tip-content { font-size: 16px; color: var(--text-secondary); line-height: 1.6; }
+    .tip-content strong { color: var(--text-primary); font-weight: 600; }
+
+    .similar-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .similar-card {
+      display: block; text-decoration: none; background: var(--bg-subtle);
+      border: 1px solid var(--border); border-radius: var(--radius-md);
+      padding: 18px 20px; transition: all 0.2s ease;
+    }
+    .similar-card:hover {
+      border-color: var(--accent-border); background: var(--accent-light);
+      transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    }
+    .similar-card h4 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+    .similar-card p { font-size: 13.5px; color: var(--text-muted); margin-bottom: 0; }
+
+    .evolution-step { display: flex; gap: 16px; margin-bottom: 20px; position: relative; }
+    .evolution-step:not(:last-child)::after {
+      content: ''; position: absolute; left: 15px; top: 36px; bottom: -20px;
+      width: 2px; background: var(--border);
+    }
+    .evolution-marker {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--accent-light); border: 2px solid var(--accent-border);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-mono); font-size: 13.5px; font-weight: 600;
+      color: var(--accent-text); flex-shrink: 0;
+    }
+    .evolution-content h4 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+    .evolution-content p { font-size: 15.5px; color: var(--text-secondary); margin-bottom: 0; }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .main { padding: 0 20px 80px; }
+      .hero h1 { font-size: 34px; }
+      .tradeoff { grid-template-columns: 1fr; }
+      .card-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <header class="topbar">
+    <div class="topbar-left">
+      <a href="../index.html">System Design</a>
+      <span class="topbar-sep">/</span>
+      <span class="topbar-problem">Mutual Connections</span>
+    </div>
+    <div class="topbar-right">
+      <span class="topbar-tag">Hard</span>
+    </div>
+  </header>
+
+  <aside class="sidebar">
+    <div class="sidebar-label">Sections</div>
+    <ul class="sidebar-nav" id="sidebar-nav">
+      <li><a href="#problem">Problem Statement</a></li>
+      <li><a href="#requirements">Requirements</a></li>
+      <li><a href="#scale">Scale Estimation</a></li>
+      <li><a href="#api">API Design</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#deep-dive">Deep Dive</a></li>
+      <li><a href="#tradeoffs">Tradeoffs</a></li>
+      <li><a href="#failures">Failure Scenarios</a></li>
+      <li><a href="#interview-tips">Interview Tips</a></li>
+      <li><a href="#similar">Similar Problems</a></li>
+      <li><a href="#evolution">Evolution</a></li>
+    </ul>
+    <div class="sidebar-label">Related</div>
+    <ul class="sidebar-related">
+      <li><a href="../twitter-feed/index.html">Twitter / News Feed</a></li>
+      <li><a href="../rate-limiter/index.html">Rate Limiter</a></li>
+      <li><a href="../search-autocomplete/index.html">Search Autocomplete</a></li>
+    </ul>
+  </aside>
+
+  <main class="main">
+
+    <div class="hero">
+      <div class="hero-number">System Design — 06</div>
+      <h1>LinkedIn Mutual<br/>Connection Search</h1>
+      <p class="hero-desc">
+        Design a system that finds shared connections between any two users on a billion-user professional network — in under 50ms, at 100K+ queries per second.
+      </p>
+      <div class="hero-tags">
+        <span class="hero-tag">Graph Intersection</span>
+        <span class="hero-tag">Bloom Filters</span>
+        <span class="hero-tag">Redis</span>
+        <span class="hero-tag">Probabilistic Data Structures</span>
+        <span class="hero-tag">Set Operations</span>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 01 · PROBLEM STATEMENT ═══════════════ -->
+    <div class="section" id="problem">
+      <div class="section-number">01</div>
+      <h2>Problem Statement</h2>
+      <p>
+        Given any two users on a professional social network like LinkedIn, efficiently find and display their shared (mutual) connections. It sounds simple — a set intersection. User A's connections ∩ User B's connections. You could write it in one line of SQL.
+      </p>
+      <p>
+        But at LinkedIn's scale, that one line becomes one of the hardest problems in social networking infrastructure. Before the page finishes rendering, the system has already answered: <span class="hl">"You and this person share 47 connections — here are their faces."</span> That query ran in under 50ms, against a graph with over <span class="hl">1 billion nodes</span> and <span class="hl">250 billion edges</span>.
+      </p>
+      <p>
+        Mutual connections don't just appear on profiles. They show up on search result cards (10–20 per page), in "People You May Know" feeds, in connection request screens, in messaging previews. A single user session might trigger <span class="hl">50–100 mutual connection lookups</span> without the user even thinking about it.
+      </p>
+
+      <div class="callout">
+        <p><strong>Core question:</strong> How do you make set intersection feel instant at billion-user scale, when the underlying graph is constantly changing and every page view demands multiple intersection queries?</p>
+      </div>
+
+      <h3>The Four Sub-Problems</h3>
+      <div class="card-grid">
+        <div class="card">
+          <h4>The Intersection Problem</h4>
+          <p>Computing the overlap between two potentially large sets (power users have 30,000+ connections) without scanning everything at query time.</p>
+        </div>
+        <div class="card">
+          <h4>The Freshness Problem</h4>
+          <p>Connections change constantly (~5M new connections/day). Stale mutual counts erode user trust in the product.</p>
+        </div>
+        <div class="card">
+          <h4>The Fan-out Problem</h4>
+          <p>A single page load can require mutual computation against dozens of profiles simultaneously — search results, PYMK, feed cards.</p>
+        </div>
+        <div class="card">
+          <h4>The Asymmetry Problem</h4>
+          <p>The viewer's connection list is reused across all lookups in a session, but each target profile's list is different. This reuse is the key optimization.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 02 · REQUIREMENTS ═══════════════ -->
+    <div class="section" id="requirements">
+      <div class="section-number">02</div>
+      <h2>Requirements</h2>
+
+      <h3>Functional Requirements</h3>
+      <div class="card">
+        <ul>
+          <li><strong>FR1 — Get Mutual Connections:</strong> Given viewer + target, return the list of shared connections with profile data, ranked by relevance</li>
+          <li><strong>FR2 — Get Mutual Count:</strong> Lightweight count-only query for bulk surfaces (search cards, PYMK tiles)</li>
+          <li><strong>FR3 — Paginated Retrieval:</strong> Cursor-based pagination over potentially hundreds of mutual connections</li>
+          <li><strong>FR4 — Real-Time-ish Updates:</strong> New connections reflected in mutual counts within 30 seconds</li>
+          <li><strong>FR5 — Bulk Mutual Resolution:</strong> Batch API for 10–50 profiles in a single request, reusing viewer's connection list</li>
+        </ul>
+      </div>
+
+      <h3>Non-Functional Requirements</h3>
+      <div class="card">
+        <ul>
+          <li><strong>NFR1 — Latency:</strong> <span class="hl">sub-50ms p99 for count</span>, sub-100ms for full list</li>
+          <li><strong>NFR2 — Throughput:</strong> <span class="hl">~120K–140K peak QPS</span> (80% count-only, 20% full list)</li>
+          <li><strong>NFR3 — Consistency:</strong> Eventual, with read-your-own-writes for the active user</li>
+          <li><strong>NFR4 — Availability:</strong> 99.99% — graceful degradation (show profile without mutuals vs. fail)</li>
+          <li><strong>NFR5 — Storage:</strong> ~5TB adjacency data for 1B users, must fit in memory for hot path</li>
+          <li><strong>NFR6 — Scalability:</strong> Horizontal — adding users solved by adding machines</li>
+        </ul>
+      </div>
+
+      <h3>Out of Scope</h3>
+      <div class="card">
+        <p>2nd-degree connections (friends-of-friends), PYMK ranking algorithm, connection suggestions explanations, privacy controls, and blocking/restricting.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 03 · SCALE ESTIMATION ═══════════════ -->
+    <div class="section" id="scale">
+      <div class="section-number">03</div>
+      <h2>Scale Estimation</h2>
+      <p>The numbers here directly force the architecture. By the end, we'll know whether precomputation is feasible and whether adjacency lists fit in memory.</p>
+
+      <div class="scale-grid">
+        <div class="scale-card">
+          <div class="number">1B</div>
+          <div class="label">Total Users</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">60M</div>
+          <div class="label">Daily Active Users</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~500</div>
+          <div class="label">Avg Connections/User</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">250B</div>
+          <div class="label">Total Graph Edges</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~140K</div>
+          <div class="label">Peak QPS</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">5M/day</div>
+          <div class="label">New Connections</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">~1.2 TB</div>
+          <div class="label">Active User Adj. Data</div>
+        </div>
+        <div class="scale-card">
+          <div class="number">10<sup>18</sup></div>
+          <div class="label">Possible Pairs (impossible)</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>Key Derivation</h4>
+        <p>60M DAU × 50 lookups/session = 3B lookups/day = ~35K avg QPS. Peak 3–4× = <span class="hl">~140K QPS</span>. Split: 110K count-only + 28K full-list. Precomputing all pairs: 10<sup>18</sup> entries — <span class="hl-red">impossible</span>. Even friend-of-friend pairs: 250 trillion. <span class="hl-green">Query-time intersection is mandatory.</span></p>
+      </div>
+
+      <div class="callout">
+        <p><strong>Critical conclusion:</strong> Adjacency lists must live in memory (200K+ list fetches/sec would crush disk). Redis cluster of ~20–40 nodes for active users is non-negotiable.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 04 · API DESIGN ═══════════════ -->
+    <div class="section" id="api">
+      <div class="section-number">04</div>
+      <h2>API Design</h2>
+
+      <p>Three public endpoints reflecting the three access patterns. Viewer identity is implicit (auth token) — you can only ask "what are MY mutuals with target", preventing graph scraping.</p>
+
+      <div class="code-label">GET — Full Mutual List (Profile View)</div>
+      <div class="code-block"><code><pre>GET /v1/connections/mutual?target_user_id={id}&cursor={cursor}&limit=10&sort=relevance
+
+Response: {
+  "mutual_connections": [
+    { "user_id": "u_83a2f1", "name": "Priya Sharma",
+      "headline": "Staff Engineer at Google",
+      "profile_photo_url": "https://...",
+      "mutual_context": { "shared_company": "Google" } }
+  ],
+  "total_count": 47,
+  "next_cursor": "eyJsYX...",
+  "has_more": true
+}</pre></code></div>
+
+      <div class="code-label">GET — Count Only (Search Cards, PYMK)</div>
+      <div class="code-block"><code><pre>GET /v1/connections/mutual/count?target_user_id={id}
+
+Response: {
+  "target_user_id": "u_83a2f1",
+  "mutual_count": 47,
+  "sample_mutuals": [                    // 2–3 faces for social proof
+    { "user_id": "u_7cd312", "name": "Priya Sharma", "profile_photo_url": "..." }
+  ]
+}</pre></code></div>
+
+      <div class="code-label">POST — Batch Counts (Search Results, Feed)</div>
+      <div class="code-block"><code><pre>POST /v1/connections/mutual/batch
+Body: { "target_user_ids": ["u_001", ..., "u_020"], "include_samples": true }
+
+// Viewer's adjacency list loaded ONCE — intersected against all 20 targets
+// Bloom filter pre-check eliminates ~70% of full list loads
+Response: {
+  "results": [
+    { "target_user_id": "u_001", "mutual_count": 47, "sample_mutuals": [...] },
+    { "target_user_id": "u_002", "mutual_count": 0, "sample_mutuals": [] }
+  ]
+}</pre></code></div>
+
+      <div class="code-label">Internal Event — Connection Changed</div>
+      <div class="code-block"><code><pre>Topic: connection_events (Kafka)
+{ "event_type": "connection_created",
+  "user_a_id": "u_83a2f1", "user_b_id": "u_44e891",
+  "timestamp": "2025-06-15T14:32:01Z" }
+
+→ Invalidate adj + bloom cache for both users
+→ Proactively warm cache for both users</pre></code></div>
+    </div>
+
+    <!-- ═══════════════ 05 · HIGH-LEVEL ARCHITECTURE ═══════════════ -->
+    <div class="section" id="architecture">
+      <div class="section-number">05</div>
+      <h2>High-Level Architecture</h2>
+      <p>The read path is optimized around two insights: the viewer's adjacency list is reused across batch queries, and most profile pairs share zero mutuals (skippable via Bloom filter).</p>
+
+      <div class="arch-diagram">
+        <svg viewBox="0 0 850 520" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="#ccc9c4"/>
+            </marker>
+          </defs>
+
+          <!-- Client -->
+          <g class="node" id="node-client" onclick="hlNode('node-client')">
+            <rect class="node-rect" x="20" y="60" width="120" height="56" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="80" y="82">Client</text>
+            <text class="node-sublabel" x="80" y="98">Web / Mobile</text>
+          </g>
+
+          <!-- API Gateway -->
+          <g class="node" id="node-gw" onclick="hlNode('node-gw')">
+            <rect class="node-rect" x="200" y="60" width="120" height="56" fill="hsl(203,80%,94%)" stroke="hsl(203,60%,80%)"/>
+            <text class="node-label" x="260" y="82">API Gateway</text>
+            <text class="node-sublabel" x="260" y="98">Auth · Rate Limit</text>
+          </g>
+
+          <!-- Mutual Service -->
+          <g class="node" id="node-mutual" onclick="hlNode('node-mutual')">
+            <rect class="node-rect" x="390" y="40" width="150" height="96" fill="hsl(203,80%,94%)" stroke="hsl(203,60%,80%)"/>
+            <text class="node-label" x="465" y="68">Mutual Connection</text>
+            <text class="node-label" x="465" y="84">Service</text>
+            <text class="node-sublabel" x="465" y="106">Stateless · Batch</text>
+            <text class="node-sublabel" x="465" y="120">Intersection Engine</text>
+          </g>
+
+          <!-- Redis Bloom -->
+          <g class="node" id="node-bloom" onclick="hlNode('node-bloom')">
+            <rect class="node-rect" x="620" y="20" width="120" height="56" fill="hsl(203,80%,94%)" stroke="hsl(203,60%,80%)"/>
+            <text class="node-label" x="680" y="42">Bloom Filters</text>
+            <text class="node-sublabel" x="680" y="58">Redis · ~185 GB</text>
+          </g>
+
+          <!-- Redis Adj -->
+          <g class="node" id="node-redis" onclick="hlNode('node-redis')">
+            <rect class="node-rect" x="620" y="100" width="120" height="56" fill="hsl(203,80%,94%)" stroke="hsl(203,60%,80%)"/>
+            <text class="node-label" x="680" y="122">Adjacency Cache</text>
+            <text class="node-sublabel" x="680" y="138">Redis · ~1.2 TB</text>
+          </g>
+
+          <!-- Profile Service -->
+          <g class="node" id="node-profile" onclick="hlNode('node-profile')">
+            <rect class="node-rect" x="620" y="180" width="120" height="56" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="680" y="202">Profile Service</text>
+            <text class="node-sublabel" x="680" y="218">Name · Photo</text>
+          </g>
+
+          <!-- Kafka -->
+          <g class="node" id="node-kafka" onclick="hlNode('node-kafka')">
+            <rect class="node-rect" x="200" y="300" width="120" height="56" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="260" y="322">Kafka</text>
+            <text class="node-sublabel" x="260" y="338">Connection Events</text>
+          </g>
+
+          <!-- Connection Service -->
+          <g class="node" id="node-conn" onclick="hlNode('node-conn')">
+            <rect class="node-rect" x="20" y="300" width="120" height="56" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="80" y="322">Connection Svc</text>
+            <text class="node-sublabel" x="80" y="338">Create · Remove</text>
+          </g>
+
+          <!-- Cache Invalidator -->
+          <g class="node" id="node-invalidator" onclick="hlNode('node-invalidator')">
+            <rect class="node-rect" x="390" y="300" width="150" height="56" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="465" y="322">Cache Invalidator</text>
+            <text class="node-sublabel" x="465" y="338">Invalidate + Warm</text>
+          </g>
+
+          <!-- Graph DB -->
+          <g class="node" id="node-graphdb" onclick="hlNode('node-graphdb')">
+            <rect class="node-rect" x="620" y="300" width="120" height="56" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="680" y="322">Graph DB</text>
+            <text class="node-sublabel" x="680" y="338">PostgreSQL Sharded</text>
+          </g>
+
+          <!-- Relevance Ranker -->
+          <g class="node" id="node-ranker" onclick="hlNode('node-ranker')">
+            <rect class="node-rect" x="390" y="190" width="150" height="46" fill="#f7f7f5" stroke="#e4e2de"/>
+            <text class="node-label" x="465" y="210">Relevance Ranker</text>
+            <text class="node-sublabel" x="465" y="224">Score · Sort</text>
+          </g>
+
+          <!-- Edges — Hot Read Path -->
+          <line class="edge" x1="140" y1="88" x2="200" y2="88"/>
+          <line class="edge" x1="320" y1="88" x2="390" y2="88"/>
+          <line class="edge" x1="540" y1="55" x2="620" y2="48"/>
+          <line class="edge" x1="540" y1="80" x2="620" y2="128"/>
+          <line class="edge" x1="540" y1="110" x2="620" y2="208"/>
+          <line class="edge" x1="465" y1="136" x2="465" y2="190"/>
+
+          <!-- Edges — Async Path -->
+          <line class="edge" x1="140" y1="328" x2="200" y2="328"/>
+          <line class="edge" x1="320" y1="328" x2="390" y2="328"/>
+          <line class="edge" x1="540" y1="328" x2="620" y2="328"/>
+          <line class="edge" x1="465" y1="300" x2="465" y2="236"/>
+
+          <!-- Cache miss fallback -->
+          <line class="edge" x1="540" y1="128" x2="620" y2="320" stroke-dasharray="6,4"/>
+
+          <!-- Edge Labels -->
+          <text class="edge-label" x="170" y="80">HTTPS</text>
+          <text class="edge-label" x="355" y="80">Batch</text>
+          <text class="edge-label" x="575" y="38">MGET blooms</text>
+          <text class="edge-label" x="575" y="110">MGET adj lists</text>
+          <text class="edge-label" x="575" y="172">Enrich samples</text>
+          <text class="edge-label" x="170" y="320">Events</text>
+          <text class="edge-label" x="355" y="320">Consume</text>
+          <text class="edge-label" x="575" y="320">DEL + Warm</text>
+          <text class="edge-label" x="590" y="236" fill="var(--text-muted)" font-style="italic">cache miss</text>
+        </svg>
+      </div>
+
+      <!-- Flow Stepper -->
+      <div class="flow-stepper">
+        <div class="flow-stepper-header">
+          <span class="flow-stepper-title">Batch Mutual Count — Request Flow</span>
+          <div class="flow-stepper-controls">
+            <button class="flow-btn" onclick="resetFlow()" id="flow-reset" disabled>Reset</button>
+            <button class="flow-btn flow-btn-primary" onclick="runFlow()" id="flow-next">Next Step →</button>
+          </div>
+        </div>
+        <div class="flow-steps" id="flow-steps"></div>
+        <div class="flow-desc" id="flow-desc">Click <strong>Next Step</strong> to walk through the batch mutual count flow.</div>
+        <div class="flow-counter" id="flow-counter"></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 06 · DEEP DIVE ═══════════════ -->
+    <div class="section" id="deep-dive">
+      <div class="section-number">06</div>
+      <h2>Deep Dive — Bloom Filter Pre-check &amp; Set Intersection</h2>
+
+      <p>
+        The most impactful optimization isn't a faster intersection algorithm — it's <span class="hl">avoiding the intersection entirely</span> for the ~70% of profile pairs that share zero mutuals.
+      </p>
+
+      <h3>The Adaptive Intersection Engine</h3>
+      <p>The system picks the best algorithm at runtime based on set sizes:</p>
+
+      <div class="table-wrap">
+        <table>
+          <tr><th>Scenario</th><th>Algorithm</th><th>Why</th><th>Time</th></tr>
+          <tr><td>Zero mutuals (70%)</td><td><span class="hl-green">Bloom pre-check</span></td><td>Skip intersection entirely</td><td>~0.0001ms</td></tr>
+          <tr><td>Small ×  Small (300×300)</td><td>Sorted merge</td><td>Sequential access, cache-friendly</td><td>~0.002ms</td></tr>
+          <tr><td>Small × Large (300×25K)</td><td>Galloping search</td><td>O(|S| × log|L|) beats O(S+L)</td><td>~0.01ms</td></tr>
+          <tr><td>Large × Large (25K×25K)</td><td>Roaring bitmap AND</td><td>SIMD bitwise ops, 3× faster</td><td>~0.05ms</td></tr>
+          <tr><td>Batch (1 viewer × 20 targets)</td><td>Hash-set probe</td><td>Build viewer set once, probe N times</td><td>~0.02ms total</td></tr>
+        </table>
+      </div>
+
+      <h3>Bloom Filter — The Zero-Mutual Fast Path</h3>
+      <p>
+        A Bloom filter is a probabilistic data structure that answers "is X <em>possibly</em> in this set?" If it says <strong>no</strong>, the element is <span class="hl">definitely</span> not present. If it says <strong>yes</strong>, the element is <em>probably</em> present (with a tunable false positive rate).
+      </p>
+
+      <div class="card card-accent">
+        <h4>The Compound FPR Trap</h4>
+        <p>With 1% per-element FPR and 500 viewer IDs probed against a target bloom, the chance of <em>at least one</em> false positive is <span class="hl">1 − 0.99⁵⁰⁰ = 99.3%</span>. The bloom is nearly useless as a yes/no gate! Solution: count hits vs. expected false positives. If hits ≤ expected_FP × 1.5, declare zero mutuals. This gives ~90% skip rate on true-zero pairs.</p>
+      </div>
+
+      <div class="code-label">Statistical Threshold Approach</div>
+      <div class="code-block"><code><pre>bloom_check(viewer_list, target_bloom, fpr=0.01):
+    hits = sum(1 for id in viewer_list if target_bloom.might_contain(id))
+    expected_fp = len(viewer_list) × fpr        // e.g. 500 × 0.01 = 5
+    
+    if hits ≤ expected_fp × 1.5:                // ≤ 7.5 → likely zero mutuals
+        return ZERO_MUTUALS                     // Skip full intersection
+    else:
+        return NEEDS_INTERSECTION               // Load full list, intersect</pre></code></div>
+
+      <h3>Bloom Filter Sizing</h3>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Connections</th><th>FPR</th><th>Filter Size</th><th>Hash Functions</th><th>vs Full List</th></tr>
+          <tr><td>200</td><td>1%</td><td>240 bytes</td><td>7</td><td>15× smaller</td></tr>
+          <tr><td>500</td><td>1%</td><td><span class="hl">598 bytes</span></td><td>7</td><td>6.7× smaller</td></tr>
+          <tr><td>5,000</td><td>1%</td><td>5.9 KB</td><td>7</td><td>6.7× smaller</td></tr>
+          <tr><td>25,000</td><td>1%</td><td>29.3 KB</td><td>7</td><td>6.7× smaller</td></tr>
+        </table>
+      </div>
+
+      <h3>Batch Pipeline with Bloom Pre-check</h3>
+
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant M as Mutual Service
+    participant RB as Redis (Bloom)
+    participant RA as Redis (Adj)
+    participant P as Profile Service
+
+    C->>M: POST /batch (20 targets)
+    M->>RA: GET viewer adjacency list
+    RA-->>M: 500 IDs (4KB)
+    M->>RB: MGET 20 target bloom filters
+    RB-->>M: 20 blooms (~12KB total)
+    Note over M: Probe viewer IDs against<br/>each bloom. 14 return ZERO.<br/>6 return NEEDS_INTERSECTION.
+    M->>RA: MGET 6 target adj lists
+    RA-->>M: 6 lists (~24KB)
+    Note over M: Hash-set intersect viewer<br/>set against 6 targets.
+    M->>P: Enrich 12 sample mutuals
+    P-->>M: Names + photos
+    M-->>C: 20 results (14 zero, 6 with counts)
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>Impact: Bloom Saves 60% of Redis Operations</h4>
+        <p>Without bloom: 21 Redis calls (1 viewer + 20 target lists), 84KB transferred. With bloom: 8 Redis calls (1 viewer + 1 MGET blooms + 6 selected lists), 40KB transferred. At 100K+ batch QPS, that's <span class="hl">hundreds of thousands of saved Redis calls per second</span>.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 07 · TRADEOFFS ═══════════════ -->
+    <div class="section" id="tradeoffs">
+      <div class="section-number">07</div>
+      <h2>Key Design Decisions &amp; Tradeoffs</h2>
+
+      <h3>1. Query-Time Intersection vs. Precomputed Tables</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Query-Time Intersection</h4>
+          <p>Pull both sorted lists from Redis, intersect in-memory. No precomputed state to maintain when graph changes. Sub-50ms with cached lists.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Precomputed Mutual Table</h4>
+          <p>Trillions of possible pairs. Each new connection invalidates up to 250K entries. 5M connections/day → 1.25 trillion recomputations/day. Impossible.</p>
+        </div>
+      </div>
+
+      <h3>2. Serialized Sorted Arrays vs. Redis ZSET</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Sorted Byte Arrays</h4>
+          <p>500 IDs × 8 bytes = 4KB per user. 310M active users = 1.2TB. Dense, cache-friendly, always read as full list.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Redis ZSET</h4>
+          <p>~70 bytes overhead per entry → 35KB per user → 10.8TB total. 9× more memory for data structures we never query individually.</p>
+        </div>
+      </div>
+
+      <h3>3. Application-Layer vs. Redis-Side Intersection</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Application Layer (Mutual Service)</h4>
+          <p>Enables viewer-list reuse across batch. Supports adaptive algorithm selection. No cross-shard constraints.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Redis SINTER</h4>
+          <p>Both sets must be on same shard — violated 99% of time with user-ID sharding. Can't exploit batch viewer reuse.</p>
+        </div>
+      </div>
+
+      <h3>4. Bloom Filter: Statistical Threshold vs. Ultra-Low FPR</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Statistical Threshold (1% FPR)</h4>
+          <p>598-byte filters, 7 hash functions. Count hits vs. expected FP. ~90% skip rate. 185GB total storage.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Ultra-Low FPR (0.01%)</h4>
+          <p>1.2KB filters, 13 hash functions. 95% skip rate. 370GB storage. Marginal improvement doesn't justify doubled cost.</p>
+        </div>
+      </div>
+
+      <h3>5. Split Storage vs. Combined Keys</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Separate Keys (adj + bloom)</h4>
+          <p>Batch pipeline fetches 20 blooms (12KB) first, then selectively fetches ~6 adj lists (24KB). 70% of the time we never load the adj list.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Combined Key</h4>
+          <p>Pulls adjacency list every time — even for zero-mutual cases. Wastes 308 MB/s bandwidth at scale.</p>
+        </div>
+      </div>
+
+      <h3>6. Exact vs. Approximate Counts</h3>
+      <div class="tradeoff">
+        <div class="tradeoff-option chosen">
+          <div class="tradeoff-label yes">✓ Chosen</div>
+          <h4>Exact for Display, MinHash for Ranking</h4>
+          <p>"47 mutual connections" must be exact — it's social proof. PYMK pipeline uses MinHash (~9% error) to score 5,000 candidates cheaply, exact only for top 200.</p>
+        </div>
+        <div class="tradeoff-option">
+          <div class="tradeoff-label no">✗ Alternative</div>
+          <h4>Approximate Everywhere</h4>
+          <p>Users notice wrong counts. "~50" undermines trust. Exact intersection is fast enough (sub-50ms) for display surfaces.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 08 · FAILURE SCENARIOS ═══════════════ -->
+    <div class="section" id="failures">
+      <div class="section-number">08</div>
+      <h2>What Can Go Wrong</h2>
+
+      <div class="card">
+        <h4>Redis Shard Failure</h4>
+        <p>One shard down → 5% of single queries affected, but <span class="hl">40% of batch requests</span> (probability at least 1 of 20 targets is on dead shard). <span class="hl-green">Mitigation:</span> Replica promotion in 5–15s, DB fallback with rate limiting, client renders profiles without mutuals for affected targets.</p>
+      </div>
+
+      <div class="card">
+        <h4>Kafka Consumer Lag — Stale Mutual Counts</h4>
+        <p>30-minute lag → 208K users with stale adjacency lists (0.35% of DAU). Most won't notice, but "just connected" users will. <span class="hl-green">Mitigation:</span> 1-hour TTL safety net bounds staleness. Freshness tokens for read-your-own-writes bypass. Consumer lag alerting.</p>
+      </div>
+
+      <div class="card">
+        <h4>Bloom Filter Corruption</h4>
+        <p>If bloom becomes a subset of reality (missing bits), it returns false "zero mutuals" — the dangerous case. <span class="hl-green">Mitigation:</span> Atomic rebuild (adj + bloom together via Redis pipeline). Bloom TTL shorter than adj TTL (45min vs 60min). FP-rate monitoring detects corrupted filters.</p>
+      </div>
+
+      <div class="card">
+        <h4>Power-User Thundering Herd</h4>
+        <p>Influencer's 240KB adjacency list TTL expires. 500 requests simultaneously miss cache, all hit Graph DB. <span class="hl-green">Mitigation:</span> Singleflight (request coalescing) — 500 requests collapse into 1 DB read. VIP cache warming pre-refreshes before TTL expiry. Stale-while-revalidate.</p>
+      </div>
+
+      <div class="card">
+        <h4>Graph DB Overload from Cache Miss Storm</h4>
+        <p>Redis eviction event → thousands of cache misses → DB receives 50K QPS (sized for 1K). <span class="hl-green">Mitigation:</span> Rate-limit DB fallback at 5K QPS. Tiered degradation: return nulls for uncached targets. Token-bucket controlled cache backfill.</p>
+      </div>
+
+      <div class="card">
+        <h4>Celebrity Hot-Key in Redis</h4>
+        <p>Viral CEO profile → 1M reads/sec on single Redis shard (capacity: 100K). Latency spikes for all keys on that shard. <span class="hl-green">Mitigation:</span> Local LRU cache (30s TTL) on service instances. Hot-key detection → auto-replicate key to 8 shards. Redis read replicas.</p>
+      </div>
+
+      <div class="card">
+        <h4>Event Pipeline Data Loss</h4>
+        <p>Kafka event lost → connection exists in DB but cache never invalidated. <span class="hl-green">Mitigation:</span> Transactional outbox pattern (event written in same DB transaction as connection). Hourly reconciliation job samples 10K users, rebuilds mismatched caches.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 09 · INTERVIEW TIPS ═══════════════ -->
+    <div class="section" id="interview-tips">
+      <div class="section-number">09</div>
+      <h2>Interview Tips</h2>
+
+      <div class="tip-card">
+        <span class="tip-icon">💡</span>
+        <div class="tip-content">
+          <strong>Lead with the combinatorial impossibility.</strong><br/>
+          Within 2 minutes, before drawing any box: "Precomputing all pairs is 10¹⁸ entries. Each new connection invalidates thousands. So query-time intersection is the only option — the entire design follows from that constraint."
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">⚡</span>
+        <div class="tip-content">
+          <strong>Name the three access patterns unprompted.</strong><br/>
+          Single profile view (100ms budget), bulk count for search cards (50ms, batch of 20), PYMK ranking pipeline (seconds, thousands of candidates). Each needs a different optimization. When you say "the viewer's list is reused across all 20," you've revealed the key insight.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🎯</span>
+        <div class="tip-content">
+          <strong>Don't say "just use a graph database."</strong><br/>
+          Neo4j can express the query elegantly but can't hit 100K QPS at sub-50ms. It's the persistence layer, not the query engine. The hot path runs through Redis with app-layer intersection.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🔢</span>
+        <div class="tip-content">
+          <strong>Know the Bloom filter compound FPR trap.</strong><br/>
+          1% per-element FPR × 500 probes = 99.3% compound FP rate. The bloom is useless as a yes/no gate. Bring up the statistical threshold approach proactively — if the interviewer catches this before you do, it's a red flag.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">📊</span>
+        <div class="tip-content">
+          <strong>Derive scale from product behavior, not thin air.</strong><br/>
+          "60M DAU × 50 lookups/session × 3–4× peak = ~140K QPS." Trace the logic so they can verify. Split count vs. list — shows you understand the different performance profiles.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🏗️</span>
+        <div class="tip-content">
+          <strong>Show the single-machine baseline first.</strong><br/>
+          "1M users × 500 connections × 8 bytes = 4GB. Fits in one machine. Sorted merge takes 5μs. We distribute for storage (5TB), not CPU." Demonstrates you add complexity only when data forces it.
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <span class="tip-icon">🧪</span>
+        <div class="tip-content">
+          <strong>Prepare for "now add 2nd-degree connections."</strong><br/>
+          "That's union of 500 connection lists (250K candidates), not intersection of 2. Can't be real-time — needs batch precomputation. Our mutual system handles the real-time layer; 2nd-degree is a batch layer on top."
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 10 · SIMILAR PROBLEMS ═══════════════ -->
+    <div class="section" id="similar">
+      <div class="section-number">10</div>
+      <h2>Similar Problems</h2>
+
+      <div class="similar-grid">
+        <a href="../twitter-feed/index.html" class="similar-card">
+          <h4>Twitter / News Feed</h4>
+          <p>Same precompute-vs-query-time tradeoff. Fan-out on write (precompute) vs. fan-out on read (query-time). Power-user problem appears in both.</p>
+        </a>
+        <a href="../search-autocomplete/index.html" class="similar-card">
+          <h4>Search Autocomplete</h4>
+          <p>Low-latency, high-QPS lookups with cached in-memory data structures that must stay fresh. Same invalidation patterns (event-driven + TTL).</p>
+        </a>
+        <a href="../rate-limiter/index.html" class="similar-card">
+          <h4>Rate Limiter</h4>
+          <p>Probabilistic data structures for fast membership testing. Bloom filter sizing math transfers directly. Counting Bloom filters for rate limiting.</p>
+        </a>
+        <a href="../recommendation-engine/index.html" class="similar-card">
+          <h4>Recommendation Engine</h4>
+          <p>Set similarity as core signal (Jaccard). MinHash for approximate scoring. Two-phase pipeline: cheap filter then precise score.</p>
+        </a>
+        <a href="../leaderboard/index.html" class="similar-card">
+          <h4>Real-Time Leaderboards</h4>
+          <p>Redis as in-memory data layer. Hot-key problem and mitigations (local cache, key splitting) are identical.</p>
+        </a>
+        <a href="../pymk/index.html" class="similar-card">
+          <h4>People You May Know</h4>
+          <p>Natural extension — uses mutual count as primary ranking signal. Requires batch precomputation (Spark/Flink). Our system is a direct dependency.</p>
+        </a>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 11 · EVOLUTION ═══════════════ -->
+    <div class="section" id="evolution">
+      <div class="section-number">11</div>
+      <h2>Evolution</h2>
+      <p>How this design grows from MVP to planet-scale. Each transition is triggered by a specific bottleneck — not arbitrary growth.</p>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">1</div>
+        <div class="evolution-content">
+          <h4>MVP — SQL JOIN, No Caching (&lt;500K users)</h4>
+          <p>Single PostgreSQL database. <span class="inline-code">SELECT friend_id FROM connections c1 JOIN connections c2 ON c1.friend_id = c2.friend_id</span>. Works in &lt;10ms for small lists. Build and ship in a day. <strong>Trigger:</strong> P95 latency exceeds 100ms as connection density grows.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">2</div>
+        <div class="evolution-content">
+          <h4>Cache Layer — Redis + Batch API (500K–10M users)</h4>
+          <p>Redis caches adjacency lists. App-layer intersection. Batch endpoint (viewer-list reuse). Direct cache invalidation on connection changes. 2–3 Redis nodes. <strong>Trigger:</strong> DB fallback overload from growing cache-miss traffic.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">3</div>
+        <div class="evolution-content">
+          <h4>Events + Bloom Filters (10M–100M users)</h4>
+          <p>Kafka decouples invalidation. Bloom filters skip 70% of list loads. Adaptive intersection algorithm. Profile Service for enrichment. <strong>Trigger:</strong> Power-user latency spikes, Graph DB needs sharding.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">4</div>
+        <div class="evolution-content">
+          <h4>Sharding + Power-User Optimizations (100M–500M users)</h4>
+          <p>Sharded Graph DB (5–10 primaries). VIP cache warming. Singleflight for thundering herds. Roaring bitmaps for large-large intersections. Local LRU cache for hot keys. <strong>Trigger:</strong> PYMK pipeline cost, multi-region latency requirements.</p>
+        </div>
+      </div>
+
+      <div class="evolution-step">
+        <div class="evolution-marker">5</div>
+        <div class="evolution-content">
+          <h4>Planet Scale — Multi-Region + Approximate Methods (500M–1B+ users)</h4>
+          <p>Regional Redis clusters (US, Europe, APAC, India). MinHash signatures for PYMK scoring. Tiered storage (hot/warm/cold). Community-based graph partitioning. CSR in-memory graph index for hottest users. You're LinkedIn.</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  // ── Mermaid Init ──
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: 'hsl(203, 80%, 94%)',
+      primaryTextColor: '#111110',
+      primaryBorderColor: 'hsl(203, 60%, 80%)',
+      lineColor: '#ccc9c4',
+      secondaryColor: '#f7f7f5',
+      tertiaryColor: '#f0eeeb',
+      fontFamily: 'Geist, system-ui, sans-serif',
+      fontSize: '13px'
+    }
+  });
+
+  // ── Sidebar Observer ──
+  (function() {
+    const sections = document.querySelectorAll('.section[id]');
+    const navLinks = document.querySelectorAll('#sidebar-nav a');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+          navLinks.forEach(link => {
+            link.classList.toggle('active', link.getAttribute('href') === '#' + id);
+          });
+        }
+      });
+    }, { rootMargin: '-80px 0px -60% 0px', threshold: 0 });
+    sections.forEach(s => observer.observe(s));
+  })();
+
+  // ── Node Highlight ──
+  let highlightedNode = null;
+  function hlNode(id) {
+    if (highlightedNode) document.getElementById(highlightedNode).classList.remove('node-highlight');
+    if (highlightedNode === id) { highlightedNode = null; return; }
+    document.getElementById(id).classList.add('node-highlight');
+    highlightedNode = id;
+  }
+
+  // ── Flow Stepper ──
+  const FLOW_NODES = [
+    'Client',
+    'API Gateway',
+    'Mutual Service',
+    'Redis (Bloom)',
+    'Bloom Check',
+    'Redis (Adj)',
+    'Intersect',
+    'Profile Svc',
+    'Response'
+  ];
+
+  const FLOW_DESCS = [
+    'Client sends POST /v1/connections/mutual/batch with 20 target user IDs. Viewer identity comes from auth token — never passed as a param.',
+    'API Gateway validates the auth token, extracts the viewer\'s user ID, attaches it as a header, and routes to the Mutual Connection Service.',
+    'Mutual Service fetches the viewer\'s adjacency list from Redis — one call, ~4KB. This list is held in memory and reused for all 20 intersections.',
+    'Service fetches all 20 target Bloom filters in a single MGET — one round-trip, ~12KB total. Each bloom is ~600 bytes.',
+    'Probe the viewer\'s 500 IDs against each of the 20 target blooms. Count hits vs. expected false positives. Result: 14 targets have zero mutuals (skip), 6 need full intersection.',
+    'Fetch only the 6 target adjacency lists that passed the bloom check — one MGET, ~24KB. We skipped loading 14 lists, saving 56KB of transfer and 14 intersections.',
+    'Build a hash set from the viewer\'s 500 IDs (done once). Probe each of the 6 target lists against it. Extract top-2 sample mutuals per target by relevance score.',
+    'Enrich the 12 sample mutual profiles (2 per target × 6 targets) with names, headlines, and photos from the Profile Service. Cached, fast.',
+    'Return 20 results: 14 with count=0, 6 with exact counts + sample mutuals. Total: 8 Redis calls instead of 21. ~40KB transferred instead of 84KB. Latency: ~25ms.'
+  ];
+
+  let flowStep = -1;
+  const flowStepsEl = document.getElementById('flow-steps');
+  const flowDescEl  = document.getElementById('flow-desc');
+  const flowCounter = document.getElementById('flow-counter');
+  const flowNextBtn = document.getElementById('flow-next');
+  const flowResetBtn = document.getElementById('flow-reset');
+
+  FLOW_NODES.forEach((name, i) => {
+    if (i > 0) {
+      const arrow = document.createElement('span');
+      arrow.className = 'flow-arrow';
+      arrow.textContent = '→';
+      flowStepsEl.appendChild(arrow);
+    }
+    const node = document.createElement('span');
+    node.className = 'flow-node';
+    node.id = 'fnode-' + i;
+    node.textContent = name;
+    flowStepsEl.appendChild(node);
+  });
+
+  function runFlow() {
+    flowStep++;
+    if (flowStep >= FLOW_NODES.length) {
+      flowNextBtn.disabled = true;
+      flowDescEl.innerHTML = '<strong>✓ Flow complete.</strong> Click Reset to start over.';
+      return;
+    }
+    flowResetBtn.disabled = false;
+    for (let i = 0; i < flowStep; i++) {
+      document.getElementById('fnode-' + i).classList.remove('active');
+      document.getElementById('fnode-' + i).classList.add('done');
+    }
+    document.getElementById('fnode-' + flowStep).classList.add('active');
+    document.getElementById('fnode-' + flowStep).scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    flowDescEl.innerHTML = FLOW_DESCS[flowStep];
+    flowCounter.textContent = `Step ${flowStep + 1} of ${FLOW_NODES.length}`;
+    if (flowStep === FLOW_NODES.length - 1) flowNextBtn.textContent = 'Finish ✓';
+  }
+
+  function resetFlow() {
+    flowStep = -1;
+    FLOW_NODES.forEach((_, i) => {
+      const el = document.getElementById('fnode-' + i);
+      el.classList.remove('active', 'done');
+    });
+    flowDescEl.innerHTML = 'Click <strong>Next Step</strong> to walk through the batch mutual count flow.';
+    flowCounter.textContent = '';
+    flowNextBtn.disabled = false;
+    flowNextBtn.textContent = 'Next Step →';
+    flowResetBtn.disabled = true;
+  }
+</script>
+
+</body>
+</html>

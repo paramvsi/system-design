@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Datadog — March 8, 2023 — systemd Security Update Multi-Region Outage</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 255; --accent-s: 50%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <div class="hero" id="problem">
+    <div class="hero-kicker">Post-mortem · 2023-03-08 · Datadog</div>
+    <h1 class="hero-title">Datadog <em>systemd Update</em> Takes Out All 5 Regions</h1>
+    <p class="hero-desc">A routine Ubuntu systemd security update, applied automatically to tens of thousands of Datadog VMs across all 5 regions, broke networking on every affected host. Datadog's observability service — the one customers trust to tell them when they're down — went dark for 24 hours.</p>
+    <div class="hero-tags">
+      <span class="tag">Auto-update</span>
+      <span class="tag">systemd</span>
+      <span class="tag">All regions</span>
+      <span class="tag">24h outage</span>
+    </div>
+  </div>
+
+  <section class="section" id="tldr">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">TL;DR</h2></div>
+    <div class="prose">
+      <p>Datadog's VMs had Ubuntu unattended-upgrades enabled. An Ubuntu security patch to systemd-networkd shipped; VMs auto-updated; the update restarted networking on each VM in a way that broke CNI config for the running K8s pods. Every region affected simultaneously because unattended-upgrades runs on a cron schedule that doesn't vary by region. Datadog, whose entire business is "observability you can trust," went dark — customers couldn't see their own systems' metrics during the outage.</p>
+    </div>
+  </section>
+
+  <section class="section" id="timeline">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Timeline</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Pre-event</strong> — Datadog VMs run Ubuntu with unattended-upgrades enabled — standard security best practice.</li>
+        <li><strong>~06:00 UTC Mar 8</strong> — Ubuntu pushes systemd-networkd security patch.</li>
+        <li><strong>~06:00 UTC</strong> — Datadog VMs across 5 regions begin applying the patch as cron runs unattended-upgrades.</li>
+        <li><strong>06:00–06:30</strong> — systemd-networkd restart on each VM removes K8s CNI config. Pods lose networking. Datadog internal services cascade.</li>
+        <li><strong>06:30–08:00</strong> — Datadog engineers realize scale of impact. Disable unattended-upgrades everywhere. Build + ship a fix that re-programs CNI.</li>
+        <li><strong>08:00–24:00</strong> — Gradual region-by-region recovery. Service fully recovered ~24 hours later.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="rootcause">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Root cause</h2></div>
+    <div class="prose">
+      <p>The specific bug: Ubuntu's systemd patch triggered a "reload" of networking that doesn't actually cooperate with Kubernetes CNI plugins. CNI sets up virtual interfaces + iptables rules at pod-creation time. systemd-networkd reload cleared those rules. Pods now had interfaces but no routing.</p>
+      <p>The deeper cause: unattended-upgrades was running across ALL VMs simultaneously. Multi-region redundancy didn't help because the update landed everywhere at the same hour. "Multi-region" was a geography strategy, not a time-schedule strategy.</p>
+    </div>
+  </section>
+
+  <section class="section" id="impact">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Blast radius</h2></div>
+    <div class="prose">
+      <p>24 hours of Datadog unavailability, globally. Customers operating critical infrastructure couldn't see their own metrics, alerts, logs, or APM traces. Estimated ~18,000 paid customers impacted. Service credits + customer trust hits. The irony — a monitoring company blind during its own outage — led to significant internal process changes.</p>
+    </div>
+  </section>
+
+  <section class="section" id="lessons">
+    <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Lessons</h2></div>
+    <div class="prose">
+      <ol>
+        <li><strong>"Multi-region" must include "multi-time."</strong> Regional redundancy is useless against a synchronized global cause. Stagger auto-updates by region.</li>
+        <li><strong>Auto-updates on production are a double-edged sword.</strong> Security team loves them. Infra team hates them. The real answer: auto-updates with staged rollouts + the ability to pause if something breaks.</li>
+        <li><strong>Monitoring systems need special care.</strong> A monitoring platform is mission-critical to customers by definition. Its own reliability bar has to exceed the bar of the systems it monitors.</li>
+        <li><strong>Treat the OS as a dependency.</strong> OS + distribution + kernel + init system is part of your stack. Upgrades are code changes. Canary + monitor them.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="concepts-used">
+    <div class="section-head"><span class="section-n">06</span><h2 class="section-title">Concepts in play</h2></div>
+    <div class="prose">
+      <ul>
+        <li><a href="/concepts/deployment-strategies-blue-green-canary">Deployment strategies</a> — auto-upgrades need canaries too.</li>
+        <li><a href="/concepts/multi-region-deployment">Multi-region</a> — redundancy across space doesn't save you from a synchronized cause.</li>
+        <li><a href="/concepts/kubernetes">Kubernetes</a> — CNI + systemd coupling.</li>
+        <li><a href="/concepts/monitoring-alerting">Monitoring</a> — the meta-problem of monitoring your monitors.</li>
+        <li><a href="/concepts/chaos-engineering">Chaos engineering</a> — "what if all regions update at once?" is a testable scenario.</li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>
