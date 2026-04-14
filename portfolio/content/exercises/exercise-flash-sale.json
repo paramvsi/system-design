@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-flash-sale",
+  "title": "Flash Sale",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 350,
+    "s": 80,
+    "l": 50
+  },
+  "category": "Marketplace & Booking",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>100K users hit \"Buy\" at the exact same second for 1K limited items. No overselling. The hard parts: a waiting room that absorbs the thundering herd without crashing your backend, atomic inventory decrement that never goes negative even under 100K concurrent requests, and a payment pipeline that pre-authorizes cards before entering the queue so checkout is instant for winners. Amazon Prime Day, Xiaomi phone drops, Supreme releases — same pattern, different merch.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Lead with the waiting room. \"100K users → 500/sec admission rate → smooth backend load.\" This is the insight that separates good from great.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Redis Lua for atomic inventory. Name it explicitly — \"single Redis key, Lua DECR-if-positive, no race.\" Shows you've actually built these systems.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Pre-auth payment in queue. This UX detail (checkout = one click, not \"enter card\") is the kind of production nuance interviewers love.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Lead with the waiting room. \"100K users → 500/sec admission rate → smooth backend load.\" This is the insight that separates good from great.</li>\n      <li><span class=\"rubric-points\">+2</span> Redis Lua for atomic inventory. Name it explicitly — \"single Redis key, Lua DECR-if-positive, no race.\" Shows you've actually built these systems.</li>\n      <li><span class=\"rubric-points\">+2</span> Pre-auth payment in queue. This UX detail (checkout = one click, not \"enter card\") is the kind of production nuance interviewers love.</li>\n      <li><span class=\"rubric-points\">+2</span> Bot mitigation is load-bearing. Without it, bots take all 1K items. CAPTCHA + proof-of-work + device fingerprinting. Don't skip this.</li>\n      <li><span class=\"rubric-points\">+2</span> Distinguish from Ticketmaster. Ticketmaster = seat selection + hold pattern. Flash sale = single SKU + atomic counter. Simpler inventory model, harder contention model.</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>SELECT stock FROM products WHERE id=X; if stock &gt; 0 then UPDATE stock = stock - 1</li>\n        <li>Let all 100K users hit checkout simultaneously — \"the server will handle it\"</li>\n        <li>Checkout asks user to enter card info after winning the slot</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

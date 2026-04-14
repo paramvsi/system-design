@@ -1,0 +1,77 @@
+[
+  {
+    "slug": "api-protocols",
+    "title": "API Protocols Compared",
+    "difficulty": null,
+    "accent": {
+      "h": 145,
+      "s": 60,
+      "l": 45
+    },
+    "tags": [],
+    "category": "Technology Comparisons",
+    "blurb": "Every system design starts with \"how do clients talk to your service?\" REST, gRPC, GraphQL, WebSocket, and SSE are not interchangeable — each optimizes for a different communication pattern. Choosing the wrong protocol m",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "caching-strategies",
+    "title": "Caching Strategies Compared",
+    "difficulty": null,
+    "accent": {
+      "h": 200,
+      "s": 70,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Technology Comparisons",
+    "blurb": "Caching is the single biggest performance lever in any system. But \"just add a cache\" is a hand-wave — the strategy determines consistency, write amplification, and failure modes. Cache-aside, write-through, write-back, ",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "consistency-models",
+    "title": "Consistency Models Compared",
+    "difficulty": null,
+    "accent": {
+      "h": 350,
+      "s": 70,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Technology Comparisons",
+    "blurb": "Every distributed system makes a consistency choice — explicitly or by accident. \"Eventual consistency\" gets thrown around in interviews like a magic wand, but there are at least five distinct models, each with different",
+    "problemNumber": null,
+    "readMinutes": 4
+  },
+  {
+    "slug": "databases",
+    "title": "Databases Compared",
+    "difficulty": null,
+    "accent": {
+      "h": 215,
+      "s": 75,
+      "l": 48
+    },
+    "tags": [],
+    "category": "Technology Comparisons",
+    "blurb": "\"Which database?\" is the single most common design decision in every system design interview. Pick wrong and your design either can't scale, can't query, or can't stay consistent. PostgreSQL, MySQL, Cassandra, DynamoDB, ",
+    "problemNumber": null,
+    "readMinutes": 3
+  },
+  {
+    "slug": "message-brokers",
+    "title": "Message Brokers Compared",
+    "difficulty": null,
+    "accent": {
+      "h": 270,
+      "s": 55,
+      "l": 50
+    },
+    "tags": [],
+    "category": "Technology Comparisons",
+    "blurb": "Every distributed system eventually needs asynchronous communication. The wrong broker choice leads to lost messages, impossible replay, or a $50k/month AWS bill. Kafka, RabbitMQ, SQS, and Redis pub/sub each solve a diff",
+    "problemNumber": null,
+    "readMinutes": 3
+  }
+]

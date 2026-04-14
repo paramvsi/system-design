@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-airbnb",
+  "title": "Airbnb",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 350,
+    "s": 72,
+    "l": 52
+  },
+  "category": "Marketplace & Booking",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>A two-sided marketplace with ~7M listings and ~100M nights booked per year. The hard parts: date-range availability search — \"find homes in Lisbon for 4 guests, June 3–10, under $200/night\" is a surprisingly gnarly query; no-double-booking with strong consistency on the calendar; and dynamic pricing + complex fees (cleaning fee, service fee, taxes that vary by jurisdiction) without ever showing the guest one number and charging another. Airbnb solved the \"Amazon but for someone's spare bedroom\" problem at planet scale.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Lead with the consistency split. \"Search is eventually consistent; booking is strongly consistent; the booking saga re-verifies authoritatively.\" This sentence shows you've thought about the hard part.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Date-range availability bitmaps. Mention them by name. Most candidates don't know this representation; it's specific and correct.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Price quote locking. 10-minute quote window. Prevents \"I see $200, I go enter my card, I see $230.\" A small detail that shows care for UX.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Lead with the consistency split. \"Search is eventually consistent; booking is strongly consistent; the booking saga re-verifies authoritatively.\" This sentence shows you've thought about the hard part.</li>\n      <li><span class=\"rubric-points\">+2</span> Date-range availability bitmaps. Mention them by name. Most candidates don't know this representation; it's specific and correct.</li>\n      <li><span class=\"rubric-points\">+2</span> Price quote locking. 10-minute quote window. Prevents \"I see $200, I go enter my card, I see $230.\" A small detail that shows care for UX.</li>\n      <li><span class=\"rubric-points\">+2</span> Saga, not 2PC. Airbnb is a canonical saga example. Don't propose distributed transactions across payment + calendar.</li>\n      <li><span class=\"rubric-points\">+2</span> Reviews and trust. Often skipped. The blind-review system is a product-design decision with a data-model implication — worth mentioning.</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>No back-of-envelope estimation — jumps straight into components without quantifying scale for Airbnb</li>\n        <li>Single point of failure — no replication, failover, or redundancy discussed</li>\n        <li>Ignores data model and storage choices — hand-waves the database layer</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

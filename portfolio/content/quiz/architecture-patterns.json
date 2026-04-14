@@ -45,6 +45,36 @@
       "choices": ["Other backends", "A specific client type — one BFF per (web, iOS, Android) shape", "Internal admins", "Nobody"],
       "correct": 1,
       "explanation": "Each client has different needs (mobile: minimal payloads; web: richer). BFF layer tailors the API surface per client. Wraps N microservices into one client-optimized API."
+    },
+    {
+      "q": "Your saga for order processing has 5 steps: reserve inventory, charge payment, assign warehouse, schedule shipping, send confirmation. The payment step (step 2) succeeds but warehouse assignment (step 3) fails. The compensating transaction for payment (refund) also fails due to the payment provider being down. What happens?",
+      "choices": ["The saga completes normally", "The saga is stuck in a partially compensated state; you need a retry mechanism with persistent state for compensation steps and manual intervention alerts", "All steps automatically roll back", "The order is completed anyway"],
+      "correct": 1,
+      "explanation": "Compensating transactions can fail too — this is the hardest part of sagas. Best practice: persist saga state in a durable store, retry compensations with exponential backoff, and alert operations if compensations fail after max retries. Some systems use a 'saga log' that a background process continuously retries until all compensations complete."
+    },
+    {
+      "q": "Your CQRS system publishes events from the write model to update read-model projections. After a write, a user refreshes the page and doesn't see their change. Customer support tickets are piling up. What's the root cause and fix?",
+      "choices": ["Write model is broken", "Read model projection lag: the async event hasn't been processed yet; fix with read-your-own-writes by querying the write model for recently-changed entities or showing optimistic updates on the client", "Event bus lost the message", "Cache issue"],
+      "correct": 1,
+      "explanation": "CQRS eventual consistency means the read model lags behind writes. Users expect immediate consistency for their own actions. Solutions: route reads for just-written entities to the write model for a short window, use optimistic UI updates on the client, or display a 'changes processing' indicator. Don't fight eventual consistency — design the UX around it."
+    },
+    {
+      "q": "Service A calls Service B, which calls Service C, which calls Service D. Service D starts responding slowly (2-second timeout). Soon Services C, B, and A all have exhausted thread pools and return 503s. No traffic increase occurred. What pattern would have prevented this cascade?",
+      "choices": ["Increase timeouts to 10 seconds", "Circuit breakers at each service boundary + bulkhead isolation (separate thread pools per downstream) + aggressive timeouts", "Add more instances of Service D", "Remove Service D"],
+      "correct": 1,
+      "explanation": "Cascading failures propagate upstream when slow dependencies exhaust caller resources (threads, connections). Circuit breakers detect failure rates and fail-fast. Bulkheads prevent one slow dependency from consuming all threads. Short timeouts (with retries and backoff) bound the blast radius. Netflix's Hystrix was built to solve exactly this pattern."
+    },
+    {
+      "q": "You're decomposing a monolith into microservices. The first service you extract still needs to JOIN against 3 tables that remain in the monolith's database. The team proposes the new service directly queries the monolith's DB. What's wrong with this approach?",
+      "choices": ["Nothing — it's pragmatic", "Shared database coupling: the new service is tightly coupled to the monolith's schema; any monolith schema change can break the new service, defeating the purpose of decomposition", "Performance will suffer", "Security risk only"],
+      "correct": 1,
+      "explanation": "A shared database is the #1 anti-pattern in microservice extraction. It couples deployment, schema evolution, and scaling. The new service should own its data and sync via events, API calls, or a data replication pipeline. Accept eventual consistency between services. Strangler fig pattern: gradually migrate data ownership, one bounded context at a time."
+    },
+    {
+      "q": "Your event-driven architecture processes 50K events/sec. A new consumer is added that needs the last 30 days of events to build its initial state. Replaying 30 days at 50K/sec would take days AND impact production consumers. How do you bootstrap the new consumer?",
+      "choices": ["Just replay and accept the delay", "Provide a snapshot/checkpoint of the current state plus events from the snapshot point forward; the new consumer loads the snapshot then catches up from a recent offset", "Delete old events", "Run the new consumer at higher priority"],
+      "correct": 1,
+      "explanation": "Snapshot + catch-up is the standard event sourcing bootstrap pattern. Periodically snapshot the aggregate state (e.g., to S3 or a database). New consumers load the latest snapshot and only replay events after the snapshot timestamp. This avoids replaying the full history and doesn't compete with production consumers for event bus bandwidth."
     }
   ]
 }

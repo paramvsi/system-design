@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Mock Interview: Design Instagram — Mock Transcript</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 330; --accent-s: 72%; --accent-l: 52%; }
+
+.dialog { padding: 16px 20px; border-radius: 8px; margin-bottom: 12px; }
+.dialog-role { font-family: var(--font-mono); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+.dialog.interviewer { background: var(--bg-subtle); border-left: 3px solid var(--border-strong); }
+.dialog.interviewer .dialog-role { color: var(--text-muted); }
+.dialog.candidate { background: var(--accent-light); border-left: 3px solid var(--accent); }
+.dialog.candidate .dialog-role { color: var(--accent-text); }
+.dialog.annotation { background: hsl(38, 80%, 94%); border-left: 3px solid hsl(38, 70%, 50%); }
+.dialog.annotation .dialog-role { color: hsl(38, 70%, 30%); }
+.dialog p { font-size: 15px; line-height: 1.7; color: var(--text-secondary); margin: 0; }
+.dialog.candidate p { color: var(--text-primary); }
+</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Problem statement</h2></div>
+    <div class="prose">
+      <p>45-minute whiteboard mock: <strong>Design Instagram</strong>. The candidate is expected to cover photo/video upload, feed generation, social graph, and storage at scale. This transcript captures a strong performance with specific callouts on what earned points and where the candidate differentiated.</p>
+      <p>Difficulty: <span class="hl-accent">Hard</span> | Duration: 45 min | Format: Whiteboard simulation</p>
+    </div>
+  </section>
+
+  <section class="section" id="transcript">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Transcript</h2></div>
+    <div class="prose">
+
+      <div class="dialog interviewer"><div class="dialog-role">Interviewer</div><p>Design Instagram. Users can upload photos and short videos, follow other users, and see a feed of posts from people they follow. Let's say we need to support 500 million daily active users.</p></div>
+
+      <div class="dialog candidate"><div class="dialog-role">Candidate</div><p>Before jumping into the feed, I want to start with the media pipeline, because it's the most latency-sensitive and resource-intensive part of Instagram. When a user uploads a photo, we need to process it through multiple stages: the client uploads to an edge PoP, which streams it to an object store like S3. An async pipeline then kicks off — thumbnail generation at 150px, 480px, and 1080px resolutions, EXIF stripping for privacy, content moderation via an ML classifier, and finally metadata insertion into the posts table. Only after moderation passes do we fan the post out to followers' feeds.</p></div>
+
+      <div class="dialog annotation"><div class="dialog-role">📝 Annotation</div><p>Leading with the media pipeline instead of the feed shows differentiation. Most candidates jump straight to "fan-out on write vs. fan-out on read" — starting with upload processing demonstrates production-level thinking and sets up the rest of the design naturally.</p></div>
+
+      <div class="dialog interviewer"><div class="dialog-role">Interviewer</div><p>Good. How do you handle the feed? Walk me through the fan-out strategy.</p></div>
+
+      <div class="dialog candidate"><div class="dialog-role">Candidate</div><p>I'd use a hybrid fan-out model. For regular users — say anyone with fewer than 10,000 followers — we do fan-out on write. When they post, a Kafka consumer reads the post event, looks up their follower list, and writes a feed entry (post_id + timestamp) into each follower's feed cache in Redis. This keeps read latency under 5ms for the common case. For celebrity users — accounts with more than 10,000 followers — we skip the write-time fan-out. Instead, at read time, we merge the pre-computed feed with a real-time fetch of recent posts from followed celebrities. This avoids the write amplification problem: Cristiano Ronaldo posting shouldn't trigger 600 million Redis writes.</p></div>
+
+      <div class="dialog annotation"><div class="dialog-role">📝 Annotation</div><p>Naming the celebrity fan-out threshold explicitly (10K followers) earns credibility. Saying "hybrid" alone is table stakes — specifying the cutoff and reasoning about write amplification shows the candidate has thought about the actual trade-offs at scale.</p></div>
+
+      <div class="dialog interviewer"><div class="dialog-role">Interviewer</div><p>What about the storage layer? How do you handle photos at this scale?</p></div>
+
+      <div class="dialog candidate"><div class="dialog-role">Candidate</div><p>Storage tiering is essential here. Hot content — posts from the last 48 hours — lives on SSD-backed object storage with CDN caching at the edge. Warm content from the last 30 days stays on standard S3. Cold content older than 30 days moves to S3 Glacier or an equivalent infrequent-access tier. The metadata follows a similar pattern: recent post metadata sits in a Redis cluster for fast feed assembly, while the canonical store is a sharded MySQL cluster partitioned by user_id. We'd use Vitess or a similar sharding proxy to handle the routing transparently.</p></div>
+
+      <div class="dialog annotation"><div class="dialog-role">📝 Annotation</div><p>Storage tiering with specific time boundaries (48h / 30d) and naming Vitess as the sharding layer is strong. This moves the answer from "we shard the database" to an actionable architecture that an SRE team could implement.</p></div>
+
+      <div class="dialog interviewer"><div class="dialog-role">Interviewer</div><p>How would you handle the social graph — followers and following relationships?</p></div>
+
+      <div class="dialog candidate"><div class="dialog-role">Candidate</div><p>The social graph is a directed graph: user A follows user B doesn't imply B follows A. I'd store this in two tables: a <code>following</code> table keyed by follower_id, and a <code>followers</code> table keyed by followee_id. Both are sharded by the primary key. For follower counts, I'd maintain a denormalized counter in a separate table, updated asynchronously via a change-data-capture stream. For the "mutual friends" feature, we can compute set intersections at read time using Redis sets for active users, falling back to a batch-computed cache for cold queries. The graph also feeds into the recommendation engine — "users you might want to follow" runs as an offline Spark job computing Jaccard similarity on the adjacency lists.</p></div>
+
+      <div class="dialog interviewer"><div class="dialog-role">Interviewer</div><p>Let's talk about the feed ranking. Is it purely chronological?</p></div>
+
+      <div class="dialog candidate"><div class="dialog-role">Candidate</div><p>No. Instagram moved away from chronological feeds years ago. I'd implement a two-stage ranking pipeline. Stage one is candidate generation: pull the last ~500 posts from followed accounts (from the precomputed feed + celebrity merge). Stage two is a lightweight ML ranker — a logistic regression or small neural net that scores each post based on features like affinity (how often you interact with this poster), recency, post type (Reels get boosted), and engagement velocity (posts gaining likes quickly rank higher). The model serves predictions via a feature store backed by Redis, and we retrain daily on interaction logs. We also inject "discovery" posts from the Explore recommendation engine at a 10-15% rate to keep the feed fresh.</p></div>
+
+      <div class="dialog annotation"><div class="dialog-role">📝 Annotation</div><p>Describing a two-stage ranking pipeline (candidate generation then scoring) mirrors how real recommendation systems work at Meta. Mentioning affinity scoring and engagement velocity as features shows ML-systems awareness beyond basic system design.</p></div>
+
+      <div class="dialog interviewer"><div class="dialog-role">Interviewer</div><p>What happens if the feed service goes down?</p></div>
+
+      <div class="dialog candidate"><div class="dialog-role">Candidate</div><p>Graceful degradation. If the ranking service is unavailable, we fall back to the pre-computed chronological feed from Redis — it's stale but functional. If Redis itself is down for a partition, we fall back to a direct database query for the user's followed accounts' recent posts, sorted by timestamp. We'd also have a static "trending posts" cache that can serve as a last-resort feed. Each degradation level is controlled by a feature flag, and we monitor the fallback rate as an SLI. The key principle: users should always see something, even if it's not optimally ranked.</p></div>
+
+      <div class="dialog annotation"><div class="dialog-role">📝 Annotation</div><p>Layered degradation with explicit fallback levels (ranked → chronological → trending) is a mature answer. Tying fallback rate to an SLI shows operational thinking.</p></div>
+
+      <div class="dialog interviewer"><div class="dialog-role">Interviewer</div><p>How do you handle image content moderation at 500M DAU?</p></div>
+
+      <div class="dialog candidate"><div class="dialog-role">Candidate</div><p>Content moderation is in the critical path of the upload pipeline but must not block the user experience. I'd run it as an async step: the image is uploaded and a thumbnail is generated immediately so the user sees their post in their own profile. Meanwhile, a moderation queue processes the image through a multi-model pipeline — nudity detection, violence detection, copyright matching via perceptual hashing against a known-content database. If the image is flagged, we suppress it from the feed within seconds. For borderline cases, we route to a human review queue. The system processes with a target p99 latency of 30 seconds from upload to moderation decision. We maintain a false-positive dashboard and tune thresholds weekly.</p></div>
+
+      <div class="dialog annotation"><div class="dialog-role">📝 Annotation</div><p>Showing the image to the uploader immediately while moderating asynchronously is the real Instagram pattern. Mentioning perceptual hashing for copyright and specific latency targets (p99 30s) adds credibility.</p></div>
+
+      <div class="dialog interviewer"><div class="dialog-role">Interviewer</div><p>Great. Let's wrap up. Any final thoughts on scaling this system?</p></div>
+
+      <div class="dialog candidate"><div class="dialog-role">Candidate</div><p>Three things I'd emphasize. First, CDN placement is critical — we want photos served from edge nodes within 50ms globally, so we'd use a multi-CDN strategy with Cloudflare and Akamai, routing via latency-based DNS. Second, the notification pipeline needs its own dedicated infrastructure — push notifications for likes, comments, and follows generate enormous write volume and should be decoupled from the core feed path via a separate Kafka topic and consumer group. Third, observability: distributed tracing across the upload pipeline, feed assembly, and ranking stages so we can identify bottlenecks. I'd instrument key SLIs — upload success rate, feed load p50/p99, and moderation decision latency — and set error budgets for each.</p></div>
+
+      <div class="dialog annotation"><div class="dialog-role">📝 Annotation</div><p>Closing with CDN strategy, notification decoupling, and observability SLIs covers the "operational excellence" dimension that many candidates miss. This is a strong finish.</p></div>
+
+    </div>
+  </section>
+
+  <section class="section" id="annotations">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Key takeaways</h2></div>
+    <div class="prose">
+      <p><strong>What went well:</strong> The candidate led with the media pipeline rather than jumping to feed fan-out, immediately signaling depth. The hybrid fan-out strategy with an explicit celebrity threshold, storage tiering with concrete time boundaries, and layered degradation strategy all demonstrated production-level thinking. The two-stage ranking pipeline and async moderation architecture mirrored real Instagram patterns.</p>
+      <p><strong>Areas for improvement:</strong> The candidate could have discussed cache invalidation strategies for the feed more explicitly, and the Stories feature (ephemeral content with TTL) was not addressed. Mentioning geo-replication strategy for multi-region availability would have strengthened the infrastructure section.</p>
+      <p><strong>Overall assessment:</strong> Strong hire. The candidate demonstrated clear ownership of the problem, named specific technologies appropriately, and thought about failure modes proactively.</p>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

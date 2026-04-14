@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-google-news",
+  "title": "Google News",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 215,
+    "s": 85,
+    "l": 48
+  },
+  "category": "Search & Discovery",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>Crawl 50K+ news sources worldwide, rank by freshness + authority + personalization, and serve a unique feed to each of 1B users. The hard parts: near-duplicate clustering so users see one card per story with \"N sources\" instead of 50 identical headlines, freshness decay that surfaces breaking news in seconds but lets evergreen content linger, and a diversity constraint (greedy MMR) that prevents any single source from dominating the feed. Google News, Apple News, MSN News, Flipboard -- same pattern, different editorial stance. The system must balance three competing goals: recency (show what's happening now), authority (from trustworthy sources), and relevance (personalized to each user's interests).</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Lead with clustering. \"The key insight is that 200 outlets publish the same story -- we cluster near-duplicates via SimHash and show one representative per cluster.\" This immediately shows you understand what makes news aggregation different from generic feed.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Name the freshness model. \"score = authority x e^(-lambda x age) where lambda varies by article type.\" Concrete formula beats hand-waving about \"freshness matters.\"</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Explain MMR for diversity. \"Greedy Maximal Marginal Relevance -- each pick maximizes relevance while minimizing similarity to already-selected items.\" Shows you know recommender-system theory.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Lead with clustering. \"The key insight is that 200 outlets publish the same story -- we cluster near-duplicates via SimHash and show one representative per cluster.\" This immediately shows you understand what makes news aggregation different from generic feed.</li>\n      <li><span class=\"rubric-points\">+2</span> Name the freshness model. \"score = authority x e^(-lambda x age) where lambda varies by article type.\" Concrete formula beats hand-waving about \"freshness matters.\"</li>\n      <li><span class=\"rubric-points\">+2</span> Explain MMR for diversity. \"Greedy Maximal Marginal Relevance -- each pick maximizes relevance while minimizing similarity to already-selected items.\" Shows you know recommender-system theory.</li>\n      <li><span class=\"rubric-points\">+1</span> Adaptive crawl rate is the politeness story. Don't just say \"we crawl.\" Say \"CNN every 2 min, local blog every 6 hours, based on learned publish frequency.\" Shows operational maturity.</li>\n      <li><span class=\"rubric-points\">+1</span> Distinguish from social feed. News feed ranks professional content by authority + freshness. Social feed ranks user-generated content by engagement + social graph. Different ranking signals, different abuse vectors.</li>\n      <li><span class=\"rubric-points\">+1</span> Mention the cold-start problem. New user with no click history: fall back to location-based trending + globally popular stories. After ~20 clicks, the interest vector has enough signal for personalization. Explicit topic follows accelerate cold-start.</li>\n      <li><span class=\"rubric-points\">+1</span> Crawl-to-display latency is a differentiator. \"Breaking news visible in &lt; 5 min: priority re-crawl triggered by trending velocity spike, plus push-based ingestion from wire services (AP, Reuters).\" Shows you think about the full pipeline end-to-end.</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Re-crawl all 50K sources every 5 minutes</li>\n        <li>Show 5 articles from the same source on the same topic</li>\n        <li>Rank purely by click-through rate</li>\n        <li>Use exact string matching for deduplication</li>\n        <li>Pre-compute feeds for all 1B users every 5 minutes</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-unique-id-generator",
+  "title": "Unique ID Generator",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 270,
+    "s": 60,
+    "l": 52
+  },
+  "category": "Infrastructure",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>Generate globally unique, k-sortable, compact identifiers at over 1 million IDs per second across N machines with zero coordination. The hard parts: a bit-layout balancing timestamp, machine, and sequence that stays unique without a central authority, handling clock skew from NTP corrections that can break monotonicity, and keeping IDs compact enough (~11 chars base62) for URL-friendly use while encoding enough entropy to avoid collisions across 1,024 machines.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Start with requirements, not solutions. Ask: how many IDs/sec? Must they be sortable? How compact? 64-bit or 128-bit acceptable? This shapes the entire design.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Draw the bit layout. Literally sketch 1 + 41 + 10 + 12 = 64 on the whiteboard. Interviewers love seeing the tradeoff between timestamp range, machine count, and per-ms throughput.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Address clock skew proactively. Mention NTP backward jump before being asked. The defense (refuse or wait) shows you understand the real-world failure mode that trips up Snowflake.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Start with requirements, not solutions. Ask: how many IDs/sec? Must they be sortable? How compact? 64-bit or 128-bit acceptable? This shapes the entire design.</li>\n      <li><span class=\"rubric-points\">+2</span> Draw the bit layout. Literally sketch 1 + 41 + 10 + 12 = 64 on the whiteboard. Interviewers love seeing the tradeoff between timestamp range, machine count, and per-ms throughput.</li>\n      <li><span class=\"rubric-points\">+2</span> Address clock skew proactively. Mention NTP backward jump before being asked. The defense (refuse or wait) shows you understand the real-world failure mode that trips up Snowflake.</li>\n      <li><span class=\"rubric-points\">+2</span> Know the alternatives. Snowflake vs ULID vs UUID v7 vs Ticket Server. Each has a sweet spot. Naming all four and their tradeoffs demonstrates breadth.</li>\n      <li><span class=\"rubric-points\">+2</span> Mention base62 encoding. 64-bit integer to ~11-char URL-safe string. Shows you think about the consumer of IDs, not just the generator.</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Auto-increment INT from a single database</li>\n        <li>Random UUID v4 as primary key in B-tree indexed tables</li>\n        <li>Timestamp-only ID (no machine or sequence component)</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

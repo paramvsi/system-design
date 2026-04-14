@@ -1,0 +1,47 @@
+{
+  "slug": "caching-strategies",
+  "title": "Caching Strategies Compared",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 200,
+    "s": 70,
+    "l": 50
+  },
+  "category": "Technology Comparisons",
+  "blurb": "Caching is the single biggest performance lever in any system. But \"just add a cache\" is a hand-wave — the strategy determines consistency, write amplification, and failure modes. Cache-aside, write-through, write-back, ",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>Caching is the single biggest performance lever in any system. But \"just add a cache\" is a hand-wave — the <em>strategy</em> determines consistency, write amplification, and failure modes. Cache-aside, write-through, write-back, and read-through each have fundamentally different trade-off profiles.</p>\n      <p>Interviewers probe this because <span class=\"hl-accent\">cache invalidation is one of the two hard things in computer science</span>. Knowing which strategy to pick — and articulating why — separates L4 from L5 answers.</p>\n    </div>"
+    },
+    {
+      "id": "comparison",
+      "label": "Head-to-head comparison",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Head-to-head comparison</h2></div>\n    <table class=\"algo-table\">\n      <thead>\n        <tr>\n          <th>Strategy</th>\n          <th>Write path</th>\n          <th>Read path</th>\n          <th>Consistency</th>\n          <th>Complexity</th>\n          <th>Best for</th>\n        </tr>\n      </thead>\n      <tbody>\n        <tr>\n          <td class=\"algo-name\">Cache-aside (Lazy)</td>\n          <td>App writes to DB only; invalidates/deletes cache entry</td>\n          <td>App checks cache → miss → reads DB → populates cache</td>\n          <td>Eventual (stale window between write and next read)</td>\n          <td>Low — app controls both paths</td>\n          <td>Read-heavy, tolerates brief staleness</td>\n        </tr>\n        <tr>\n          <td class=\"algo-name\">Write-through</td>\n          <td>App writes to cache AND DB synchronously</td>\n          <td>Always read from cache (populated on write)</td>\n          <td>Strong — cache always has latest</td>\n          <td>Medium — dual write on every mutation</td>\n          <td>Read-heavy with strict consistency needs</td>\n        </tr>\n        <tr>\n          <td class=\"algo-name\">Write-back (Write-behind)</td>\n          <td>App writes to cache only; cache async flushes to DB</td>\n          <td>Always read from cache</td>\n          <td>Weak — data loss risk if cache crashes before flush</td>\n          <td>High — need flush queue, retry, ordering</td>\n          <td>Write-heavy, latency-sensitive (gaming, counters)</td>\n        </tr>\n        <tr>\n          <td class=\"algo-name\">Read-through</td>\n          <td>App writes to DB; cache auto-loads on miss</td>\n          <td>Cache intercepts reads; loads from DB on miss transparently</td>\n          <td>Eventual (same as cache-aside but cache manages itself)</td>\n          <td>Low — cache library handles loading</td>\n          <td>Simplify app code, uniform read pattern</td>\n        </tr>\n      </tbody>\n    </table>\n    <div class=\"prose\">\n      <p><strong>Key insight:</strong> Cache-aside puts the app in control. Write-through and read-through let the cache layer manage itself. Write-back trades durability for speed. Most production systems use cache-aside because it's simplest to reason about.</p>\n    </div>"
+    },
+    {
+      "id": "decision",
+      "label": "Decision flowchart",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Decision flowchart</h2></div>\n    <div class=\"prose\">\n      <p>Follow this decision tree based on your read:write ratio and consistency needs:</p>\n      <ol>\n        <li><strong>Read:write ratio &gt; 10:1 and you tolerate brief staleness?</strong> → <span class=\"hl-accent\">Cache-aside</span>. This is the default. Simple, battle-tested, used by most web applications.</li>\n        <li><strong>Read:write ratio &gt; 10:1 but need strong consistency?</strong> → <span class=\"hl-accent\">Write-through</span>. Every write updates cache synchronously, so reads always see latest. Higher write latency but zero stale reads.</li>\n        <li><strong>Write:read ratio high, latency-critical?</strong> → <span class=\"hl-accent\">Write-back</span>. Absorb write bursts in the cache, flush to DB asynchronously. Accept the durability risk. Use for counters, leaderboards, real-time analytics.</li>\n        <li><strong>Want to simplify application code?</strong> → <span class=\"hl-accent\">Read-through</span>. The caching layer handles DB loading transparently. Works well with cache libraries like Guava, Caffeine, or managed services like DAX.</li>\n      </ol>\n      <p><strong>The interview answer:</strong> \"Cache-aside for most read-heavy workloads. Write-through when you need cache consistency. Write-back for write-heavy latency-sensitive paths. Read-through to simplify the app layer.\"</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "When to pick what — deeper context",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">When to pick what — deeper context</h2></div>\n    <div class=\"prose\">\n      <h3>Cache-aside — the industry default</h3>\n      <p>Used by virtually every web app with Redis or Memcached. The pattern: read → check cache → miss → query DB → write to cache with TTL. On write: update DB, then delete (not update) the cache key. Why delete instead of update? Because delete-on-write avoids race conditions where two concurrent writes leave the cache with stale data.</p>\n      <p>The classic bug: app writes to DB, then cache delete fails (network blip). Now cache has stale data until TTL expires. Mitigation: short TTLs + eventual consistency acceptance, or use a CDC stream to invalidate.</p>\n\n      <h3>Write-through — consistency at a cost</h3>\n      <p>Every write goes through the cache to the DB. This guarantees the cache is always fresh. The cost: doubled write latency (cache + DB on every write). Works well when writes are infrequent relative to reads. DynamoDB DAX uses this pattern.</p>\n\n      <h3>Write-back — speed at a risk</h3>\n      <p>The cache absorbs writes and flushes to the DB in batches or after a delay. This is how CPU L1/L2 caches work, and it's how gaming leaderboards handle millions of score updates. The risk: cache node failure before flush = data loss. Mitigation: replicated cache (Redis Cluster), WAL in the cache layer, or accepting data loss for non-critical data.</p>\n\n      <h3>Cache stampede prevention</h3>\n      <p>Regardless of strategy, cache stampede (thundering herd on cold cache) is a real production concern. Solutions: lock-based population (only one thread fetches on miss), probabilistic early expiration (each read has a small chance of refreshing before TTL), or pre-warming critical keys on deploy.</p>\n\n      <h3>Combining strategies</h3>\n      <p>Production systems often combine: cache-aside for user profiles + write-back for view counters + write-through for session data. Name the combination in interviews to show you think about each data path independently.</p>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

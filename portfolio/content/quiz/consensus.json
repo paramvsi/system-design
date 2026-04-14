@@ -51,6 +51,36 @@
       "choices": ["Leader election is always possible", "No finite protocol over lossy channels guarantees common knowledge", "Clock sync is easy", "Byzantine faults are impossible"],
       "correct": 1,
       "explanation": "No protocol over an unreliable channel can make both generals certain the other has received the plan. Extends to: no distributed commit protocol is exactly atomic in the face of message loss — 2PC blocks, 3PC timeouts, etc."
+    },
+    {
+      "q": "Your 3-node etcd cluster loses two nodes simultaneously during a data center power event. The surviving node has all the data. Can it serve reads and writes?",
+      "choices": ["Yes — it has all the data", "Reads only in stale mode; no writes — quorum (2 of 3) is lost", "Full read/write — single node is sufficient", "It automatically becomes leader"],
+      "correct": 1,
+      "explanation": "etcd (Raft) requires a quorum of N/2+1 nodes. With 1 of 3, there's no quorum. The surviving node cannot elect itself leader or commit new writes. It can serve linearizable reads only if it was already leader with a valid lease, otherwise only serializable (potentially stale) reads."
+    },
+    {
+      "q": "A ZooKeeper ensemble has 5 nodes across two data centers: 3 in DC-A, 2 in DC-B. A network partition isolates the DCs. Which side can still serve writes?",
+      "choices": ["Both sides", "DC-A only (has 3 of 5 = quorum)", "DC-B only", "Neither — ZooKeeper shuts down on partition"],
+      "correct": 1,
+      "explanation": "Quorum for 5 nodes is 3. DC-A has 3 nodes and can form a quorum, so it elects a leader and continues serving reads and writes. DC-B with only 2 nodes cannot form a quorum and stops accepting writes. This is why odd-numbered, partition-aware placement matters."
+    },
+    {
+      "q": "Your Raft leader is processing a client write. It appends to its own log and sends AppendEntries to followers. Two of four followers ACK, but then the leader crashes before responding to the client. What happens to that write?",
+      "choices": ["Write is lost — leader crashed", "Write is committed — a majority (leader + 2 followers = 3 of 5) had it; the new leader will include it", "Write is rolled back", "Followers delete uncommitted entries"],
+      "correct": 1,
+      "explanation": "In Raft, an entry is committed once a majority has it in their logs. The leader plus 2 followers = 3 of 5 = majority. Even though the leader crashed before responding, the new leader election will pick a node with this entry, and it will be committed. The client may need to retry but the write is safe."
+    },
+    {
+      "q": "During a Google Spanner-style deployment, you observe that cross-region transactions take 100-200ms even for simple writes. Your team asks why not just use Raft. What is the fundamental reason for this latency?",
+      "choices": ["Spanner is slow by design", "TrueTime commit-wait: Spanner must wait out clock uncertainty (~7ms) plus cross-region Paxos round trips to guarantee external consistency", "Network congestion", "Spanner uses 2PC which is always slow"],
+      "correct": 1,
+      "explanation": "Spanner's external consistency (real-time ordering) requires commit-wait: after a write, it waits for TrueTime uncertainty to pass so no future reader can see the write before its timestamp. Combined with cross-region Paxos consensus, this yields 100-200ms per write. This is the price of global strong consistency."
+    },
+    {
+      "q": "A distributed lock service uses a 30-second TTL. Process A acquires the lock, then experiences a 35-second stop-the-world GC pause. Process B acquires the lock after TTL expires. A resumes and believes it still holds the lock. Both processes now write to shared storage. What should the storage layer enforce?",
+      "choices": ["Nothing — the lock service guarantees safety", "Fencing tokens: reject writes from A because its token is older than B's", "Require re-authentication", "Use longer TTLs"],
+      "correct": 1,
+      "explanation": "This is Martin Kleppmann's classic argument against Redlock. Distributed locks with TTL alone cannot prevent this. The storage layer must validate monotonically increasing fencing tokens. Process B's token > A's token, so A's late writes are rejected. Without fencing, no TTL-based lock is truly safe."
     }
   ]
 }

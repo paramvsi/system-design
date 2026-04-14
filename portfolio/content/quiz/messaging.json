@@ -45,6 +45,36 @@
       "choices": ["Storage efficiency", "Preserve per-entity message ordering + parallelism across entities", "Less network I/O", "Smaller broker memory"],
       "correct": 1,
       "explanation": "Same entity_id → same partition → same consumer thread → processed in order. Different entities → different partitions → parallel. Round-robin partitioning loses ordering."
+    },
+    {
+      "q": "A Kafka consumer group with 6 consumers is processing events from 12 partitions. One consumer crashes. What happens during the rebalance?",
+      "choices": ["Messages are lost", "All consumers pause briefly while partitions are reassigned; the crashed consumer's 2 partitions are redistributed among the remaining 5", "Only the crashed consumer's partitions stop", "Kafka replays all messages from the beginning"],
+      "correct": 1,
+      "explanation": "Kafka's cooperative/eager rebalance protocol reassigns the dead consumer's partitions. During rebalance, consumption pauses across the group (eager) or just for affected partitions (cooperative/incremental). The 2 orphaned partitions get assigned to surviving consumers. Any uncommitted offsets on the dead consumer mean those messages are reprocessed."
+    },
+    {
+      "q": "A poison message (malformed JSON) keeps crashing your consumer. The consumer restarts, re-reads the same message, crashes again — infinite loop. The partition is stuck. What's the correct fix?",
+      "choices": ["Increase consumer memory", "Implement a dead-letter queue: after N failed processing attempts, move the message to a DLQ and advance the offset", "Delete the Kafka topic", "Ignore all JSON errors"],
+      "correct": 1,
+      "explanation": "Without a DLQ, a single poison message blocks the entire partition forever. The consumer should track per-message retry counts. After N failures (e.g., 3-5), publish the message to a dead-letter topic, commit the offset, and continue. Operators inspect the DLQ asynchronously."
+    },
+    {
+      "q": "Your order-processing service consumes from Kafka, writes to a PostgreSQL database, and then commits the Kafka offset. The service crashes AFTER the DB write but BEFORE the offset commit. What happens on restart?",
+      "choices": ["The order is lost", "The order is processed a second time (duplicate) because Kafka re-delivers from the last committed offset", "Kafka detects the duplicate", "PostgreSQL rolls back automatically"],
+      "correct": 1,
+      "explanation": "This is the classic at-least-once delivery problem. The DB write succeeded but the offset wasn't committed, so Kafka re-delivers. The consumer must be idempotent: use a unique order_id as a dedup key (INSERT ... ON CONFLICT DO NOTHING) to safely handle the duplicate."
+    },
+    {
+      "q": "Your Kafka consumer lag metric shows consumer group 'payments' is 500,000 messages behind on partition 7, while other partitions have near-zero lag. What's the most likely root cause?",
+      "choices": ["Kafka broker is slow", "A slow or blocking message on partition 7 is causing head-of-line blocking in that consumer's processing thread", "Network partition", "Too many partitions"],
+      "correct": 1,
+      "explanation": "Kafka delivers messages in order within a partition. If one message on partition 7 takes a long time to process (e.g., a slow external API call, retry loop, or resource contention), all subsequent messages on that partition queue up. Other partitions on different consumers are unaffected. Fix: add timeouts, async processing, or identify the slow message."
+    },
+    {
+      "q": "You're migrating from RabbitMQ (queue semantics) to Kafka (log semantics). Your current design deletes messages after processing. A developer asks: 'How do we replay last week's events for a new analytics consumer?' What Kafka feature enables this?",
+      "choices": ["Message deletion API", "Consumer offset reset: new consumer group starts reading from any past offset (beginning, timestamp, or specific offset) since Kafka retains messages by retention policy, not consumption", "RabbitMQ-compatible mode", "Kafka Streams only"],
+      "correct": 1,
+      "explanation": "Kafka's log retention (time or size based) keeps messages regardless of consumption. Any new consumer group can seek to an arbitrary offset or timestamp and replay history. This is impossible with traditional queues that delete on ACK. It's why Kafka is ideal for event sourcing and adding new downstream consumers retroactively."
     }
   ]
 }

@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-twitter-trending",
+  "title": "Twitter Trending",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 200,
+    "s": 80,
+    "l": 50
+  },
+  "category": "Social & Feed",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>Surface the top-10 trending topics — hashtags, phrases, named entities — from the firehose of all tweets, refreshed every few minutes, per geo and per user. The hard parts: approximate top-K over a high-velocity stream where storing exact counts for every term is impossible; distinguishing a trend from steady background noise (#love is always common, so it's not trending); and filtering spam + bot amplification before a coordinated campaign games the list. X/Twitter does ~500M tweets/day, ~6K/sec; trending updates for 400+ geos every ~5 minutes.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Lead with streaming top-K + CMS. Candidates who say \"store counts in a DB and sort\" fail here. The probabilistic data structure answer is expected.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Clarify \"trending\" early. Deviation from baseline, not raw volume. This single sentence separates good from great answers.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Anti-spam / anti-bot is load-bearing. Often skipped. Mention user-reputation weighting + author-diversity constraint.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Lead with streaming top-K + CMS. Candidates who say \"store counts in a DB and sort\" fail here. The probabilistic data structure answer is expected.</li>\n      <li><span class=\"rubric-points\">+2</span> Clarify \"trending\" early. Deviation from baseline, not raw volume. This single sentence separates good from great answers.</li>\n      <li><span class=\"rubric-points\">+2</span> Anti-spam / anti-bot is load-bearing. Often skipped. Mention user-reputation weighting + author-diversity constraint.</li>\n      <li><span class=\"rubric-points\">+2</span> Geo scoping + personalization are separate concerns. Geo is pre-compute; personalization is runtime-rerank on top of geo's top-K. Don't mush them together.</li>\n      <li><span class=\"rubric-points\">+2</span> LLM-generated trend summaries is modern. Shows you know the 2024+ state of the art; a generic trend-picking design sounds dated.</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>No back-of-envelope estimation — jumps straight into components without quantifying scale for Twitter Trending</li>\n        <li>Single point of failure — no replication, failover, or redundancy discussed</li>\n        <li>Ignores data model and storage choices — hand-waves the database layer</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

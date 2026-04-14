@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-distributed-cache",
+  "title": "Distributed Cache",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 0,
+    "s": 70,
+    "l": 52
+  },
+  "category": "Infrastructure",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>An in-memory key-value store serving ~1M ops/sec per node with sub-millisecond latency. The hard parts: hash-slot sharding across a cluster of ~100 nodes so any key routes deterministically, eviction policies (LRU/LFU) that keep hot data in RAM while memory stays bounded, and a replication + persistence layer (leader-follower async replication, RDB snapshots + AOF logs) that survives node crashes without losing writes. Redis, Memcached, Dragonfly -- same core pattern, different tradeoffs.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Start with the access pattern. \"Read-heavy workload, cache-aside pattern, Redis as L2 between app and DB.\" This frames the problem correctly.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Name the sharding scheme. \"CRC16 mod 16384 hash slots, client-side routing, MOVED/ASK redirects.\" Shows you know Redis internals, not just the API.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Explain eviction before they ask. \"allkeys-lru with sample size 10. Approximated LRU, not true LRU -- the O(1) tradeoff.\" This is the detail that separates senior from mid-level.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Start with the access pattern. \"Read-heavy workload, cache-aside pattern, Redis as L2 between app and DB.\" This frames the problem correctly.</li>\n      <li><span class=\"rubric-points\">+2</span> Name the sharding scheme. \"CRC16 mod 16384 hash slots, client-side routing, MOVED/ASK redirects.\" Shows you know Redis internals, not just the API.</li>\n      <li><span class=\"rubric-points\">+2</span> Explain eviction before they ask. \"allkeys-lru with sample size 10. Approximated LRU, not true LRU -- the O(1) tradeoff.\" This is the detail that separates senior from mid-level.</li>\n      <li><span class=\"rubric-points\">+2</span> Persistence is not optional. \"RDB+AOF hybrid. RDB prefix for fast restart, AOF tail for sub-second data loss.\" Don't hand-wave \"we'll use persistence\" -- name the mode.</li>\n      <li><span class=\"rubric-points\">+1</span> Address the thundering herd. Without prompting, mention cache stampede mitigation: lock-based fill, probabilistic early expiration, or background refresh. Shows production experience.</li>\n      <li><span class=\"rubric-points\">+1</span> Know when Redis is wrong. \"Above 100 GB per node, consider sharding more aggressively or using a disk-backed store. Redis is not a database replacement.\" Showing boundaries earns trust.</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Use Redis as the primary database -- \"it's fast, who needs Postgres?\"</li>\n        <li>Store 500 GB in a single Redis instance -- \"just add more RAM\"</li>\n        <li>Run KEYS * in production to find matching keys</li>\n        <li>Cache with no TTL -- \"we'll invalidate manually when data changes\"</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

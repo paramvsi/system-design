@@ -216,6 +216,8 @@ if score > 0.60: FLAG for manual review
 else: PASS to aggregation</code></pre>
       <p>The model runs in a sidecar container co-located with the Flink task manager. Feature lookups (IP ranges, device history) use a local Redis cache refreshed every minute. Inference latency: &lt; 5 ms per click, well within the streaming budget.</p>
 
+      <p><strong>Fraud transparency report.</strong> All discarded clicks are logged to a separate "fraud" Kafka topic with the full click payload + fraud score + feature values. This data feeds a daily transparency report per advertiser: "We filtered X clicks as fraudulent for your campaign. Breakdown: 40% bot, 35% click farm, 25% SDK spoof." Advertisers can appeal — if a pattern of false positives is detected, the model threshold is adjusted for that advertiser's traffic profile.</p>
+
       <p><strong>(c) Late-arriving events.</strong> Clicks can arrive late due to network delays, mobile app batching, or ad server retries. Flink uses watermark-based windowing:</p>
       <ul>
         <li>Events up to <strong>5 minutes late</strong>: Flink reprocesses the window (allowed lateness). The ClickHouse row is updated via a ReplacingMergeTree — last version wins.</li>
@@ -246,6 +248,10 @@ else: PASS to aggregation</code></pre>
 ORDER BY (campaign_id, ad_id, geo, minute)
 PARTITION BY toYYYYMM(minute);</code></pre>
       <p>ReplacingMergeTree keeps only the latest version per unique key. When Flink reprocesses a window due to late events, it writes a new row with a higher version — ClickHouse merges and keeps the latest. No double-counting.</p>
+
+      <p><strong>Kafka topic design.</strong> The clicks topic is partitioned by <code>campaign_id</code> to ensure all clicks for a campaign land on the same partition — preserving ordering per campaign. With ~500K clicks/sec peak, we need ~100 partitions across a 10-broker cluster (each broker handles ~50K msg/sec). Retention: 7 days, giving ample replay window for Flink recovery. Compression: LZ4 for throughput over ratio.</p>
+
+      <p><strong>Exactly-once end-to-end.</strong> The chain: Kafka consumer offsets committed atomically with Flink checkpoints (Flink's Kafka connector handles this). Flink checkpoints to S3 every 30 seconds. ClickHouse sink uses ReplacingMergeTree with Flink checkpoint ID as the version column — replayed writes are idempotent. The only gap: if ClickHouse acknowledges a write but Flink crashes before checkpointing, the same window is re-sent — but ReplacingMergeTree deduplicates it. True exactly-once from Kafka to ClickHouse.</p>
 
       <div class="diagram-wrap">
         <div class="diagram-head"><span class="diagram-label">Click Lifecycle — Ingest to Billing</span><span class="diagram-type">Mermaid</span></div>
@@ -315,6 +321,8 @@ sequenceDiagram
         <li><strong>ClickHouse (fast OLAP, MergeTree) vs Druid (real-time ingestion, complex ops).</strong> ClickHouse handles both fast ingestion and fast queries with simpler operations. Druid excels at real-time ingestion with segments but requires more operational overhead (ZooKeeper, deep storage). ClickHouse wins on simplicity at this scale.</li>
         <li><strong>Pre-aggregation (fast reads, limited slicing) vs raw events (flexible slicing, slow scans).</strong> Pre-aggregating to (campaign, ad, geo, minute) makes dashboard queries fast but you can't slice by user_agent or device_type after the fact. Raw events in S3 allow any ad-hoc query but are slow. We do both: pre-agg for dashboards, raw archive for deep-dive analysis.</li>
         <li><strong>Inline fraud filter (low latency, potential false positives) vs post-aggregation filter (no false positives on counts, delayed fraud removal).</strong> Inline is better — you never want fraudulent clicks in the billing pipeline even temporarily. False positives are managed by keeping the threshold conservative and logging all decisions for review.</li>
+        <li><strong>Event-time vs processing-time windows.</strong> Event-time (timestamp from ad server) is correct but requires watermarks and late-event handling. Processing-time (Flink wall clock) is simpler but skews counts when events arrive out of order. For billing accuracy, event-time is non-negotiable — you must count clicks in the minute they actually happened, not when Flink processed them.</li>
+        <li><strong>Single Kafka topic vs per-advertiser topics.</strong> Single topic with campaign_id partitioning is simpler to manage and allows global fraud detection. Per-advertiser topics provide isolation but explode topic count (100K advertisers = 100K topics). Start with a single topic; shard by advertiser only if noisy-neighbor issues arise.</li>
       </ul>
     </div>
   </section>
@@ -325,6 +333,8 @@ sequenceDiagram
     <div class="failure"><div class="failure-icon">--</div><div><div class="failure-title">ClickHouse node down</div><div class="failure-desc">One ClickHouse replica fails. Queries to that shard timeout. Dashboard shows stale data or errors.</div><div class="mitigation">Mitigation: ClickHouse ReplicatedMergeTree with 3 replicas per shard. ZooKeeper-based replication. Queries automatically route to healthy replicas. No data loss.</div></div></div>
     <div class="failure"><div class="failure-icon">--</div><div><div class="failure-title">Fraud model false positive — legitimate clicks dropped</div><div class="failure-desc">ML model update increases false-positive rate. Real user clicks are discarded. Advertiser sees unexplained drop in click counts. Complaints follow.</div><div class="mitigation">Mitigation: shadow-score new models before deployment. Compare fraud rates between old and new model. Alert on > 0.5% delta. All discarded clicks logged to fraud topic — can be re-ingested if model is rolled back.</div></div></div>
     <div class="failure"><div class="failure-icon">--</div><div><div class="failure-title">Late events beyond watermark (lost without dead-letter)</div><div class="failure-desc">Mobile SDK batches clicks and sends them 30 minutes late. Flink's 5-min allowed lateness drops them. Those clicks are never counted.</div><div class="mitigation">Mitigation: dead-letter topic for events beyond watermark. Nightly batch reconciliation job reads dead-letter, re-aggregates, patches ClickHouse. Billing corrections applied before invoice generation.</div></div></div>
+    <div class="failure"><div class="failure-icon">--</div><div><div class="failure-title">Kafka broker failure during peak</div><div class="failure-desc">A Kafka broker dies during US evening peak (500K clicks/sec). Partitions on that broker become unavailable. Clicks from affected ad servers are rejected.</div><div class="mitigation">Mitigation: Kafka replication factor 3, min.insync.replicas=2. On broker failure, controller reassigns partition leadership to replicas within seconds. Ad servers retry with exponential backoff. No data loss if acks=all.</div></div></div>
+    <div class="failure"><div class="failure-icon">--</div><div><div class="failure-title">Budget pacing failure — overspend</div><div class="failure-desc">Billing batch runs hourly. Between batches, a viral campaign burns through its daily budget without being paused. Advertiser overspends by 2x.</div><div class="mitigation">Mitigation: real-time budget monitoring. A separate Flink job tracks per-campaign spend in a sliding window. When spend approaches 90% of daily budget, publish a "pause campaign" event. Ad servers stop serving ads for that campaign within seconds.</div></div></div>
   </section>
 
   <section class="section" id="similar">
@@ -344,7 +354,23 @@ sequenceDiagram
     <div class="evolution-step"><div class="evolution-marker">2</div><div class="evolution-content"><h4>Spark micro-batch every 5 min</h4><p>Spark Structured Streaming reads from Kafka in 5-min micro-batches. Dashboard latency drops to 5 min. Still not real-time for budget pacing.</p></div></div>
     <div class="evolution-step"><div class="evolution-marker">3</div><div class="evolution-content"><h4>Flink true streaming + ClickHouse</h4><p>Flink tumbling windows at 1-min granularity. ClickHouse for sub-second OLAP. Dashboard is near-real-time. Budget pacing works.</p></div></div>
     <div class="evolution-step"><div class="evolution-marker">4</div><div class="evolution-content"><h4>Inline fraud ML + exactly-once</h4><p>ML fraud scorer runs inline in the Flink pipeline. Exactly-once via checkpoints. Billing is accurate and fraud-free. Advertiser trust improves.</p></div></div>
-    <div class="evolution-step"><div class="evolution-marker">5</div><div class="evolution-content"><h4>Real-time anomaly detection + self-serve analytics</h4><p>Anomaly detection on click patterns (sudden spike = bot attack or viral ad). Self-serve SQL analytics for advertisers via a ClickHouse query proxy with row-level access control.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">5</div><div class="evolution-content"><h4>Real-time anomaly detection + self-serve analytics</h4><p>Anomaly detection on click patterns (sudden spike = bot attack or viral ad). Self-serve SQL analytics for advertisers via a ClickHouse query proxy with row-level access control. Auto-scaling Flink job slots based on Kafka consumer lag metrics.</p></div></div>
+  </section>
+
+  <section class="section" id="capacity">
+    <div class="section-head"><span class="section-n">13</span><h2 class="section-title">Capacity Planning</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Kafka cluster:</strong> 500K clicks/sec peak x 500 bytes = ~250 MB/sec ingest. A 10-broker cluster with 100 partitions, replication factor 3 = ~750 MB/sec total write throughput. 7-day retention: 5 TB/day x 7 = ~35 TB total storage across the cluster.</li>
+        <li><strong>Flink cluster:</strong> 500K events/sec with fraud scoring (~5 ms each) needs ~2,500 parallel slots to keep up. A 50-node cluster with 50 task slots each provides headroom. Checkpoints to S3 every 30 seconds; checkpoint size ~500 MB (window state).</li>
+        <li><strong>ClickHouse:</strong> ~1M aggregate rows/day x 100 bytes = ~100 MB/day. With 2 years of history: ~73 GB. Trivial for ClickHouse. Query performance: sub-second scans on time-partitioned data. A 3-shard, 3-replica cluster handles 10K queries/sec for dashboards.</li>
+        <li><strong>S3 archive:</strong> 5 TB/day raw clicks in Parquet (compressed ~3x) = ~1.7 TB/day. With 1-year retention: ~620 TB. At S3 Standard pricing: ~$14K/month. Move to Glacier after 90 days for ~$2.5K/month.</li>
+        <li><strong>Postgres billing:</strong> ~100K billing rows/day (one per campaign per hour). With 2 years: ~73M rows. Well within Postgres capabilities. Monthly invoice queries scan ~100K rows — instant.</li>
+        <li><strong>Fraud filter model:</strong> Model size ~50 MB. Loaded into each Flink task manager's memory. IP range lookup table: ~200 MB (all known datacenter IPs). Device history cache (local Redis): ~10 GB for 1-hour window of device_id click counts. Total per-node overhead: ~300 MB — acceptable.</li>
+        <li><strong>Dead-letter volume:</strong> ~0.1% of clicks arrive beyond 5-min watermark = ~10M/day. At 500 bytes each = ~5 GB/day. Nightly batch reconciliation processes this in minutes on a single Spark job.</li>
+        <li><strong>Dashboard query load:</strong> ~10K queries/sec from advertiser dashboards. ClickHouse handles this with query caching and materialized views for common time-range aggregations (last 1h, last 24h, last 7d).</li>
+      </ul>
+    </div>
   </section>
 
 </main>

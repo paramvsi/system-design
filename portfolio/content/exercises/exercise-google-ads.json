@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-google-ads",
+  "title": "Google Ads",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 145,
+    "s": 75,
+    "l": 42
+  },
+  "category": "Financial & Trading",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>Advertiser creates a campaign. Every search query or page-view triggers an ad auction in under 100 ms. The winner's ad is shown, the click is tracked, and the advertiser is billed on a CPC basis. Scale: 10M+ auctions per second. The hard parts: a second-price auction with quality scoring so the best ad wins (not just the richest bidder), budget pacing that spends the daily budget evenly instead of blowing it in one hour, and click-fraud detection that filters bots and click farms before billing advertisers. Google, Meta, Amazon — same pattern, different inventory.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Lead with the auction model. \"Second-price, Ad Rank = bid x quality score.\" This shows you understand the economic incentive structure, not just the tech.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Quality score is the key insight. Without it, ads devolve into a pure spending war. Quality score aligns platform revenue with user experience — interviewers love this.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Budget pacing is non-obvious. Most candidates forget it. \"Probabilistic throttling to spread daily budget evenly\" — this is a production detail that separates senior from junior.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Lead with the auction model. \"Second-price, Ad Rank = bid x quality score.\" This shows you understand the economic incentive structure, not just the tech.</li>\n      <li><span class=\"rubric-points\">+2</span> Quality score is the key insight. Without it, ads devolve into a pure spending war. Quality score aligns platform revenue with user experience — interviewers love this.</li>\n      <li><span class=\"rubric-points\">+2</span> Budget pacing is non-obvious. Most candidates forget it. \"Probabilistic throttling to spread daily budget evenly\" — this is a production detail that separates senior from junior.</li>\n      <li><span class=\"rubric-points\">+2</span> Click fraud is a billing integrity problem. Frame it as: \"we cannot charge advertisers for bot clicks.\" Two layers: real-time filtering + batch ML + refunds.</li>\n      <li><span class=\"rubric-points\">+2</span> Distinguish search ads from display RTB. Search = server-side auction among own campaigns. Display = fan-out to external DSPs in real-time. Same auction principles, different latency profiles.</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>First-price auction — winner pays exactly their bid</li>\n        <li>No quality score — highest bidder always wins</li>\n        <li>No budget pacing — serve ads until daily budget is gone</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

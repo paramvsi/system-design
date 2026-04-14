@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Consistency Models Compared — System Design</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 350; --accent-s: 70%; --accent-l: 50%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Every distributed system makes a consistency choice — explicitly or by accident. "Eventual consistency" gets thrown around in interviews like a magic wand, but there are at least five distinct models, each with different guarantees, latency costs, and failure modes.</p>
+      <p>When the interviewer asks "What consistency model does your design use?", you need to answer with <span class="hl-accent">the specific model, why it fits, and what it costs</span>. This comparison gives you that vocabulary.</p>
+    </div>
+  </section>
+
+  <section class="section" id="comparison">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Head-to-head comparison</h2></div>
+    <table class="algo-table">
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Guarantee</th>
+          <th>Latency cost</th>
+          <th>Implementation</th>
+          <th>Example systems</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="algo-name">Strong consistency</td>
+          <td>All reads see the most recent write. Total order on operations.</td>
+          <td>High — requires synchronous replication or consensus</td>
+          <td>Single-leader with sync replicas, or consensus (Raft/Paxos)</td>
+          <td>Google Spanner, CockroachDB, single-node PostgreSQL</td>
+        </tr>
+        <tr>
+          <td class="algo-name">Eventual consistency</td>
+          <td>If no new writes, all replicas converge. No bound on when.</td>
+          <td>Lowest — async replication, local reads</td>
+          <td>Async multi-leader or leaderless replication</td>
+          <td>Cassandra (ONE), DynamoDB (default), DNS</td>
+        </tr>
+        <tr>
+          <td class="algo-name">Causal consistency</td>
+          <td>Causally related operations seen in order. Concurrent ops may differ.</td>
+          <td>Moderate — track causal dependencies (vector clocks)</td>
+          <td>Vector clocks, version vectors, causal broadcast</td>
+          <td>MongoDB (causal sessions), COPS, Eiger</td>
+        </tr>
+        <tr>
+          <td class="algo-name">Read-your-writes</td>
+          <td>A client always sees its own writes. Others may see stale data.</td>
+          <td>Low-moderate — route reads to same replica or check version</td>
+          <td>Sticky sessions, version tags, read-after-write tokens</td>
+          <td>DynamoDB (consistent reads), social media profiles</td>
+        </tr>
+        <tr>
+          <td class="algo-name">Linearizability</td>
+          <td>Operations appear atomic and in real-time order. Strongest guarantee.</td>
+          <td>Highest — requires coordination on every operation</td>
+          <td>Consensus protocols (Raft, Multi-Paxos, ZAB)</td>
+          <td>ZooKeeper, etcd, Spanner (with TrueTime)</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="prose">
+      <p><strong>Key insight:</strong> Consistency models form a spectrum. Stronger guarantees cost more latency and reduce availability (CAP theorem). The art is picking the <em>weakest model that your use case can tolerate</em> — that's where you get the best performance.</p>
+    </div>
+  </section>
+
+  <section class="section" id="decision">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Decision flowchart</h2></div>
+    <div class="prose">
+      <p>Match the consistency model to the use case during your design:</p>
+      <ol>
+        <li><strong>Money, inventory, distributed locks?</strong> → <span class="hl-accent">Strong / Linearizable</span>. Double-spending or overselling is unacceptable. Use Spanner, CockroachDB, or consensus-based coordination (etcd, ZooKeeper).</li>
+        <li><strong>Social counters, likes, view counts?</strong> → <span class="hl-accent">Eventual</span>. Off-by-a-few is fine. Users don't notice if a like count is 3 seconds stale. Async replication gives you the lowest latency and highest availability.</li>
+        <li><strong>Chat messages, collaborative documents?</strong> → <span class="hl-accent">Causal</span>. Messages must appear in conversation order (causal dependency), but two independent conversations don't need total ordering. Vector clocks or Lamport timestamps track causality.</li>
+        <li><strong>User profile after editing?</strong> → <span class="hl-accent">Read-your-writes</span>. After a user updates their bio, they must see the change immediately. Other users can see the old version briefly. Implement with sticky sessions or read-after-write tokens.</li>
+        <li><strong>Distributed locks, leader election, config coordination?</strong> → <span class="hl-accent">Linearizable</span>. These require operations to appear instantaneous and globally ordered. Use ZooKeeper, etcd, or Chubby.</li>
+      </ol>
+      <p><strong>The interview answer:</strong> "Strong for money. Eventual for social counters. Causal for chat. Linearizable for distributed locks."</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">When to pick what — deeper context</h2></div>
+    <div class="prose">
+      <h3>Strong consistency — the intuitive default</h3>
+      <p>Strong consistency means the system behaves as if there's a single copy of the data. This is what developers expect from a single-node database. In distributed systems, achieving this requires synchronous replication: every write waits for a majority of replicas to acknowledge before returning. Google Spanner achieves this globally using TrueTime (GPS + atomic clocks) for bounded clock skew.</p>
+
+      <h3>Eventual consistency — faster than you think</h3>
+      <p>"Eventual" sounds scary, but in practice convergence happens in milliseconds for well-tuned systems. The real risk is <strong>conflict resolution</strong>: when two replicas accept conflicting writes, you need a merge strategy (last-writer-wins, CRDTs, application-level resolution). DynamoDB uses LWW by default; Riak offered CRDTs.</p>
+
+      <h3>Causal consistency — the Goldilocks zone</h3>
+      <p>Causal consistency is the strongest model achievable without coordination in a partition-tolerant system (CALM theorem). It preserves "happens-before" relationships while allowing concurrent operations to be seen in different orders by different nodes. This maps perfectly to chat: "I asked a question, you answered it" — the answer must come after the question, but unrelated messages can reorder freely.</p>
+
+      <h3>Read-your-writes — the UX requirement</h3>
+      <p>This isn't a formal consistency model but a session guarantee that matters enormously for user experience. Implementation options: (1) route reads to the leader/same replica that handled the write, (2) include a version token in the write response and wait for the replica to catch up before reading, (3) read from cache that's updated on write.</p>
+
+      <h3>Linearizability vs serializability</h3>
+      <p>These are often confused. <strong>Serializability</strong> is a transaction isolation level — transactions appear to execute one at a time. <strong>Linearizability</strong> is about individual operations appearing atomic and real-time ordered. Spanner provides both ("strict serializability"). Most systems provide one or neither.</p>
+
+      <h3>Tunable consistency — the practical approach</h3>
+      <p>Cassandra and DynamoDB let you choose consistency per query: write to 3 replicas but read from 1 (eventual), or read from 2 out of 3 (quorum = strong). The formula: W + R > N guarantees overlap between write and read sets, giving strong consistency. This per-query tuning lets you optimize hot paths independently.</p>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

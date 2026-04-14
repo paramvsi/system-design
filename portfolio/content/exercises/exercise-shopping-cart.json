@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-shopping-cart",
+  "title": "Shopping Cart",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 30,
+    "s": 80,
+    "l": 48
+  },
+  "category": "Marketplace & Booking",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>500M carts updated daily across every device. Never lose a cart. The hard parts: a hybrid storage layer that keeps hot carts in Redis for sub-ms reads while persisting to DynamoDB for durability, guest-to-authenticated cart merge that unions items without losing anything on login, and inventory soft-reservation with TTL that holds stock for 15 minutes without hard-locking millions of abandoned items. Amazon, Walmart, Shopify — every cart looks simple until it runs at 50K ops/sec.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Lead with the hybrid storage model. \"Redis for hot reads at sub-ms, DynamoDB for durable persistence, write-behind via Kafka.\" This shows you understand the latency-durability tradeoff at scale.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Guest merge is the differentiator. Most candidates forget that 40% of e-commerce traffic is unauthenticated. Explain the union strategy (keep higher quantity) and the inventory hold transfer — this is production-level detail.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Soft hold with TTL is the key insight. \"DECR on add, TTL key at 15 min, INCR on expiry. Checkout deletes the TTL key to make the hold permanent.\" This single pattern prevents both oversell and dead-stock from abandoned carts.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Lead with the hybrid storage model. \"Redis for hot reads at sub-ms, DynamoDB for durable persistence, write-behind via Kafka.\" This shows you understand the latency-durability tradeoff at scale.</li>\n      <li><span class=\"rubric-points\">+2</span> Guest merge is the differentiator. Most candidates forget that 40% of e-commerce traffic is unauthenticated. Explain the union strategy (keep higher quantity) and the inventory hold transfer — this is production-level detail.</li>\n      <li><span class=\"rubric-points\">+2</span> Soft hold with TTL is the key insight. \"DECR on add, TTL key at 15 min, INCR on expiry. Checkout deletes the TTL key to make the hold permanent.\" This single pattern prevents both oversell and dead-stock from abandoned carts.</li>\n      <li><span class=\"rubric-points\">+2</span> Don't forget abandon recovery. 70% of carts are abandoned. At Amazon scale that's 350M carts/day. Recovering even 5% via email is worth billions annually. Kafka event stream + idle detection is the architecture.</li>\n      <li><span class=\"rubric-points\">+2</span> Distinguish from flash-sale inventory. Flash sale = single atomic counter, extreme contention. Shopping cart = distributed soft holds across millions of SKUs, long-lived state. Different problem, different solution.</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Store the cart in an HTTP session cookie</li>\n        <li>Hard-lock inventory when item is added to cart</li>\n        <li>Never refresh prices — show the price from 3 days ago at checkout</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

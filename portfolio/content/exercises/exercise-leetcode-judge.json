@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-leetcode-judge",
+  "title": "LeetCode",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 38,
+    "s": 90,
+    "l": 48
+  },
+  "category": "Infrastructure",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>Users submit code solutions in 15+ languages. The system compiles, runs against hidden test cases with strict time/memory limits, and returns a verdict — all within seconds. The hard parts: sandboxed execution that prevents user code from escaping or consuming unbounded resources, a judge queue that handles 10K concurrent contest submissions without starving practice users, and plagiarism detection across millions of historical submissions. LeetCode processes ~10M submissions/day.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Lead with the sandbox. \"We're running arbitrary untrusted code — isolation is the #1 concern.\" Then name gVisor or Firecracker.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Priority queue for contest vs practice. A single queue is wrong. Name the priority lanes explicitly.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Stream test cases, don't batch-load. Large inputs (10M-node graph) can't be pre-loaded into memory. Stream from S3 per case.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Lead with the sandbox. \"We're running arbitrary untrusted code — isolation is the #1 concern.\" Then name gVisor or Firecracker.</li>\n      <li><span class=\"rubric-points\">+2</span> Priority queue for contest vs practice. A single queue is wrong. Name the priority lanes explicitly.</li>\n      <li><span class=\"rubric-points\">+2</span> Stream test cases, don't batch-load. Large inputs (10M-node graph) can't be pre-loaded into memory. Stream from S3 per case.</li>\n      <li><span class=\"rubric-points\">+2</span> Autoscale workers, not the API. The API is lightweight; the workers are the bottleneck. Scale workers on queue depth.</li>\n      <li><span class=\"rubric-points\">+2</span> Plagiarism is offline, not real-time. Too expensive to run during contest. Batch after. MOSS / AST fingerprint.</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Run user code directly on the host (no sandbox)</li>\n        <li>Load all 200 test cases into memory before running</li>\n        <li>Single queue for contest + practice (no priority)</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 1
+}

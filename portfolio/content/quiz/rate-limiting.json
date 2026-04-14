@@ -39,6 +39,36 @@
       "choices": ["Closed (deny all) — safest", "Open (allow all) — availability over precision", "Random 50/50", "Return 503"],
       "correct": 1,
       "explanation": "Fail-open: better to temporarily over-allow than block every request. Exception: auth-critical paths (e.g., anti-brute-force on login) should fail-closed. Choose per endpoint."
+    },
+    {
+      "q": "Your API gateway rate-limits at 1000 req/sec per API key. A client sends 999 requests at T=0.999 and 999 at T=1.001. The fixed-window counter sees 999 in each window. But the actual rate over that 2ms span is ~999K req/sec. What algorithm fixes this?",
+      "choices": ["Token bucket", "Sliding window log or sliding window counter", "Leaky bucket", "Increase the fixed window limit"],
+      "correct": 1,
+      "explanation": "Sliding window log tracks each request timestamp and counts within a rolling window. Sliding window counter approximates this by weighting the previous window's count. Both prevent the boundary-burst problem where two full allowances land in a tiny real-time window."
+    },
+    {
+      "q": "Your distributed rate limiter uses Redis INCR with a 60-second TTL. During a Redis master failover (5 seconds), the new replica has stale counters that are 3 seconds behind. What's the impact?",
+      "choices": ["All requests are blocked", "Some users get a 'free' burst because their counters reset to an older (lower) value", "No impact — Redis Sentinel handles it", "Rate limits become stricter"],
+      "correct": 1,
+      "explanation": "Redis async replication means the new master may have counters from 3 seconds ago. Users who were near their limit get headroom back. For most APIs this is acceptable. For critical paths (payment, auth), consider a local fallback counter during failover."
+    },
+    {
+      "q": "You have rate limiting at both the API gateway (global: 10K/min per tenant) and individual microservices (per-service: 1K/min per tenant). A tenant's requests pass the gateway but get 429s from Service B. What's happening?",
+      "choices": ["Gateway is broken", "The tenant's traffic pattern hits Service B disproportionately — within global budget but exceeding Service B's local limit", "Service B has a bug", "DNS routing issue"],
+      "correct": 1,
+      "explanation": "Multi-tier rate limiting creates this conflict. A tenant using 9K/min on Service A and 1.5K/min on Service B is within the 10K global limit but over Service B's 1K local limit. Solutions: communicate remaining budget across tiers, or set local limits as fractions of the global budget with headroom."
+    },
+    {
+      "q": "A mobile app retries immediately on receiving a 429 response, ignoring the Retry-After header. Under load, this creates a feedback loop. What pattern emerges?",
+      "choices": ["Requests succeed faster", "Retry storm: rejected requests instantly retry, doubling the load on the rate limiter and making congestion worse", "The rate limiter adapts", "Client-side caching kicks in"],
+      "correct": 1,
+      "explanation": "Aggressive retries on 429 amplify load: each rejected request becomes two requests. This positive feedback loop can overwhelm the rate limiter itself. Clients must respect Retry-After, use exponential backoff with jitter, and cap max retries. Server-side, consider returning 503 with backoff hints during extreme overload."
+    },
+    {
+      "q": "Your rate limiter uses a token bucket per user with 100 tokens refilling at 10/sec. A legitimate user needs to upload 200 small files in a batch job. They hit the rate limit after 100 files. What's the best accommodation without removing the rate limit?",
+      "choices": ["Remove the rate limit for this user", "Provide a separate bulk/batch API endpoint with a higher per-request allowance or batch grouping, keeping the per-item rate limit for the standard API", "Increase all users' bucket size to 200", "Tell the user to add delays"],
+      "correct": 1,
+      "explanation": "A dedicated batch endpoint that accepts multiple items per request lets the user accomplish the same work within rate limits. The standard API keeps its protective limits for normal traffic. This is how S3 (multi-object delete), Gmail (batch API), and Stripe (bulk creates) handle it."
     }
   ]
 }

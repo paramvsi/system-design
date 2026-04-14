@@ -124,7 +124,7 @@
     <div class="section-head"><span class="section-n">04</span><h2 class="section-title">API Design</h2></div>
     <div class="endpoint">
       <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/campaigns</span></div>
-      <p class="ep-desc">Create campaign. Body: <code>{keywords, bid_cpc, daily_budget, creative, targeting}</code>. Returns <code>{campaign_id, status: review_pending}</code>. Creative goes through policy review before serving.</p>
+      <p class="ep-desc">Create campaign. Body: <code>{keywords, bid_cpc, daily_budget, creative, targeting}</code>. Returns <code>{campaign_id, status: review_pending}</code>. Creative goes through automated policy review (ML classifier for prohibited content) before serving. Typically approved within 1 hour.</p>
     </div>
     <div class="endpoint">
       <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/auction</span></div>
@@ -136,17 +136,22 @@
     </div>
     <div class="endpoint">
       <div class="endpoint-head"><span class="method get">GET</span><span class="ep-path">/api/campaigns/{campaign_id}/stats</span></div>
-      <p class="ep-desc">Campaign dashboard. Returns <code>{impressions, clicks, ctr, spend, conversions, avg_cpc}</code>. Near-real-time (1-5 min lag).</p>
+      <p class="ep-desc">Campaign dashboard. Returns <code>{impressions, clicks, ctr, spend, conversions, avg_cpc}</code>. Near-real-time (1-5 min lag). Aggregated from Kafka click stream via Flink windowed counters.</p>
+    </div>
+    <div class="endpoint">
+      <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/campaigns/{campaign_id}/budget</span></div>
+      <p class="ep-desc">Update daily budget or bid strategy. Body: <code>{daily_budget, bid_strategy: "manual"|"target_cpa"|"maximize_clicks"}</code>. Takes effect within 5 minutes (propagated to budget pacer shards).</p>
     </div>
     <div class="endpoint">
       <div class="endpoint-head"><span class="method post">POST</span><span class="ep-path">/api/conversions</span></div>
-      <p class="ep-desc">Advertiser reports a conversion (purchase, signup). Body: <code>{click_id, value}</code>. Used for ROI tracking and quality score improvement.</p>
+      <p class="ep-desc">Advertiser reports a conversion (purchase, signup). Body: <code>{click_id, value}</code>. Used for ROI tracking, quality score improvement, and Smart Bidding optimization. Conversion window: up to 30 days post-click.</p>
     </div>
   </section>
 
   <section class="section" id="architecture">
     <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Architecture</h2></div>
-    <div class="prose"><p>Four tiers: <strong>candidate selection</strong> (find eligible ads for query), <strong>auction + ranking</strong> (score and pick winners), <strong>serving</strong> (render ad + track impression), <strong>billing pipeline</strong> (click validation + charge). Budget and fraud systems run as side-car services.</p></div>
+    <div class="prose"><p>Four tiers: <strong>candidate selection</strong> (find eligible ads for query), <strong>auction + ranking</strong> (score and pick winners), <strong>serving</strong> (render ad + track impression), <strong>billing pipeline</strong> (click validation + charge). Budget and fraud systems run as side-car services.</p>
+    <p>The ad server is stateless and horizontally scaled. Candidate selection uses a sharded inverted index (keyword to campaign mapping) replicated across data centers. Quality scores are pre-computed and cached in a distributed KV store. Budget state is sharded by campaign ID across budget servers. Click events flow through Kafka to both real-time fraud filters (Flink) and batch billing (Spark daily).</p></div>
     <div class="diagram-wrap">
       <div class="diagram-head"><span class="diagram-label">Ad Serving Architecture</span><span class="diagram-type">SVG</span></div>
       <div class="diagram-body">
@@ -203,6 +208,18 @@ ad_rank = bid * quality_score
 -- Winner pays: (second_ad_rank / winner_quality_score) + 0.01
 -- This ensures winner never pays more than their bid</code></pre>
       <p><strong>Quality score</strong> = predicted CTR (ML model on historical click data) x relevance (query-to-keyword semantic match) x landing page quality (load speed, mobile-friendly, content relevance). This means a $2 bid with 10x quality beats a $10 bid with 1x quality. Google's entire ad incentive structure flows from this formula.</p>
+      <p><strong>Why quality score matters economically.</strong> Without quality score, the platform maximizes short-term revenue (highest bidder wins) but destroys long-term revenue (users stop clicking ads because they're irrelevant, CTR drops industry-wide, advertisers see lower ROI and reduce spend). Quality score aligns all three parties: users get relevant ads, advertisers get clicks from interested users, platform maximizes total click volume and thus total revenue.</p>
+      <pre><code>-- Example: two advertisers bidding on "running shoes"
+Advertiser A: bid=$5.00, pCTR=0.08, relevance=0.9, landing=0.85
+  quality = 0.08 * 0.9 * 0.85 = 0.0612
+  ad_rank = 5.00 * 0.0612 = 0.306
+
+Advertiser B: bid=$2.00, pCTR=0.15, relevance=0.95, landing=0.90
+  quality = 0.15 * 0.95 * 0.90 = 0.1283
+  ad_rank = 2.00 * 0.1283 = 0.257
+
+Winner: Advertiser A (rank 0.306 > 0.257)
+A pays: (0.257 / 0.0612) + 0.01 = $4.21 (not their $5 bid)</code></pre>
 
       <p><strong>(b) Real-time bidding (RTB) for display ads.</strong> For display/programmatic ads, the ad server sends bid requests to multiple demand-side platforms (DSPs) simultaneously. Each DSP has &lt; 100 ms to evaluate the impression, check campaign targeting, and return a bid. The ad exchange runs a second-price auction across all DSP responses. This is parallelized: fan-out to 10+ DSPs, take first responses within the deadline, discard slow ones.</p>
       <pre><code>-- RTB timeline (100 ms budget)
@@ -214,6 +231,7 @@ T+90ms  : second-price auction across all received bids
 T+95ms  : winning creative URL returned to page
 T+100ms : ad rendered in user's browser</code></pre>
       <p>Key engineering challenge: the fan-out must be non-blocking. Each DSP connection uses a persistent HTTP/2 stream. Slow DSPs are dropped after 80 ms — they lose the auction by default. This creates a strong incentive for DSPs to optimize latency.</p>
+      <p><strong>Header bidding.</strong> Publishers sometimes run a client-side pre-auction (header bidding) before calling the ad exchange. Multiple demand sources bid in parallel in the browser, and the highest bid is passed to the exchange as a floor price. This gives publishers more control over yield but adds latency (50-200 ms client-side).</p>
 
       <p><strong>(c) Budget pacing.</strong> Advertiser sets $1000/day budget. Without pacing, high-traffic morning hours consume the entire budget by 10 AM — missing afternoon conversions entirely.</p>
       <pre><code>-- Probabilistic throttling
@@ -237,7 +255,11 @@ else:
         <li><strong>Conversion validation:</strong> clicks that never convert at a rate &gt; 3 standard deviations from baseline flagged for review. Refund issued to advertiser.</li>
         <li><strong>IP frequency capping:</strong> same IP clicking the same ad more than N times per hour is capped. Clicks beyond the cap are logged but not billed. Threshold varies by vertical (e-commerce: 3/hr, B2B: 5/hr).</li>
       </ol>
-      <p><strong>Fraud refund pipeline.</strong> Clicks initially billed optimistically. Batch ML runs hourly and flags invalid clicks. At end-of-day, flagged clicks are reversed from advertiser's bill. Advertiser sees "invalid click adjustment" line item in their invoice. Google reports ~10% of clicks as invalid and auto-refunded.</p>
+      <p><strong>Fraud refund pipeline.</strong> Clicks initially billed optimistically.
+      Batch ML runs hourly and flags invalid clicks.
+      At end-of-day, flagged clicks are reversed from advertiser's bill.
+      Advertiser sees "invalid click adjustment" line item in their invoice.
+      Google reports ~10% of clicks as invalid and auto-refunded.</p>
 
       <div class="diagram-wrap">
         <div class="diagram-head"><span class="diagram-label">Auction Sequence — Query to Ad Shown</span><span class="diagram-type">Mermaid</span></div>
@@ -267,6 +289,16 @@ sequenceDiagram
           </div>
         </div>
       </div>
+
+      <p><strong>Candidate selection pipeline.</strong> The keyword index is an inverted index mapping keywords to campaign IDs. For a query "cheap flights to NYC," the system:</p>
+      <ol>
+        <li><strong>Tokenize + expand:</strong> "cheap flights to nyc" + synonyms ("affordable," "budget") + broad match ("flights nyc," "airfare new york")</li>
+        <li><strong>Index lookup:</strong> union of all matching campaign IDs from the inverted index (~5000 candidates)</li>
+        <li><strong>Targeting filter:</strong> remove campaigns that don't match user's geo, device, time-of-day, audience segment (~1000 remain)</li>
+        <li><strong>Budget filter:</strong> remove campaigns with exhausted daily budget or paused by advertiser (~800 remain)</li>
+        <li><strong>Score + rank:</strong> compute Ad Rank for remaining candidates; take top K for auction slots</li>
+      </ol>
+      <p>This pipeline must complete in &lt; 50 ms (leaving 50 ms for rendering). The inverted index is sharded by keyword hash and replicated across data centers for low-latency reads.</p>
 
       <div class="callout callout-good">
         <div class="callout-label">Interview answer</div>
@@ -317,6 +349,8 @@ sequenceDiagram
         <li><strong>Budget pacing is non-obvious.</strong> Most candidates forget it. "Probabilistic throttling to spread daily budget evenly" — this is a production detail that separates senior from junior.</li>
         <li><strong>Click fraud is a billing integrity problem.</strong> Frame it as: "we cannot charge advertisers for bot clicks." Two layers: real-time filtering + batch ML + refunds.</li>
         <li><strong>Distinguish search ads from display RTB.</strong> Search = server-side auction among own campaigns. Display = fan-out to external DSPs in real-time. Same auction principles, different latency profiles.</li>
+        <li><strong>Mention the data pipeline.</strong> "Clicks flow through Kafka to a Flink streaming job for real-time fraud filtering, then to a batch pipeline for billing reconciliation." This shows you think about the full lifecycle, not just the auction.</li>
+        <li><strong>Know the numbers.</strong> Google processes ~8.5 billion searches/day, each triggering an auction. Average CPC across all verticals is ~$1-2. Legal keywords ("lawyer," "insurance") can exceed $50/click. These numbers ground your design in reality.</li>
       </ol>
     </div>
   </section>
@@ -339,6 +373,8 @@ sequenceDiagram
     <div class="evolution-step"><div class="evolution-marker">3</div><div class="evolution-content"><h4>Second-price auction + quality score</h4><p>Vickrey pricing removes gaming incentive. Quality score rewards relevant ads. Revenue and user experience both improve.</p></div></div>
     <div class="evolution-step"><div class="evolution-marker">4</div><div class="evolution-content"><h4>Budget pacing + fraud detection</h4><p>Probabilistic throttling spreads budget evenly. ML pipeline filters invalid clicks. Advertiser trust increases.</p></div></div>
     <div class="evolution-step"><div class="evolution-marker">5</div><div class="evolution-content"><h4>RTB + programmatic display + ML bidding</h4><p>Extend to display ads via real-time bidding. Smart Bidding: ML sets bids automatically to maximize conversions within budget. Cross-channel attribution.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">6</div><div class="evolution-content"><h4>Smart Bidding + conversion optimization</h4><p>ML-driven automated bidding: target CPA (cost per acquisition), target ROAS (return on ad spend). System adjusts bids per auction based on predicted conversion probability. Advertiser sets business goals, not individual keyword bids.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">7</div><div class="evolution-content"><h4>Multi-format + privacy-preserving</h4><p>Video ads, shopping ads, app install ads — all through the same auction engine. Privacy sandbox (Topics API, FLEDGE) replaces third-party cookies for targeting. On-device auction for remarketing. Federated learning for quality score models without raw user data leaving the device.</p></div></div>
   </section>
 
 </main>

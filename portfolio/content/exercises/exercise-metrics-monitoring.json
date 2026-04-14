@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-metrics-monitoring",
+  "title": "Metrics & Monitoring",
+  "problemNumber": "60",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "60 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 145,
+    "s": 60,
+    "l": 45
+  },
+  "category": "Infrastructure",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>1M hosts each running an agent that collects CPU, memory, disk, and custom application metrics every 10-15 seconds. That is ~100M data points/sec flowing into your ingest pipeline. The hard parts: a time-series database that stores 10M unique series with columnar compression (delta-of-delta timestamps, XOR-encoded floats), a query engine that fans out across time-partitioned shards and returns aggregated results in &lt;1 second over weeks of data, and an alert evaluator that runs thousands of threshold and anomaly-detection rules every 15-60 seconds without missing a single breach. Datadog, Prometheus, New Relic, VictoriaMetrics — same architecture, different trade-offs.</p>\n      <p><strong>Time budget:</strong> 60 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Start with the data model. \"A time series is identified by (metric_name + set of tag key-value pairs). Each series has a stream of (timestamp, float_value) tuples.\" This grounds everything.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Name Gorilla encoding explicitly. \"Delta-of-delta for timestamps, XOR for float values — from Facebook's 2015 paper. Gets ~1.37 bytes/point vs 16 bytes raw.\" Shows depth beyond \"we use a TSDB.\"</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Cardinality is the interview differentiator. Most candidates describe ingest and query. Few mention cardinality explosion. Say: \"The most dangerous production issue is unbounded tag cardinality — one bad deploy tagging with request_id creates millions of series and OOMs the cluster.\"</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Start with the data model. \"A time series is identified by (metric_name + set of tag key-value pairs). Each series has a stream of (timestamp, float_value) tuples.\" This grounds everything.</li>\n      <li><span class=\"rubric-points\">+2</span> Name Gorilla encoding explicitly. \"Delta-of-delta for timestamps, XOR for float values — from Facebook's 2015 paper. Gets ~1.37 bytes/point vs 16 bytes raw.\" Shows depth beyond \"we use a TSDB.\"</li>\n      <li><span class=\"rubric-points\">+2</span> Cardinality is the interview differentiator. Most candidates describe ingest and query. Few mention cardinality explosion. Say: \"The most dangerous production issue is unbounded tag cardinality — one bad deploy tagging with request_id creates millions of series and OOMs the cluster.\"</li>\n      <li><span class=\"rubric-points\">+2</span> Separate ingest path from query path. Draw them as independent pipelines that share TSDB storage. This shows you understand read/write isolation — writers don't block readers.</li>\n      <li><span class=\"rubric-points\">+1</span> Address \"who monitors the monitoring?\" Dead-man's switch: alert evaluator emits a heartbeat; a separate watchdog in a different failure domain checks it. This is the kind of operational nuance that impresses.</li>\n      <li><span class=\"rubric-points\">+1</span> Mention push vs pull trade-off proactively. \"Prometheus pulls, Datadog pushes. Push is better for ephemeral containers. Pull is simpler for static fleets. Modern systems support both via OpenTelemetry Collector.\"</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Store every metric data point as a row in Postgres</li>\n        <li>Allow unbounded tag cardinality (user_id, request_id as metric tags)</li>\n        <li>Alert on raw noisy metrics without smoothing</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

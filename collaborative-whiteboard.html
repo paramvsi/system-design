@@ -146,7 +146,8 @@
 
   <section class="section" id="architecture">
     <div class="section-head"><span class="section-n">05</span><h2 class="section-title">Architecture</h2></div>
-    <div class="prose"><p>Three layers: <strong>real-time collaboration</strong> (WebSocket servers + CRDT merge), <strong>spatial query</strong> (R-tree index for viewport loading), <strong>persistence</strong> (CRDT state snapshots + operation log). Clients are thick — they hold the full CRDT state for objects in their viewport and apply operations locally before sending to server.</p></div>
+    <div class="prose"><p>Three layers: <strong>real-time collaboration</strong> (WebSocket servers + CRDT merge), <strong>spatial query</strong> (R-tree index for viewport loading), <strong>persistence</strong> (CRDT state snapshots + operation log). Clients are thick — they hold the full CRDT state for objects in their viewport and apply operations locally before sending to server.</p>
+    <p>WebSocket servers are stateful (each holds connections for a set of boards) but horizontally scaled via consistent hashing on board_id. If a server dies, clients reconnect to a different server and replay from their local CRDT state. Persistence layer takes periodic snapshots (every 30 seconds or every 100 operations) to bound recovery time. The operation log is append-only and serves as the source of truth for replay, audit trails, and offline sync.</p></div>
     <div class="diagram-wrap">
       <div class="diagram-head"><span class="diagram-label">Collaborative Whiteboard Architecture</span><span class="diagram-type">SVG</span></div>
       <div class="diagram-body">
@@ -207,6 +208,8 @@
 -- Concurrent creates: both objects appear (add-wins set)
 -- Concurrent moves: last-writer-wins on position (acceptable for whiteboard)</code></pre>
       <p>The board itself is an add-wins set (OR-Set) of objects. Creating an object adds it to the set. Deleting sets <code>deleted: true</code> (tombstone). Concurrent create + delete: create wins (add-wins semantics). This guarantees no data loss.</p>
+      <p><strong>Why LWW works for whiteboards but not for text.</strong> In a text editor, concurrent inserts at the same position must both appear (interleaving). LWW would lose one insert — unacceptable. But for spatial objects, if two users move the same rectangle simultaneously, having it end up at one position or the other is fine — the "loser" just moves it again. This is why whiteboards use LWW registers while Google Docs uses sequence CRDTs (RGA, Yjs).</p>
+      <p><strong>Lamport clocks for ordering.</strong> Each client maintains a logical clock. On every operation, increment the clock. When receiving a remote operation, set clock = max(local, remote) + 1. This ensures a total order across all operations without relying on wall-clock time (which can skew between clients).</p>
 
       <p><strong>(b) Spatial indexing with R-tree.</strong> A board with 100K objects cannot send all of them to every client on connect. Solution: server maintains an R-tree (rectangle tree) index of all object bounding boxes.</p>
       <pre><code>-- Viewport query
@@ -287,6 +290,16 @@ sequenceDiagram
         </div>
       </div>
 
+      <p><strong>Offline sync protocol.</strong> When a client goes offline, it continues applying operations locally to its CRDT state. Operations are buffered in an ordered queue. On reconnect:</p>
+      <ol>
+        <li><strong>Client sends</strong> its last-known server timestamp (vector clock)</li>
+        <li><strong>Server sends</strong> all operations since that timestamp (delta sync)</li>
+        <li><strong>Client merges</strong> server delta into local state (CRDT merge — automatic, no conflicts)</li>
+        <li><strong>Client sends</strong> its buffered offline operations to server</li>
+        <li><strong>Server merges</strong> offline ops and broadcasts to other clients</li>
+      </ol>
+      <p>Because CRDTs are commutative and idempotent, the order of merge does not matter. The final state is identical regardless of whether operations arrive in-order or out-of-order. This is the fundamental advantage over OT.</p>
+
       <div class="callout callout-good">
         <div class="callout-label">Interview answer</div>
         <p>"Each canvas object is a CRDT with LWW registers per field — concurrent edits merge automatically, no central coordinator needed. The board is an add-wins set (OR-Set) so concurrent creates both appear. Spatial indexing via R-tree means clients only receive the ~200 objects in their viewport, not all 100K. Cursors broadcast at 15 Hz only to users with overlapping viewports. Undo is per-user: each operation has an inverse, and applying the inverse is itself a valid CRDT op. Offline edits buffer locally and merge on reconnect — same CRDT semantics, just delayed."</p>
@@ -336,6 +349,8 @@ sequenceDiagram
         <li><strong>Per-user undo is non-obvious.</strong> "Undo applies the inverse operation as a new CRDT op" — this shows you've thought about multiplayer undo deeply, not just single-player Ctrl+Z.</li>
         <li><strong>Cursor optimization matters at scale.</strong> "Viewport-filtered, 15 Hz with client interpolation" — shows you understand the network cost of presence features.</li>
         <li><strong>Distinguish from Google Docs.</strong> Docs = linear text (sequence CRDT or OT). Whiteboard = spatial objects (map CRDT with LWW registers). Different data model, different indexing strategy.</li>
+        <li><strong>Mention concrete libraries.</strong> "Yjs or Automerge for CRDT implementation; RBush for client-side R-tree; protobuf or CBOR for wire format." Naming real tools shows production awareness.</li>
+        <li><strong>Address the "infinite" in infinite canvas.</strong> Coordinates are floating-point. There is no actual boundary. Zoom levels range from 10% (see the whole board) to 400% (pixel-level detail). At extreme zoom-out, the R-tree returns thousands of objects — client renders them as simplified thumbnails, not full detail.</li>
       </ol>
     </div>
   </section>
@@ -358,6 +373,7 @@ sequenceDiagram
     <div class="evolution-step"><div class="evolution-marker">3</div><div class="evolution-content"><h4>WebSocket + CRDT real-time sync</h4><p>Sub-100ms collaboration via WebSocket. CRDT ensures conflict-free merges at field level. Cursors visible in real time. True multiplayer experience.</p></div></div>
     <div class="evolution-step"><div class="evolution-marker">4</div><div class="evolution-content"><h4>Spatial indexing + viewport loading</h4><p>R-tree index enables boards with 100K+ objects. Only viewport objects sent to client. Pan/zoom triggers delta loading. Performance stays constant regardless of board size.</p></div></div>
     <div class="evolution-step"><div class="evolution-marker">5</div><div class="evolution-content"><h4>Offline support + per-user undo + compaction</h4><p>Offline edits buffer and merge on reconnect. Per-user undo stacks. Periodic CRDT compaction removes ancient tombstones. Production-grade collaboration at scale.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">6</div><div class="evolution-content"><h4>AI-assisted + embedded content + version history</h4><p>AI generates diagrams from text prompts, auto-layout for messy boards, smart grouping suggestions. Embed live data (Jira cards, Google Sheets). Full version history with named snapshots and branch/merge for board variants. Commenting and @mentions on specific objects.</p></div></div>
   </section>
 
 </main>

@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-google-calendar",
+  "title": "Google Calendar",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 210,
+    "s": 80,
+    "l": 55
+  },
+  "category": "Communication",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>A calendar and scheduling platform handling recurring events, calendar sharing, and free/busy queries for 1.5 billion users across every timezone. The hard parts: an RRULE recurrence engine that expands \"every Monday forever\" into concrete instances on read without infinite storage, a free/busy query system that resolves availability across N calendars in milliseconds, and a sync layer that keeps events consistent across web, mobile, and CalDAV clients even after offline edits. iCal defined the spec; Google Calendar made it work at planet scale.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Lead with RRULE expansion. This is THE differentiator. Explain \"store the rule, expand on read\" immediately — it shows you understand the core complexity rather than treating it as a simple CRUD app.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Timezones are not optional. Mention IANA timezone IDs (not UTC offsets) early. DST handling is the canonical \"sounds easy, is hard\" problem. Naming it explicitly earns credibility.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Free/busy is an interval problem. Frame it as merging intervals across expanded instances. Then optimize with bitmap caching. This shows algorithmic thinking applied to systems.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Lead with RRULE expansion. This is THE differentiator. Explain \"store the rule, expand on read\" immediately — it shows you understand the core complexity rather than treating it as a simple CRUD app.</li>\n      <li><span class=\"rubric-points\">+2</span> Timezones are not optional. Mention IANA timezone IDs (not UTC offsets) early. DST handling is the canonical \"sounds easy, is hard\" problem. Naming it explicitly earns credibility.</li>\n      <li><span class=\"rubric-points\">+2</span> Free/busy is an interval problem. Frame it as merging intervals across expanded instances. Then optimize with bitmap caching. This shows algorithmic thinking applied to systems.</li>\n      <li><span class=\"rubric-points\">+2</span> Single-instance exceptions are the tricky part. \"This Monday is moved to Tuesday\" as an override row merged at read time. Shows you've thought beyond the happy path.</li>\n      <li><span class=\"rubric-points\">+2</span> Sync conflict resolution. Mention field-level merge + vector clocks. This demonstrates distributed systems depth — calendar is inherently a multi-device, occasionally-offline system.</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Materialize all future instances of \"every Monday forever\"</li>\n        <li>Store timezone as UTC offset (-05:00) instead of IANA zone (America/New_York)</li>\n        <li>Free/busy query scans all events linearly</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

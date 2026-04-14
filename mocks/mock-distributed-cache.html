@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Mock Interview: Design a Distributed Cache — Mock Transcript</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 0; --accent-s: 70%; --accent-l: 52%; }
+
+.dialog { padding: 16px 20px; border-radius: 8px; margin-bottom: 12px; }
+.dialog-role { font-family: var(--font-mono); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+.dialog.interviewer { background: var(--bg-subtle); border-left: 3px solid var(--border-strong); }
+.dialog.interviewer .dialog-role { color: var(--text-muted); }
+.dialog.candidate { background: var(--accent-light); border-left: 3px solid var(--accent); }
+.dialog.candidate .dialog-role { color: var(--accent-text); }
+.dialog.annotation { background: hsl(38, 80%, 94%); border-left: 3px solid hsl(38, 70%, 50%); }
+.dialog.annotation .dialog-role { color: hsl(38, 70%, 30%); }
+.dialog p { font-size: 15px; line-height: 1.7; color: var(--text-secondary); margin: 0; }
+.dialog.candidate p { color: var(--text-primary); }
+</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Problem statement</h2></div>
+    <div class="prose">
+      <p>45-minute whiteboard mock: <strong>Design a Distributed Cache</strong>. The candidate should cover data partitioning, eviction strategies, replication, persistence trade-offs, and failure handling. This transcript shows a candidate with strong Redis internals knowledge who handles the failover challenge well.</p>
+      <p>Difficulty: <span class="hl-accent">Hard</span> | Duration: 45 min | Format: Whiteboard simulation</p>
+    </div>
+  </section>
+
+  <section class="section" id="transcript">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Transcript</h2></div>
+    <div class="prose">
+
+      <div class="dialog interviewer"><div class="dialog-role">Interviewer</div><p>Design a distributed cache system — something like Redis or Memcached, but from scratch. It needs to handle 10 million reads per second with sub-millisecond latency. Walk me through your design.</p></div>
+
+      <div class="dialog candidate"><div class="dialog-role">Candidate</div><p>Let me start with the data model and partitioning strategy. We're building a key-value store optimized for read-heavy workloads. To distribute 10M reads/sec across multiple nodes, I'd use hash-slot sharding — similar to Redis Cluster's approach. We divide the keyspace into 16,384 hash slots. Each key is mapped to a slot via CRC16(key) mod 16384. Slots are distributed across N shards. With 16 shards, each handles about 1,024 slots and roughly 625K reads/sec — well within what a single instance can handle with in-memory data structures. The slot-to-shard mapping is stored in a cluster metadata table that every client caches locally. This gives us O(1) routing — the client computes the slot, looks up the shard, and sends the request directly. No proxy layer needed for the hot path.</p></div>
+
+      <div class="dialog annotation"><div class="dialog-role">📝 Annotation</div><p>Starting with hash-slot sharding and citing the specific 16,384 number shows Redis Cluster knowledge. Computing the math (625K reads per shard) and explaining client-side routing demonstrates the candidate can reason about capacity from first principles.</p></div>
+
+      <div class="dialog interviewer"><div class="dialog-role">Interviewer</div><p>What eviction policies would you support, and how do you implement them efficiently?</p></div>
+
+      <div class="dialog candidate"><div class="dialog-role">Candidate</div><p>I'd support three eviction policies: LRU (least recently used), LFU (least frequently used), and TTL-based expiration. For LRU, maintaining a perfect LRU across millions of keys is expensive — a doubly-linked list with O(1) operations per access adds 16 bytes of pointer overhead per key and requires a lock on every read. Instead, I'd use an approximated LRU like Redis does: on eviction, sample 5 random keys and evict the one with the oldest access timestamp. This is surprisingly close to true LRU in practice — Redis benchmarks show it achieves 95% of perfect LRU's hit rate. For LFU, I'd use a logarithmic frequency counter (8 bits) combined with a decay factor — the counter probabilistically increments on access and decays over time, so recently-popular keys are favored over historically-popular-but-now-cold keys. TTL expiration uses a combination of lazy deletion (check TTL on access) and an active expiration loop that samples 20 keys with TTL set every 100ms, deleting expired ones, and repeating if more than 25% were expired.</p></div>
+
+      <div class="dialog annotation"><div class="dialog-role">📝 Annotation</div><p>Explaining why exact LRU is impractical and pivoting to sampled approximation shows depth. The Redis-style active+lazy TTL expiration with specific sampling parameters (20 keys, 100ms, 25% threshold) demonstrates internals knowledge beyond textbook answers.</p></div>
+
+      <div class="dialog interviewer"><div class="dialog-role">Interviewer</div><p>How do you handle persistence? Should a cache be persistent?</p></div>
+
+      <div class="dialog candidate"><div class="dialog-role">Candidate</div><p>This is a key trade-off. A pure cache doesn't need persistence — if the node restarts, it warms up from the backing store. But in practice, cold-start cache misses can overwhelm the database (thundering herd on restart). So I'd offer two persistence modes. First, RDB snapshots: periodically fork the process, and the child writes a point-in-time snapshot to disk using copy-on-write memory pages. This is efficient — the parent keeps serving reads while the child serializes. Snapshots happen every 5 minutes or after N writes, whichever comes first. The trade-off is you lose up to 5 minutes of data on crash. Second, AOF (append-only file): every write operation is logged to disk. You can tune fsync frequency — every write (safest, but 10x slower), every second (good balance), or never (OS decides). AOF gives better durability but slower writes and larger disk usage. I'd default to RDB for cache use cases and offer AOF for scenarios where the cache doubles as a primary data store, like session storage.</p></div>
+
+      <div class="dialog interviewer"><div class="dialog-role">Interviewer</div><p>Let's talk about replication. How do you keep replicas in sync?</p></div>
+
+      <div class="dialog candidate"><div class="dialog-role">Candidate</div><p>Each shard has one leader and one or two replicas. Replication is asynchronous by default — the leader applies the write, acknowledges the client, then streams the operation to replicas via a replication log. Replicas apply operations in order, maintaining a replication offset that the leader tracks. For initial sync (when a new replica joins or falls too far behind), the leader creates an RDB snapshot, sends it to the replica, then streams all buffered operations since the snapshot began. The replication log is a bounded in-memory buffer (say 64MB) — if a replica disconnects for too long and falls outside this buffer, it needs a full resync. Reads can optionally go to replicas for higher throughput, but clients must tolerate stale reads. For strong consistency needs, we can support a WAIT command: the client blocks until N replicas have acknowledged the write, trading latency for consistency.</p></div>
+
+      <div class="dialog annotation"><div class="dialog-role">📝 Annotation</div><p>The bounded replication buffer with full-resync fallback is exactly how Redis replication works. Offering WAIT as an opt-in consistency mechanism shows the candidate understands the consistency-latency spectrum rather than forcing one model.</p></div>
+
+      <div class="dialog interviewer"><div class="dialog-role">Interviewer</div><p>Here's the hard question: what happens during leader failover? Walk me through the failure scenario and its implications.</p></div>
+
+      <div class="dialog candidate"><div class="dialog-role">Candidate</div><p>Leader failover is where things get tricky because of the async replication. Here's the timeline: the leader crashes, and the Sentinel or gossip-based failure detector notices after 3-5 seconds (configurable timeout). The replicas elect a new leader — we use a Raft-lite protocol where the replica with the highest replication offset wins. The new leader starts accepting writes. But here's the critical caveat: since replication was async, the old leader may have acknowledged writes that never reached any replica. Those writes are permanently lost. This is the fundamental trade-off of async replication: we chose availability and low latency over consistency. To mitigate, we can do two things. First, use the WAIT command for writes that cannot be lost — the client only considers the write successful after at least one replica ACKs. Second, when the old leader comes back online, it has divergent data — writes it accepted that the new leader doesn't have. We detect this by comparing replication offsets and truncate the old leader's divergent suffix before it rejoins as a replica.</p></div>
+
+      <div class="dialog annotation"><div class="dialog-role">📝 Annotation</div><p>Explicitly calling out data loss during async failover — and not hand-waving it — is what separates strong candidates. The truncation of divergent history when the old leader rejoins is a subtle detail that shows deep distributed systems understanding.</p></div>
+
+      <div class="dialog interviewer"><div class="dialog-role">Interviewer</div><p>How do you handle cluster resharding — adding or removing nodes?</p></div>
+
+      <div class="dialog candidate"><div class="dialog-role">Candidate</div><p>When we add a new shard, we need to migrate some hash slots to it. The process is online — no downtime. We mark slots as "migrating" on the source and "importing" on the destination. During migration, the source checks each key on access: if the key's slot is migrating and the key still exists locally, serve it; if it's already been moved, return a MOVED redirect to the client. A background process iterates through keys in the migrating slots, serializing and sending them to the destination. Once all keys are moved, we update the cluster metadata atomically (the slot-to-shard mapping), and clients refresh their cached routing table on the next MOVED response. The entire process is incremental and doesn't block normal operations. We rate-limit the migration to avoid overwhelming the network — typically 64 keys per batch with a 1ms pause between batches.</p></div>
+
+      <div class="dialog interviewer"><div class="dialog-role">Interviewer</div><p>One more: how do you prevent cache stampede?</p></div>
+
+      <div class="dialog candidate"><div class="dialog-role">Candidate</div><p>Cache stampede happens when a hot key expires and hundreds of concurrent requests all miss the cache simultaneously, overwhelming the backend. Three defenses. First, probabilistic early expiration: instead of expiring at exactly TTL, each access computes <code>now - (TTL - random_delta) > expiry</code> — a small percentage of requests will "expire early" and refresh the cache before the actual TTL, ensuring the key is almost never truly cold. Second, locking: when a cache miss occurs, the first request acquires a distributed lock (SET key:lock NX EX 5) and fetches from the backend; all other requests wait briefly and retry, hitting the now-populated cache. Third, stale-while-revalidate: serve the expired value while one request refreshes it in the background. I'd implement all three and let users choose based on their consistency tolerance.</p></div>
+
+      <div class="dialog annotation"><div class="dialog-role">📝 Annotation</div><p>Three distinct stampede prevention strategies with implementation details (probabilistic early expiration, distributed lock, stale-while-revalidate) is comprehensive. Most candidates only mention one of these.</p></div>
+
+    </div>
+  </section>
+
+  <section class="section" id="annotations">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Key takeaways</h2></div>
+    <div class="prose">
+      <p><strong>What went well:</strong> The candidate demonstrated deep knowledge of Redis internals throughout — hash-slot sharding, approximated LRU, RDB vs AOF, async replication with bounded buffers, and online slot migration. The failover answer was particularly strong, explicitly acknowledging data loss from async replication and explaining divergent history truncation. The cache stampede answer was comprehensive with three distinct strategies.</p>
+      <p><strong>Areas for improvement:</strong> The candidate could have discussed memory optimization techniques (object encoding, ziplist vs hashtable thresholds) and multi-key operations across shards (how to handle MGET when keys span multiple slots). Mentioning client-side caching with server-assisted invalidation (Redis 6's tracking feature) would have been a nice addition.</p>
+      <p><strong>Overall assessment:</strong> Strong hire. The candidate clearly has hands-on experience with distributed caching systems and can reason about trade-offs at every level — from data structure choice to failure semantics.</p>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

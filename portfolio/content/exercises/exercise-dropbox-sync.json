@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-dropbox-sync",
+  "title": "Dropbox Sync",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 215,
+    "s": 75,
+    "l": 48
+  },
+  "category": "Storage & Data",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>A two-way file sync engine: every file in a user's \"Dropbox\" folder should appear identically across all their devices within seconds of any change. The hard parts: a content-addressable block store that deduplicates chunks across users for massive storage savings; a metadata service that tells clients exactly which blocks to fetch/push per file version; and a sync loop that reconciles local file-system changes with remote state while handling conflicts, offline edits, and flaky networks. Dropbox stores exabytes of user data; clients sync ~billions of file events per day.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Lead with chunking + content-addressable storage. This is THE answer to \"how do you make this efficient?\" Most candidates miss this and just \"upload the file to S3.\"</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Separate metadata from blocks. Metadata is transactional (needs DB); blocks are immutable byte bags (object store). Don't conflate them.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Conflict resolution is \"save both.\" Not OT/CRDT. Name this explicitly — it shows you understand the scope of a sync engine vs a collab editor.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Lead with chunking + content-addressable storage. This is THE answer to \"how do you make this efficient?\" Most candidates miss this and just \"upload the file to S3.\"</li>\n      <li><span class=\"rubric-points\">+2</span> Separate metadata from blocks. Metadata is transactional (needs DB); blocks are immutable byte bags (object store). Don't conflate them.</li>\n      <li><span class=\"rubric-points\">+2</span> Conflict resolution is \"save both.\" Not OT/CRDT. Name this explicitly — it shows you understand the scope of a sync engine vs a collab editor.</li>\n      <li><span class=\"rubric-points\">+2</span> Delta sync via chunk hashes. 99% of candidates think \"rsync-style diff\" — the correct Dropbox answer is \"chunked CAS, query missing hashes, upload only those.\"</li>\n      <li><span class=\"rubric-points\">+2</span> Offline-first is the sync loop's existence. If you don't have a client-side SQLite holding pending ops + a reconcile step, your design assumes online-always.</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>No back-of-envelope estimation — jumps straight into components without quantifying scale for Dropbox Sync</li>\n        <li>Single point of failure — no replication, failover, or redundancy discussed</li>\n        <li>Ignores data model and storage choices — hand-waves the database layer</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

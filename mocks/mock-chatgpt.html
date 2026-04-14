@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Mock Interview: Design ChatGPT — Mock Transcript</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 170; --accent-s: 65%; --accent-l: 42%; }
+
+.dialog { padding: 16px 20px; border-radius: 8px; margin-bottom: 12px; }
+.dialog-role { font-family: var(--font-mono); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+.dialog.interviewer { background: var(--bg-subtle); border-left: 3px solid var(--border-strong); }
+.dialog.interviewer .dialog-role { color: var(--text-muted); }
+.dialog.candidate { background: var(--accent-light); border-left: 3px solid var(--accent); }
+.dialog.candidate .dialog-role { color: var(--accent-text); }
+.dialog.annotation { background: hsl(38, 80%, 94%); border-left: 3px solid hsl(38, 70%, 50%); }
+.dialog.annotation .dialog-role { color: hsl(38, 70%, 30%); }
+.dialog p { font-size: 15px; line-height: 1.7; color: var(--text-secondary); margin: 0; }
+.dialog.candidate p { color: var(--text-primary); }
+</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Problem statement</h2></div>
+    <div class="prose">
+      <p>45-minute whiteboard mock: <strong>Design ChatGPT</strong>. The candidate should cover LLM serving infrastructure, token generation, conversation management, safety pipelines, and scaling inference. This transcript captures a candidate with strong ML infrastructure knowledge who handles the serving optimization and safety questions well.</p>
+      <p>Difficulty: <span class="hl-accent">Hard</span> | Duration: 45 min | Format: Whiteboard simulation</p>
+    </div>
+  </section>
+
+  <section class="section" id="transcript">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Transcript</h2></div>
+    <div class="prose">
+
+      <div class="dialog interviewer"><div class="dialog-role">Interviewer</div><p>Design ChatGPT — a conversational AI service that serves a large language model to millions of concurrent users. Users send messages and receive streamed responses. Walk me through the system architecture.</p></div>
+
+      <div class="dialog candidate"><div class="dialog-role">Candidate</div><p>The core challenge here is inference serving at scale. An LLM generates tokens autoregressively — each token depends on all previous tokens. For a model like GPT-4 with hundreds of billions of parameters, a single forward pass takes significant GPU time. The key optimization is the KV-cache: during generation, each transformer layer produces key-value attention vectors for every token in the context. Instead of recomputing these for all previous tokens on every step, we cache them in GPU memory. So for a 2000-token context generating token 2001, we only compute attention for the new token against the cached KV pairs. This reduces per-token compute from O(n) to O(1) relative to context length, but it uses substantial GPU memory — roughly 2 bytes per parameter per layer per token for the KV pairs. For a 175B model with a 4K context, the KV-cache alone can consume 20+ GB per active request.</p></div>
+
+      <div class="dialog annotation"><div class="dialog-role">📝 Annotation</div><p>Leading with the KV-cache and its memory implications shows the candidate understands the fundamental bottleneck of LLM serving. Quantifying the memory cost (2 bytes per parameter per layer per token) demonstrates this is not surface-level knowledge.</p></div>
+
+      <div class="dialog interviewer"><div class="dialog-role">Interviewer</div><p>With that memory constraint, how do you serve many users concurrently on limited GPU resources?</p></div>
+
+      <div class="dialog candidate"><div class="dialog-role">Candidate</div><p>This is where continuous batching comes in. The naive approach is static batching: collect N requests, process them together, and return all results. But LLM generation has variable output lengths — one request might generate 50 tokens while another generates 2000. With static batching, short requests waste GPU cycles waiting for the longest request in the batch to finish. Continuous batching (also called iteration-level batching, pioneered by the Orca paper) solves this: after each token generation step, we check if any request in the batch has finished (hit EOS or max tokens). If so, we evict it and immediately slot in a new request from the queue. The GPU is never idle waiting for the slowest request. Combined with PagedAttention from vLLM — which manages KV-cache memory like virtual memory pages, eliminating fragmentation — we can achieve 2-4x higher throughput compared to static batching. In practice, we'd use a serving framework like vLLM or TensorRT-LLM that implements both optimizations.</p></div>
+
+      <div class="dialog annotation"><div class="dialog-role">📝 Annotation</div><p>Naming continuous batching, the Orca paper, and PagedAttention/vLLM shows the candidate is current on LLM serving research. The comparison to virtual memory pages for KV-cache management is a precise analogy.</p></div>
+
+      <div class="dialog interviewer"><div class="dialog-role">Interviewer</div><p>How do you distribute the model across multiple GPUs?</p></div>
+
+      <div class="dialog candidate"><div class="dialog-role">Candidate</div><p>A 175B parameter model at FP16 is about 350GB — far more than a single GPU's memory (80GB for an A100). We need model parallelism. I'd use tensor parallelism within a node: split each transformer layer's weight matrices across 8 GPUs on a single server connected by NVLink (900 GB/s bandwidth). Each GPU computes a slice of the matrix multiplication, then they all-reduce the partial results. This works well within a node because NVLink has high enough bandwidth to make the communication overhead acceptable. For even larger models that don't fit on 8 GPUs, we add pipeline parallelism across nodes: different layers run on different servers. Server 1 runs layers 1-24, server 2 runs layers 25-48, etc. The micro-batch pipeline keeps all stages busy. The trade-off is that pipeline parallelism adds latency per token (each token must traverse all stages), while tensor parallelism adds communication overhead but no latency. For serving (vs training), we prefer tensor parallelism because per-token latency directly impacts user experience.</p></div>
+
+      <div class="dialog interviewer"><div class="dialog-role">Interviewer</div><p>What about the conversation management? How do you handle multi-turn conversations?</p></div>
+
+      <div class="dialog candidate"><div class="dialog-role">Candidate</div><p>Each conversation has a unique conversation_id. The message history is stored in a database — I'd use DynamoDB or Cassandra keyed by (user_id, conversation_id) with messages as a sorted list by timestamp. When the user sends a new message, the API server fetches the full conversation history, constructs the prompt (system message + all previous turns + new user message), and sends it to the inference service. The critical optimization here is KV-cache reuse across turns. If the user is in the same conversation and the previous turn's KV-cache is still in GPU memory, we only need to process the new user message tokens — the cached KV pairs for the conversation prefix are reused. This is called prefix caching or prompt caching. We'd maintain a least-recently-used cache of KV states keyed by a hash of the prompt prefix. For long conversations that exceed the model's context window (say 128K tokens), we need a summarization strategy: either truncate early messages, or run a summarization pass that condenses the first N turns into a compact summary that's prepended to the recent turns.</p></div>
+
+      <div class="dialog annotation"><div class="dialog-role">📝 Annotation</div><p>KV-cache reuse across conversation turns (prefix caching) is a key optimization that directly impacts cost and latency. The summarization strategy for long conversations shows the candidate thinks about edge cases beyond the happy path.</p></div>
+
+      <div class="dialog interviewer"><div class="dialog-role">Interviewer</div><p>How does the streaming response work? Users see tokens appear one by one.</p></div>
+
+      <div class="dialog candidate"><div class="dialog-role">Candidate</div><p>The streaming is implemented via Server-Sent Events (SSE). The client opens an HTTP connection to our API, and we keep it open. As the inference service generates each token, it pushes it to a response buffer. The API server reads from this buffer and sends each token as an SSE event: <code>data: {"token": "Hello"}\n\n</code>. The client renders tokens incrementally as they arrive. The inference service communicates with the API server via gRPC streaming — the inference server streams generated tokens back, and the API server relays them as SSE events. This double-streaming architecture (gRPC inference → API server → SSE to client) adds minimal latency because each hop forwards the token immediately without buffering. We include a heartbeat event every 15 seconds to keep the connection alive through proxies and load balancers. If the connection drops mid-generation, the client can resume by sending the conversation_id — we store the partial response server-side and either continue generation or return the already-generated tokens.</p></div>
+
+      <div class="dialog interviewer"><div class="dialog-role">Interviewer</div><p>Let's talk about safety. How do you prevent the model from generating harmful content?</p></div>
+
+      <div class="dialog candidate"><div class="dialog-role">Candidate</div><p>The safety pipeline has three layers. First, input filtering: before the prompt reaches the model, a lightweight classifier checks for prompt injection attempts, jailbreak patterns, and requests for clearly prohibited content (CSAM, weapons instructions). This classifier runs on CPU and adds less than 10ms latency. If it flags the input, we return a refusal without invoking the expensive GPU inference. Second, the model itself has been aligned through RLHF (Reinforcement Learning from Human Feedback) and constitutional AI techniques — it's trained to refuse harmful requests. This is the primary safety layer but it's not perfect. Third, output filtering: as tokens are generated, a streaming classifier monitors the output for policy violations — hate speech, personal information leakage, hallucinated medical/legal advice flagged as authoritative. If the output classifier triggers mid-stream, we stop generation, discard the problematic tokens, and append a safety message. For high-stakes categories (self-harm, violence), we also log the interaction for human review. The safety team continuously red-teams the system and updates classifier rules weekly.</p></div>
+
+      <div class="dialog annotation"><div class="dialog-role">📝 Annotation</div><p>The three-layer safety pipeline (input filter, aligned model, output filter) with streaming output classification is how production LLM services actually work. Mentioning the latency budget (10ms for input classifier) shows the candidate balances safety with user experience.</p></div>
+
+      <div class="dialog interviewer"><div class="dialog-role">Interviewer</div><p>Any other optimizations you'd consider for reducing inference cost?</p></div>
+
+      <div class="dialog candidate"><div class="dialog-role">Candidate</div><p>Several important ones. First, speculative decoding: use a smaller, faster "draft" model (say 7B parameters) to generate a candidate sequence of K tokens (say K=4), then verify all K tokens in a single forward pass of the large model. If the large model agrees with the draft tokens, we've generated 4 tokens for the cost of 1 large-model forward pass plus the cheap draft. Acceptance rates of 70-80% are common for well-matched draft models. Second, quantization: running the model at INT8 or even INT4 instead of FP16 halves or quarters the memory footprint and increases throughput, with minimal quality degradation for well-calibrated quantization (GPTQ or AWQ methods). Third, a routing layer that directs simple queries (factual lookups, simple math) to a smaller, cheaper model and only sends complex reasoning tasks to the full model. This is essentially a mixture-of-experts at the service level — a lightweight classifier decides which model tier to invoke. Combined, these optimizations can reduce serving cost by 3-5x without meaningful quality loss for the median query.</p></div>
+
+      <div class="dialog annotation"><div class="dialog-role">📝 Annotation</div><p>Mentioning speculative decoding is a differentiator — it's a cutting-edge technique that most system design candidates won't know. The service-level model routing (small model for easy queries) shows cost-awareness beyond pure technical optimization.</p></div>
+
+    </div>
+  </section>
+
+  <section class="section" id="annotations">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Key takeaways</h2></div>
+    <div class="prose">
+      <p><strong>What went well:</strong> The candidate demonstrated deep ML infrastructure knowledge throughout: KV-cache mechanics with memory quantification, continuous batching with the Orca paper reference, tensor vs pipeline parallelism trade-offs, and prefix caching for multi-turn conversations. The safety pipeline was comprehensive and practical. Mentioning speculative decoding and quantization (GPTQ/AWQ) as cost optimizations showed the candidate is current on LLM serving research.</p>
+      <p><strong>Areas for improvement:</strong> The candidate could have discussed rate limiting and fair scheduling across users (preventing one user from monopolizing GPU resources), cost attribution per request for billing purposes, and the fine-tuning/RAG pipeline for enterprise customers who want domain-specific models. A/B testing model versions in production (shadow scoring, interleaved trials) was also not covered.</p>
+      <p><strong>Overall assessment:</strong> Strong hire. This is a candidate with clear hands-on experience in ML infrastructure. The combination of low-level optimization knowledge (KV-cache, tensor parallelism, speculative decoding) with systems-level concerns (streaming architecture, safety pipeline, cost optimization) makes this a well-rounded answer for a very challenging problem.</p>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-reddit-full",
+  "title": "Reddit",
+  "problemNumber": "60",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "60 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 16,
+    "s": 100,
+    "l": 50
+  },
+  "category": "Social & Feed",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>1.7 billion monthly visits across millions of subreddit communities. The hard parts: a Hot ranking algorithm that decays old posts and surfaces fresh content without scanning every post on every page load, nested comment trees stored efficiently for fast subtree retrieval and sorted by Wilson score, and a vote counting pipeline that handles 50K votes/sec without hot-row contention or data loss. Upvotes, downvotes, karma, moderation, subreddit-scoped feeds -- same bones as any community platform, but at massive scale.</p>\n      <p><strong>Time budget:</strong> 60 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Lead with the Hot ranking formula. \"log10(votes) + time/45000 -- old posts decay automatically, no re-scoring needed.\" This shows you understand the elegance of the time-based decay approach.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Name materialized path explicitly for comments. \"Each comment stores /root/parent/self as its path. One LIKE prefix query fetches the whole subtree.\" This immediately distinguishes you from candidates who say \"recursive CTE.\"</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Vote pipeline = Redis + Kafka + Postgres. Three layers: dedup (SET), fast count (INCR), durability (Kafka to Postgres batch). Shows you understand the tension between speed and durability.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Lead with the Hot ranking formula. \"log10(votes) + time/45000 -- old posts decay automatically, no re-scoring needed.\" This shows you understand the elegance of the time-based decay approach.</li>\n      <li><span class=\"rubric-points\">+2</span> Name materialized path explicitly for comments. \"Each comment stores /root/parent/self as its path. One LIKE prefix query fetches the whole subtree.\" This immediately distinguishes you from candidates who say \"recursive CTE.\"</li>\n      <li><span class=\"rubric-points\">+1</span> Vote pipeline = Redis + Kafka + Postgres. Three layers: dedup (SET), fast count (INCR), durability (Kafka to Postgres batch). Shows you understand the tension between speed and durability.</li>\n      <li><span class=\"rubric-points\">+1</span> Explain hybrid fan-out. \"Small subs fan-out on write, large subs fan-out on read.\" Same insight as Twitter's celebrity problem. Interviewers love seeing you apply cross-system patterns.</li>\n      <li><span class=\"rubric-points\">+1</span> Mention Wilson score for comment sorting. \"Raw vote count is biased toward old comments. Wilson score confidence interval normalizes for sample size.\" This statistical nuance is a strong signal.</li>\n      <li><span class=\"rubric-points\">+1</span> Cap comment depth at ~10. \"Materialized paths grow linearly with depth. Reddit caps at 10 levels; deeper replies collapse behind a link.\" Shows production awareness.</li>\n      <li><span class=\"rubric-points\">+1</span> Distinguish hot vs controversial vs best. Hot = votes + time decay (for feeds). Best = Wilson score (for comments). Controversial = high total votes but near 50/50 split. Showing you know each algorithm signals depth.</li>\n      <li><span class=\"rubric-points\">+1</span> Address the celebrity problem for feeds. \"When r/AskReddit (40M subscribers) gets a new post, we don't push to 40M feeds. Fan-out on read for large subs, fan-out on write for small subs.\" This is the same insight Twitter had with celebrity tweets.</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Recalculate Hot ranking by scanning all posts on every feed load</li>\n        <li>Store comment tree as adjacency list + recursive query (parent_id FK)</li>\n        <li>Single vote counter row per post in Postgres (UPDATE posts SET score = score + 1)</li>\n        <li>Build home feed by querying each subscribed subreddit's DB shard at read time</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

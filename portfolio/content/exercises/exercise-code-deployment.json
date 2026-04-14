@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-code-deployment",
+  "title": "Code Deployment Pipeline",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 200,
+    "s": 70,
+    "l": 48
+  },
+  "category": "Infrastructure",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>Developer pushes code. CI builds and tests inside isolated ephemeral containers. An immutable, SHA-tagged artifact is stored in an S3-backed content-addressed store. CD does a canary deploy to 1% of traffic, runs automated statistical analysis comparing canary vs baseline metrics over 15 minutes, then progressively promotes: 10% → 50% → 100%. Rollback = re-deploy the previous artifact — no new build needed. Feature flags decouple deploy from release: ship code dark, enable for 1% → 100% independently. Google, Netflix, Meta — same pattern, different scale.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Lead with immutability. \"Artifacts are SHA-tagged and never overwritten. Rollback is just re-pointing to the previous SHA.\" This single idea simplifies everything.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Name the statistical test. \"Mann-Whitney U for canary analysis\" — shows you've thought beyond \"just check if errors go up.\"</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Distinguish deploy from release. \"Deploy puts code on servers. Release exposes it to users. Feature flags let you do these independently.\" This nuance impresses.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Lead with immutability. \"Artifacts are SHA-tagged and never overwritten. Rollback is just re-pointing to the previous SHA.\" This single idea simplifies everything.</li>\n      <li><span class=\"rubric-points\">+2</span> Name the statistical test. \"Mann-Whitney U for canary analysis\" — shows you've thought beyond \"just check if errors go up.\"</li>\n      <li><span class=\"rubric-points\">+2</span> Distinguish deploy from release. \"Deploy puts code on servers. Release exposes it to users. Feature flags let you do these independently.\" This nuance impresses.</li>\n      <li><span class=\"rubric-points\">+2</span> Talk about blast radius. \"Canary at 1% means worst case, 1% of users see a regression for 15 minutes before auto-rollback.\" Quantify the risk.</li>\n      <li><span class=\"rubric-points\">+2</span> Mention hermetic builds. \"No network during build. Dependencies from a pre-populated cache. Same commit = same artifact, always.\" Production-grade insight.</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Deploy on Friday at 5 PM — \"it's just a small change\"</li>\n        <li>Mutable artifacts — \"just SSH in and patch the JAR on the production server\"</li>\n        <li>All-at-once deploy with no canary — \"we tested it in staging, ship it\"</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

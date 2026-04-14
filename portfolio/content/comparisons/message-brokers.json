@@ -1,0 +1,47 @@
+{
+  "slug": "message-brokers",
+  "title": "Message Brokers Compared",
+  "problemNumber": null,
+  "difficulty": null,
+  "heroDescription": "",
+  "tags": [],
+  "accent": {
+    "h": 270,
+    "s": 55,
+    "l": 50
+  },
+  "category": "Technology Comparisons",
+  "blurb": "Every distributed system eventually needs asynchronous communication. The wrong broker choice leads to lost messages, impossible replay, or a $50k/month AWS bill. Kafka, RabbitMQ, SQS, and Redis pub/sub each solve a diff",
+  "sections": [
+    {
+      "id": "problem",
+      "label": "Why this matters",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Why this matters</h2></div>\n    <div class=\"prose\">\n      <p>Every distributed system eventually needs asynchronous communication. The wrong broker choice leads to lost messages, impossible replay, or a $50k/month AWS bill. Kafka, RabbitMQ, SQS, and Redis pub/sub each solve a different slice of the problem — and interviewers expect you to know which slice.</p>\n      <p>This comparison gives you a <span class=\"hl-accent\">single decision framework</span> so you can justify your choice in 30 seconds during a system design round.</p>\n    </div>"
+    },
+    {
+      "id": "comparison",
+      "label": "Head-to-head comparison",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Head-to-head comparison</h2></div>\n    <table class=\"algo-table\">\n      <thead>\n        <tr>\n          <th>Broker</th>\n          <th>Ordering</th>\n          <th>Durability</th>\n          <th>Throughput</th>\n          <th>Consumer model</th>\n          <th>Replay</th>\n          <th>Use case</th>\n        </tr>\n      </thead>\n      <tbody>\n        <tr>\n          <td class=\"algo-name\">Apache Kafka</td>\n          <td>Per-partition FIFO</td>\n          <td>Replicated commit log on disk</td>\n          <td>Millions msg/s per cluster</td>\n          <td>Pull-based consumer groups</td>\n          <td>Yes — offset rewind</td>\n          <td>Event sourcing, CDC, analytics pipelines</td>\n        </tr>\n        <tr>\n          <td class=\"algo-name\">RabbitMQ</td>\n          <td>Per-queue FIFO (no global)</td>\n          <td>Durable queues + publisher confirms</td>\n          <td>Tens of thousands msg/s</td>\n          <td>Push to consumers, ack-based</td>\n          <td>No — consumed = gone</td>\n          <td>Task queues, complex routing, RPC</td>\n        </tr>\n        <tr>\n          <td class=\"algo-name\">AWS SQS</td>\n          <td>Best-effort (FIFO queues available)</td>\n          <td>Managed, replicated across AZs</td>\n          <td>Nearly unlimited (managed)</td>\n          <td>Pull-based, visibility timeout</td>\n          <td>No — once consumed + deleted</td>\n          <td>Serverless decoupling, Lambda triggers</td>\n        </tr>\n        <tr>\n          <td class=\"algo-name\">Redis Pub/Sub</td>\n          <td>Per-channel publish order</td>\n          <td>None — in-memory, fire-and-forget</td>\n          <td>Very high for small payloads</td>\n          <td>Push to all subscribers</td>\n          <td>No — missed = lost</td>\n          <td>Real-time notifications, cache invalidation</td>\n        </tr>\n      </tbody>\n    </table>\n    <div class=\"prose\">\n      <p><strong>Key insight:</strong> Kafka is a <em>log</em>; RabbitMQ is a <em>queue</em>; SQS is a <em>managed queue</em>; Redis pub/sub is a <em>broadcast channel</em>. The data model determines everything else.</p>\n    </div>"
+    },
+    {
+      "id": "decision",
+      "label": "Decision flowchart",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Decision flowchart</h2></div>\n    <div class=\"prose\">\n      <p>Use this mental model during interviews:</p>\n      <ol>\n        <li><strong>Need replay + ordering?</strong> → <span class=\"hl-accent\">Kafka</span>. Event sourcing, audit logs, CDC streams, analytics — anything where consumers must reprocess history.</li>\n        <li><strong>Need complex routing (topic/fanout/headers)?</strong> → <span class=\"hl-accent\">RabbitMQ</span>. Its exchange model (direct, topic, fanout, headers) gives routing flexibility no other broker matches.</li>\n        <li><strong>Serverless / zero-ops?</strong> → <span class=\"hl-accent\">AWS SQS</span>. No brokers to manage. Scales to zero. Pay-per-message. Pairs with Lambda for event-driven architectures.</li>\n        <li><strong>Fire-and-forget real-time broadcast?</strong> → <span class=\"hl-accent\">Redis Pub/Sub</span>. Cache invalidation, presence updates, live scores — when losing the occasional message is acceptable.</li>\n      </ol>\n      <p><strong>The interview answer:</strong> \"Use Kafka when you need replay + ordering. RabbitMQ for complex routing. SQS for serverless. Redis pub/sub for fire-and-forget real-time.\"</p>\n    </div>"
+    },
+    {
+      "id": "deep-dive",
+      "label": "When to pick what — deeper context",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">When to pick what — deeper context</h2></div>\n    <div class=\"prose\">\n      <h3>Kafka deep considerations</h3>\n      <p>Kafka shines when you have multiple consumers that each need the full stream. Consumer groups give you both pub/sub semantics (different groups) and queue semantics (same group). The retention-based model means a new analytics pipeline can start from day-one data. Downside: operational complexity (ZooKeeper/KRaft, partition rebalancing, schema registry).</p>\n\n      <h3>RabbitMQ deep considerations</h3>\n      <p>RabbitMQ's AMQP model gives you dead-letter exchanges, TTL, priority queues, and delayed messages out of the box. It's the best choice for <strong>task distribution</strong> where you want exactly-once processing with manual acks. Not ideal for high-throughput streaming — at ~50K msg/s you'll hit limits.</p>\n\n      <h3>SQS deep considerations</h3>\n      <p>SQS Standard queues offer at-least-once delivery with best-effort ordering. FIFO queues guarantee exactly-once and ordering but cap at 300 msg/s (3,000 with batching). The visibility timeout model is simple but can cause duplicates if processing exceeds the timeout. Use with DLQ for poison-pill handling.</p>\n\n      <h3>Redis Pub/Sub deep considerations</h3>\n      <p>Zero persistence means if a subscriber is down when a message publishes, it's gone forever. Redis Streams (different from pub/sub) add persistence and consumer groups — essentially Redis's answer to Kafka. In interviews, clarify whether you mean pub/sub or Streams.</p>\n\n      <h3>Hybrid patterns</h3>\n      <p>Real systems often combine brokers: Kafka for the event backbone + SQS for individual service task queues + Redis pub/sub for WebSocket fan-out. Name the pattern and the interviewer knows you've built real systems.</p>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 3
+}

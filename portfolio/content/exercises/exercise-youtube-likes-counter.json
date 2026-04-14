@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-youtube-likes-counter",
+  "title": "YouTube Likes Counter",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 0,
+    "s": 80,
+    "l": 50
+  },
+  "category": "Social & Feed",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>A distributed counter system that handles 10M+ increments per second across 10B+ videos with eventual consistency for display. The hard parts: a sharded counter architecture that absorbs bursty write traffic without hot rows, a deduplication layer ensuring each user can like a video only once, and a read path from Redis cache that serves stale-but-fast counts within ~5 seconds of real-time. Instagram solved media pipelines; this problem isolates the counter subsystem at YouTube's write volume.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Start with the write path, not the read path. The hard part is absorbing 500K writes/sec without hot rows. Most candidates jump to \"use Redis INCR\" — which works until you need durability, dedup, and crash recovery.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Name the sharded counter pattern explicitly. \"I'll use N counter shards per video, flush deltas periodically\" shows you understand distributed counting. This is the key insight the interviewer is looking for.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Don't forget dedup. A counter without dedup is a broken counter. Mention Bloom filter + authoritative store as a two-tier approach. Discuss the false-positive tradeoff.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Start with the write path, not the read path. The hard part is absorbing 500K writes/sec without hot rows. Most candidates jump to \"use Redis INCR\" — which works until you need durability, dedup, and crash recovery.</li>\n      <li><span class=\"rubric-points\">+2</span> Name the sharded counter pattern explicitly. \"I'll use N counter shards per video, flush deltas periodically\" shows you understand distributed counting. This is the key insight the interviewer is looking for.</li>\n      <li><span class=\"rubric-points\">+2</span> Don't forget dedup. A counter without dedup is a broken counter. Mention Bloom filter + authoritative store as a two-tier approach. Discuss the false-positive tradeoff.</li>\n      <li><span class=\"rubric-points\">+2</span> Clarify consistency requirements early. \"Is exact real-time count needed, or is ~5s eventual consistency OK?\" This question shows maturity. YouTube shows approximate counts — that's a hint.</li>\n      <li><span class=\"rubric-points\">+2</span> Kafka is the shock absorber. Explain why async is safe here: unlike a payment, a like being delayed by 5 seconds is invisible to the user. Kafka decouples the write spike from the DB capacity.</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Single row UPDATE counter per video (hot row)</li>\n        <li>Synchronous Cassandra write on every like</li>\n        <li>No dedup — user likes a video 1000 times</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

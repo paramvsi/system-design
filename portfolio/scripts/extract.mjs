@@ -10,7 +10,7 @@ import url from "node:url";
 const __filename = url.fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 
-// CLI: node scripts/extract.mjs [--kind=problems|concepts|postmortems|exercises]
+// CLI: node scripts/extract.mjs [--kind=problems|concepts|postmortems|exercises|comparisons|mocks]
 const KIND = (process.argv.find((a) => a.startsWith("--kind=")) || "--kind=problems")
   .split("=")[1];
 
@@ -20,18 +20,24 @@ const SRC_DIR =
   KIND === "concepts"    ? path.resolve(ROOT_DIR, "concepts") :
   KIND === "postmortems" ? path.resolve(ROOT_DIR, "postmortems") :
   KIND === "exercises"   ? path.resolve(ROOT_DIR, "exercises") :
+  KIND === "comparisons" ? path.resolve(ROOT_DIR, "comparisons") :
+  KIND === "mocks"       ? path.resolve(ROOT_DIR, "mocks") :
   ROOT_DIR;
 
 const CONTENT_DIR =
   KIND === "concepts"    ? path.resolve(__dirname, "..", "content", "concepts") :
   KIND === "postmortems" ? path.resolve(__dirname, "..", "content", "postmortems") :
   KIND === "exercises"   ? path.resolve(__dirname, "..", "content", "exercises") :
+  KIND === "comparisons" ? path.resolve(__dirname, "..", "content", "comparisons") :
+  KIND === "mocks"       ? path.resolve(__dirname, "..", "content", "mocks") :
   path.resolve(__dirname, "..", "content");
 
 const STYLES_DIR =
   KIND === "concepts"    ? path.resolve(__dirname, "..", "public", "styles", "concepts") :
   KIND === "postmortems" ? path.resolve(__dirname, "..", "public", "styles", "postmortems") :
   KIND === "exercises"   ? path.resolve(__dirname, "..", "public", "styles", "exercises") :
+  KIND === "comparisons" ? path.resolve(__dirname, "..", "public", "styles", "comparisons") :
+  KIND === "mocks"       ? path.resolve(__dirname, "..", "public", "styles", "mocks") :
   path.resolve(__dirname, "..", "public", "styles");
 
 const SKIP = new Set([
@@ -53,6 +59,10 @@ const KNOWN_IDS = new Set([
   "tldr","timeline","rootcause","impact","lessons","concepts-used",
   // Exercise sections
   "prompt","hints","rubric","redflags","reference-answer",
+  // Comparison sections
+  "comparison","decision",
+  // Mock transcript sections
+  "transcript","annotations",
 ]);
 const isKnownSectionId = (id) => KNOWN_IDS.has(id) || id.startsWith("deep-dive");
 
@@ -227,29 +237,69 @@ const POSTMORTEM_CATEGORIES = {
 };
 
 const EXERCISE_CATEGORIES = {
-  "Social & Feed": [
-    "exercise-instagram", "exercise-news-feed",
-  ],
   "Communication": [
-    "exercise-slack-discord", "exercise-whatsapp", "exercise-notification-system",
-  ],
-  "Media & Streaming": [
-    "exercise-youtube-netflix",
-  ],
-  "Search & Discovery": [
-    "exercise-search-engine",
-  ],
-  "Marketplace & Booking": [
-    "exercise-uber", "exercise-doordash", "exercise-ticketmaster",
-  ],
-  "Storage & Data": [
-    "exercise-google-drive",
+    "exercise-whatsapp", "exercise-notification-system", "exercise-video-conferencing",
+    "exercise-collaborative-whiteboard", "exercise-gmail", "exercise-google-calendar",
+    "exercise-reminder-alert", "exercise-slack-discord",
   ],
   "Financial & Trading": [
-    "exercise-payment-gateway", "exercise-stock-exchange",
+    "exercise-bidding-platform", "exercise-payment-gateway", "exercise-crypto-exchange",
+    "exercise-google-ads", "exercise-stock-exchange", "exercise-fraud-detection",
+    "exercise-stock-trading-platform",
+  ],
+  "Gaming": [
+    "exercise-pubg",
   ],
   "Infrastructure": [
-    "exercise-rate-limiter", "exercise-url-shortener",
+    "exercise-distributed-queue", "exercise-count-active-users",
+    "exercise-distributed-job-scheduler", "exercise-distributed-locking",
+    "exercise-design-cdn", "exercise-design-chatgpt", "exercise-code-deployment",
+    "exercise-distributed-cache", "exercise-leetcode-judge", "exercise-metrics-monitoring",
+    "exercise-rate-limiter", "exercise-unique-id-generator",
+  ],
+  "Marketplace & Booking": [
+    "exercise-ticketmaster", "exercise-uber", "exercise-ecommerce", "exercise-airbnb",
+    "exercise-doordash", "exercise-flash-sale", "exercise-shopping-cart",
+    "exercise-url-shortener",
+  ],
+  "Media & Streaming": [
+    "exercise-youtube-netflix", "exercise-live-streaming",
+  ],
+  "Search & Discovery": [
+    "exercise-google-maps", "exercise-google-news", "exercise-typeahead-suggestions",
+    "exercise-search-engine", "exercise-web-crawler", "exercise-yelp-google-places",
+  ],
+  "Social & Feed": [
+    "exercise-leaderboard", "exercise-reddit-comments", "exercise-mutual-connections",
+    "exercise-recommendation-algorithm", "exercise-ad-click-aggregator",
+    "exercise-instagram", "exercise-news-feed", "exercise-reddit-full",
+    "exercise-twitter-trending", "exercise-youtube-likes-counter",
+  ],
+  "Storage & Data": [
+    "exercise-google-docs", "exercise-s3-object-storage", "exercise-distributed-logging",
+    "exercise-dropbox-sync", "exercise-google-drive", "exercise-key-value-store",
+  ],
+};
+
+const COMPARISON_CATEGORIES = {
+  "Technology Comparisons": [
+    "message-brokers", "databases", "caching-strategies",
+    "api-protocols", "consistency-models",
+  ],
+};
+
+const MOCK_CATEGORIES = {
+  "Social & Media": [
+    "mock-instagram",
+  ],
+  "Marketplace & Booking": [
+    "mock-uber",
+  ],
+  "Infrastructure": [
+    "mock-distributed-cache", "mock-chatgpt",
+  ],
+  "Financial & Trading": [
+    "mock-payment-gateway",
   ],
 };
 
@@ -257,6 +307,8 @@ const CATEGORIES =
   KIND === "concepts"    ? CONCEPT_CATEGORIES :
   KIND === "postmortems" ? POSTMORTEM_CATEGORIES :
   KIND === "exercises"   ? EXERCISE_CATEGORIES :
+  KIND === "comparisons" ? COMPARISON_CATEGORIES :
+  KIND === "mocks"       ? MOCK_CATEGORIES :
   PROBLEM_CATEGORIES;
 const CATEGORY_OF = {};
 for (const [cat, slugs] of Object.entries(CATEGORIES)) {
@@ -707,6 +759,8 @@ async function main() {
     KIND === "concepts"    ? "concepts" :
     KIND === "postmortems" ? "post-mortems" :
     KIND === "exercises"   ? "exercises" :
+    KIND === "comparisons" ? "comparisons" :
+    KIND === "mocks"       ? "mocks" :
     "problems";
   const relContent = path.relative(path.resolve(__dirname, ".."), CONTENT_DIR);
   const relStyles = path.relative(path.resolve(__dirname, ".."), STYLES_DIR);

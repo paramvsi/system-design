@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-design-cdn",
+  "title": "CDN",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 270,
+    "s": 55,
+    "l": 52
+  },
+  "category": "Infrastructure",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>A global Content Delivery Network: serve cached copies of customer content from hundreds of edge points-of-presence (PoPs), delivering to users with sub-50ms RTT anywhere on Earth. The hard parts: global routing so requests land at the closest healthy PoP (Anycast); a cache hierarchy that protects origin from stampedes at 10M+ req/sec; and cache invalidation that reliably purges stale content from ~300 locations in seconds, not hours. Cloudflare: 300+ PoPs, ~55M HTTP req/sec, serves ~20% of internet traffic. Akamai: 4000+ PoPs, older + deeper model.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Anycast first, not DNS. Modern CDN answer. Explain the mechanism in one sentence.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Tiered cache beats flat-edge. Without it, your origin burns. Mention by name; it's a load-reducing design choice that shows sophistication.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Purge is not magic. It's pub/sub with seconds of propagation. Don't say \"instant cache invalidation.\"</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Anycast first, not DNS. Modern CDN answer. Explain the mechanism in one sentence.</li>\n      <li><span class=\"rubric-points\">+2</span> Tiered cache beats flat-edge. Without it, your origin burns. Mention by name; it's a load-reducing design choice that shows sophistication.</li>\n      <li><span class=\"rubric-points\">+2</span> Purge is not magic. It's pub/sub with seconds of propagation. Don't say \"instant cache invalidation.\"</li>\n      <li><span class=\"rubric-points\">+2</span> Request coalescing for stampedes. One-request-in-flight per key. Classic pattern that many candidates forget.</li>\n      <li><span class=\"rubric-points\">+1</span> Analytics + logs. CDN's real product is observability. Mention shipping edge logs → central analytics; it's half the value customers pay for.</li>\n      <li><span class=\"rubric-points\">+1</span> Stale-while-revalidate. One line, massive impact. Shows you know the production-grade answer.</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>No back-of-envelope estimation — jumps straight into components without quantifying scale for CDN</li>\n        <li>Single point of failure — no replication, failover, or redundancy discussed</li>\n        <li>Ignores data model and storage choices — hand-waves the database layer</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 1
+}

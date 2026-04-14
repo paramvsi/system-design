@@ -1,33 +1,80 @@
 {
-  "Social & Feed": [
-    "exercise-instagram",
-    "exercise-news-feed"
-  ],
   "Communication": [
-    "exercise-slack-discord",
     "exercise-whatsapp",
-    "exercise-notification-system"
-  ],
-  "Media & Streaming": [
-    "exercise-youtube-netflix"
-  ],
-  "Search & Discovery": [
-    "exercise-search-engine"
-  ],
-  "Marketplace & Booking": [
-    "exercise-uber",
-    "exercise-doordash",
-    "exercise-ticketmaster"
-  ],
-  "Storage & Data": [
-    "exercise-google-drive"
+    "exercise-notification-system",
+    "exercise-video-conferencing",
+    "exercise-collaborative-whiteboard",
+    "exercise-gmail",
+    "exercise-google-calendar",
+    "exercise-reminder-alert",
+    "exercise-slack-discord"
   ],
   "Financial & Trading": [
+    "exercise-bidding-platform",
     "exercise-payment-gateway",
-    "exercise-stock-exchange"
+    "exercise-crypto-exchange",
+    "exercise-google-ads",
+    "exercise-stock-exchange",
+    "exercise-fraud-detection",
+    "exercise-stock-trading-platform"
+  ],
+  "Gaming": [
+    "exercise-pubg"
   ],
   "Infrastructure": [
+    "exercise-distributed-queue",
+    "exercise-count-active-users",
+    "exercise-distributed-job-scheduler",
+    "exercise-distributed-locking",
+    "exercise-design-cdn",
+    "exercise-design-chatgpt",
+    "exercise-code-deployment",
+    "exercise-distributed-cache",
+    "exercise-leetcode-judge",
+    "exercise-metrics-monitoring",
     "exercise-rate-limiter",
+    "exercise-unique-id-generator"
+  ],
+  "Marketplace & Booking": [
+    "exercise-ticketmaster",
+    "exercise-uber",
+    "exercise-ecommerce",
+    "exercise-airbnb",
+    "exercise-doordash",
+    "exercise-flash-sale",
+    "exercise-shopping-cart",
     "exercise-url-shortener"
+  ],
+  "Media & Streaming": [
+    "exercise-youtube-netflix",
+    "exercise-live-streaming"
+  ],
+  "Search & Discovery": [
+    "exercise-google-maps",
+    "exercise-google-news",
+    "exercise-typeahead-suggestions",
+    "exercise-search-engine",
+    "exercise-web-crawler",
+    "exercise-yelp-google-places"
+  ],
+  "Social & Feed": [
+    "exercise-leaderboard",
+    "exercise-reddit-comments",
+    "exercise-mutual-connections",
+    "exercise-recommendation-algorithm",
+    "exercise-ad-click-aggregator",
+    "exercise-instagram",
+    "exercise-news-feed",
+    "exercise-reddit-full",
+    "exercise-twitter-trending",
+    "exercise-youtube-likes-counter"
+  ],
+  "Storage & Data": [
+    "exercise-google-docs",
+    "exercise-s3-object-storage",
+    "exercise-distributed-logging",
+    "exercise-dropbox-sync",
+    "exercise-google-drive",
+    "exercise-key-value-store"
   ]
 }

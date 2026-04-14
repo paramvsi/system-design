@@ -82,7 +82,7 @@
     "category": "Communication",
     "blurb": "Infinite canvas. Shapes, text, freehand drawing. Multiple users see each other's cursors in real time. Undo/redo, zoom/pan, offline edits that sync when reconnected. Like Miro or FigJam. The hard parts: a CRDT for canvas",
     "problemNumber": null,
-    "readMinutes": 10
+    "readMinutes": 13
   },
   {
     "slug": "gmail",
@@ -250,7 +250,7 @@
     "category": "Financial & Trading",
     "blurb": "Advertiser creates a campaign. Every search query or page-view triggers an ad auction in under 100 ms. The winner's ad is shown, the click is tracked, and the advertiser is billed on a CPC basis. Scale: 10M+ auctions per",
     "problemNumber": null,
-    "readMinutes": 10
+    "readMinutes": 13
   },
   {
     "slug": "stock-exchange",
@@ -463,7 +463,7 @@
     "category": "Infrastructure",
     "blurb": "User sends a prompt. API gateway routes it through a tokenizer to a GPU cluster of ~10K A100s running autoregressive inference. Tokens stream back via server-sent events — the user sees words appearing one by one. The ha",
     "problemNumber": null,
-    "readMinutes": 10
+    "readMinutes": 13
   },
   {
     "slug": "code-deployment",
@@ -484,7 +484,7 @@
     "category": "Infrastructure",
     "blurb": "Developer pushes code. CI builds and tests inside isolated ephemeral containers. An immutable, SHA-tagged artifact is stored in an S3-backed content-addressed store. CD does a canary deploy to 1% of traffic, runs automat",
     "problemNumber": null,
-    "readMinutes": 8
+    "readMinutes": 11
   },
   {
     "slug": "distributed-cache",
@@ -736,7 +736,7 @@
     "category": "Marketplace & Booking",
     "blurb": "500M carts updated daily across every device. Never lose a cart. The hard parts: a hybrid storage layer that keeps hot carts in Redis for sub-ms reads while persisting to DynamoDB for durability, guest-to-authenticated c",
     "problemNumber": null,
-    "readMinutes": 10
+    "readMinutes": 12
   },
   {
     "slug": "001-url-shortener",
@@ -1034,7 +1034,7 @@
     "category": "Social & Feed",
     "blurb": "10 billion clicks per day, counted in real-time for billing and analytics. Every click is money. The hard parts: a streaming aggregation pipeline that groups clicks by campaign, ad, geo, and minute with exactly-once sema",
     "problemNumber": null,
-    "readMinutes": 9
+    "readMinutes": 12
   },
   {
     "slug": "instagram",

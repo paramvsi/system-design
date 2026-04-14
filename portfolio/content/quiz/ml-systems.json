@@ -45,6 +45,36 @@
       "choices": ["Cost", "Offline (batch) for training; online (low-latency) for serving — keep computed features consistent across both", "Redundancy", "Legal"],
       "correct": 1,
       "explanation": "Offline: Spark jobs computing historical features for training. Online: Redis/Bigtable for sub-10ms reads during serving. Same feature logic → same feature values. Prevents skew."
+    },
+    {
+      "q": "Your fraud model was trained on data from Q1-Q3 and deployed in Q4. Precision drops from 95% to 78% over the holiday season. The model code hasn't changed. What's happening?",
+      "choices": ["Bug in the model", "Model drift: real-world fraud patterns shifted (holiday spending behavior differs from training data distribution), degrading prediction quality", "Feature store outage", "GPU thermal throttling"],
+      "correct": 1,
+      "explanation": "Data drift (input distribution shift) and concept drift (relationship between features and labels changes) are inevitable in production ML. Holiday spending patterns differ from Q1-Q3 training data. Fix: continuous monitoring of prediction distributions, scheduled retraining on recent data, and drift detection alerts that trigger retraining pipelines."
+    },
+    {
+      "q": "Your LLM inference server runs out of GPU memory (OOM) when a user sends a 32K-token conversation. The model supports 32K context. What's consuming the extra memory beyond the model weights?",
+      "choices": ["The prompt text itself", "KV-cache: attention key/value tensors grow linearly with sequence length per layer per head; at 32K tokens, KV-cache can exceed the model weights in memory", "Gradient buffers", "Disk swap"],
+      "correct": 1,
+      "explanation": "KV-cache stores attention keys and values for all previous tokens across all layers and heads. For a 70B parameter model at 32K context, KV-cache alone can require 30-50 GB of GPU memory. Solutions: KV-cache quantization, paged attention (vLLM), sliding window attention, or limiting max context length per request."
+    },
+    {
+      "q": "A recommendation model trained offline shows NDCG@10 of 0.45 in evaluation but only 0.31 in A/B testing on live traffic. The feature pipeline is verified correct. What's the most likely cause?",
+      "choices": ["Evaluation metric is wrong", "Training-serving skew in data distribution: offline evaluation uses historical data where users already saw recommendations, creating a feedback loop bias that doesn't generalize to live exploration", "Model is underfitting", "A/B test is misconfigured"],
+      "correct": 0,
+      "explanation": "Offline evaluation on historical data suffers from selection bias: users interacted with items that were previously recommended. The model overfits to this biased distribution. Live traffic includes exploration (showing items the model hasn't seen interactions for). Counterfactual evaluation methods, exploration-exploitation strategies, and online learning help bridge this gap."
+    },
+    {
+      "q": "Your model serving infrastructure handles 5K requests/sec with p99 latency of 80ms. A new model version is 3% more accurate but its inference time is 200ms. Deploying it would blow your latency SLO. What's the standard approach?",
+      "choices": ["Skip the new model", "Model distillation or quantization: compress the larger model into a smaller one that fits the latency budget while retaining most of the accuracy gain", "Add more GPUs until latency drops", "Increase the SLO to 200ms"],
+      "correct": 1,
+      "explanation": "Knowledge distillation trains a smaller 'student' model to mimic the larger 'teacher' model. Quantization (FP16, INT8) reduces computation per inference. Both techniques trade small accuracy loss for major latency reduction. In practice, a distilled model often recovers 80-90% of the teacher's accuracy gain within the latency budget."
+    },
+    {
+      "q": "Your ML pipeline trains a model nightly on yesterday's data. One night, an upstream ETL job produces corrupted features (all nulls for a key column). The model trains on this bad data and deploys automatically. How do you prevent this?",
+      "choices": ["Manual review of every training run", "Data validation gates: run schema and statistical checks (Great Expectations, TFX Data Validation) on training data BEFORE training starts; block the pipeline if checks fail", "Retrain immediately", "Use a larger model that handles nulls"],
+      "correct": 1,
+      "explanation": "Automated data validation between ETL and training catches corrupted, missing, or statistically anomalous data before it poisons a model. Check for: schema compliance, null rates, distribution shifts from the previous day, and feature range violations. If validation fails, keep the current model deployed and alert the data team."
     }
   ]
 }

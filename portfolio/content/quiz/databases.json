@@ -51,6 +51,36 @@
       "choices": ["Synchronous", "Async", "Semi-synchronous", "Chain replication"],
       "correct": 1,
       "explanation": "Async replication: writes ack immediately; replication lag can be seconds. If primary crashes, unreplicated writes are lost. Sync replication ensures zero loss but adds RTT to every write."
+    },
+    {
+      "q": "Your MySQL primary has 5 seconds of replication lag to its read replicas. A user updates their profile photo, then immediately loads their profile page (served by a replica). They see the old photo. What's the standard fix?",
+      "choices": ["Always read from primary", "Read-your-own-writes: route reads for recently-written data to the primary for a short window, then fall back to replicas", "Increase replica count", "Add a CDN"],
+      "correct": 1,
+      "explanation": "Read-your-own-writes consistency: after a write, the session routes reads for that entity to the primary for a bounded period (e.g., 10 seconds). Other users can tolerate eventual consistency from replicas. This avoids paying the cost of reading everything from the primary."
+    },
+    {
+      "q": "During an AWS us-east-1 outage, your DynamoDB global table has replicas in us-west-2 and eu-west-1. You failover reads and writes to us-west-2. When us-east-1 recovers, what conflict scenario must you handle?",
+      "choices": ["No conflicts possible", "Last-writer-wins conflicts from writes that were in-flight to us-east-1 before the partition, now replicating back", "All data in us-east-1 is lost", "Only read conflicts"],
+      "correct": 1,
+      "explanation": "DynamoDB global tables use last-writer-wins (by timestamp) for conflict resolution. Writes accepted by us-east-1 before it went down but not yet replicated may conflict with writes to us-west-2 during failover. The later timestamp wins, potentially overwriting valid data."
+    },
+    {
+      "q": "A PostgreSQL query that used to take 5ms now takes 2 seconds. EXPLAIN shows a sequential scan on a 50M-row table instead of the expected index scan. The index exists. What's the most likely cause?",
+      "choices": ["Index was dropped", "Table statistics are stale; the planner estimated fewer rows than reality and chose a bad plan", "Disk is full", "Too many connections"],
+      "correct": 1,
+      "explanation": "PostgreSQL's query planner relies on pg_statistic. If ANALYZE hasn't run after significant data changes, the planner's row estimates are wrong, causing it to pick a seq scan over an index scan. Running ANALYZE or tuning autovacuum settings fixes this."
+    },
+    {
+      "q": "Your sharded MongoDB cluster uses user_id as the shard key. A new feature introduces an admin dashboard that queries across ALL users with a date range filter. What problem will you hit?",
+      "choices": ["Query is fast because user_id is indexed", "Scatter-gather: the query must fan out to every shard since it doesn't filter by shard key, causing high latency", "MongoDB rejects the query", "Only one shard responds"],
+      "correct": 1,
+      "explanation": "Queries that don't include the shard key become scatter-gather (broadcast to all shards, merge results). This is O(shards) latency. The fix is either a secondary index/collection sharded by date, or a separate analytics store (CQRS pattern) for cross-shard queries."
+    },
+    {
+      "q": "You run a two-node PostgreSQL cluster with synchronous replication. The standby node crashes. What happens to write transactions on the primary?",
+      "choices": ["Writes continue normally", "Writes block indefinitely waiting for the standby to acknowledge, causing a full production outage", "Writes are redirected to a new standby", "Writes are buffered in WAL and sent later"],
+      "correct": 1,
+      "explanation": "Synchronous replication requires at least one standby to ACK before the primary commits. With the only standby down, every COMMIT hangs. This is why production setups use synchronous_standby_names with multiple standbys or 'ANY 1' of N, so losing one standby doesn't block writes."
     }
   ]
 }

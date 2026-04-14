@@ -1,0 +1,77 @@
+[
+  {
+    "slug": "mock-payment-gateway",
+    "title": "Mock Interview: Design a Payment Gateway — Mock Transcript",
+    "difficulty": null,
+    "accent": {
+      "h": 145,
+      "s": 65,
+      "l": 42
+    },
+    "tags": [],
+    "category": "Financial & Trading",
+    "blurb": "45-minute whiteboard mock: Design a Payment Gateway. The candidate should cover payment processing, idempotency, ledger design, webhook delivery, and fraud prevention. This transcript features a candidate who opens with ",
+    "problemNumber": null,
+    "readMinutes": 7
+  },
+  {
+    "slug": "mock-distributed-cache",
+    "title": "Mock Interview: Design a Distributed Cache — Mock Transcript",
+    "difficulty": null,
+    "accent": {
+      "h": 0,
+      "s": 70,
+      "l": 52
+    },
+    "tags": [],
+    "category": "Infrastructure",
+    "blurb": "45-minute whiteboard mock: Design a Distributed Cache. The candidate should cover data partitioning, eviction strategies, replication, persistence trade-offs, and failure handling. This transcript shows a candidate with ",
+    "problemNumber": null,
+    "readMinutes": 7
+  },
+  {
+    "slug": "mock-chatgpt",
+    "title": "Mock Interview: Design ChatGPT — Mock Transcript",
+    "difficulty": null,
+    "accent": {
+      "h": 170,
+      "s": 65,
+      "l": 42
+    },
+    "tags": [],
+    "category": "Infrastructure",
+    "blurb": "45-minute whiteboard mock: Design ChatGPT. The candidate should cover LLM serving infrastructure, token generation, conversation management, safety pipelines, and scaling inference. This transcript captures a candidate w",
+    "problemNumber": null,
+    "readMinutes": 7
+  },
+  {
+    "slug": "mock-uber",
+    "title": "Mock Interview: Design Uber — Mock Transcript",
+    "difficulty": null,
+    "accent": {
+      "h": 200,
+      "s": 70,
+      "l": 45
+    },
+    "tags": [],
+    "category": "Marketplace & Booking",
+    "blurb": "45-minute whiteboard mock: Design Uber. The candidate should cover ride matching, real-time location tracking, dispatch, ETA computation, and surge pricing. This transcript captures a strong performance where the candida",
+    "problemNumber": null,
+    "readMinutes": 7
+  },
+  {
+    "slug": "mock-instagram",
+    "title": "Mock Interview: Design Instagram — Mock Transcript",
+    "difficulty": null,
+    "accent": {
+      "h": 330,
+      "s": 72,
+      "l": 52
+    },
+    "tags": [],
+    "category": "Social & Media",
+    "blurb": "45-minute whiteboard mock: Design Instagram. The candidate is expected to cover photo/video upload, feed generation, social graph, and storage at scale. This transcript captures a strong performance with specific callout",
+    "problemNumber": null,
+    "readMinutes": 6
+  }
+]

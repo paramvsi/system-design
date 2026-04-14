@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-s3-object-storage",
+  "title": "Amazon S3",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 28,
+    "s": 88,
+    "l": 48
+  },
+  "category": "Storage & Data",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>A bucket-and-key object store with read-your-writes consistency, ~11 nines of durability, and exabyte-scale capacity. The hard parts: a key → bytes service that doesn't fall over at millions of requests per second; erasure-coded durability cheaper than 3× replication but rebuilds gracefully; and a partition-key-hot-spot story — what happens when everyone writes to keys starting with 2026-04-12/. S3 stores hundreds of trillions of objects and serves tens of millions of requests per second.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Durability math is the core. 11 nines is a number. Work backward from it: what does that imply about replication factor, geographic spread, verification?</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Name erasure coding by type. \"Reed-Solomon (10, 4)\" or \"(12, 4)\" is much more credible than \"we use erasure coding.\" Know the storage-vs-durability tradeoff by heart.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Split the two planes. Index service (metadata) vs data fleet (bytes). Don't muddle them. The index is transactional; bytes are immutable blobs.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Durability math is the core. 11 nines is a number. Work backward from it: what does that imply about replication factor, geographic spread, verification?</li>\n      <li><span class=\"rubric-points\">+2</span> Name erasure coding by type. \"Reed-Solomon (10, 4)\" or \"(12, 4)\" is much more credible than \"we use erasure coding.\" Know the storage-vs-durability tradeoff by heart.</li>\n      <li><span class=\"rubric-points\">+2</span> Split the two planes. Index service (metadata) vs data fleet (bytes). Don't muddle them. The index is transactional; bytes are immutable blobs.</li>\n      <li><span class=\"rubric-points\">+2</span> Hot partitions are the classic follow-up. Interviewer will ask \"what if everyone's key starts with today's date?\" Have the auto-split + hash-prefix answer ready.</li>\n      <li><span class=\"rubric-points\">+2</span> Multipart upload is more than chunking. It's resumable, parallelizable, and lets you abort partial work. Describe each of those benefits distinctly.</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>No back-of-envelope estimation — jumps straight into components without quantifying scale for Amazon S3</li>\n        <li>Single point of failure — no replication, failover, or redundancy discussed</li>\n        <li>Ignores data model and storage choices — hand-waves the database layer</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

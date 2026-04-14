@@ -1,13 +1,13 @@
 [
-  { "slug": "caching", "cluster": "Caching", "blurb": "TTLs, eviction, stampedes, and write strategies.", "accent": { "h": 200, "s": 70, "l": 50 }, "count": 8 },
-  { "slug": "databases", "cluster": "Databases", "blurb": "Indexing, sharding, replication, consistency.", "accent": { "h": 215, "s": 75, "l": 48 }, "count": 8 },
-  { "slug": "consensus", "cluster": "Consensus & Coordination", "blurb": "Paxos, Raft, leader election, split-brain.", "accent": { "h": 270, "s": 55, "l": 52 }, "count": 8 },
-  { "slug": "rate-limiting", "cluster": "Rate Limiting", "blurb": "Algorithms, distributed coordination.", "accent": { "h": 30, "s": 80, "l": 50 }, "count": 6 },
-  { "slug": "messaging", "cluster": "Messaging & Async", "blurb": "Queues, pub/sub, Kafka, delivery guarantees.", "accent": { "h": 255, "s": 55, "l": 50 }, "count": 7 },
-  { "slug": "networking", "cluster": "Networking & Delivery", "blurb": "DNS, TCP/UDP, HTTP/2 vs 3, CDN.", "accent": { "h": 190, "s": 70, "l": 45 }, "count": 7 },
-  { "slug": "observability", "cluster": "Observability & Reliability", "blurb": "Metrics, logs, traces, SLOs, alerts.", "accent": { "h": 145, "s": 55, "l": 45 }, "count": 7 },
-  { "slug": "security", "cluster": "Security", "blurb": "Auth, TLS, secrets, DDoS, OWASP.", "accent": { "h": 0, "s": 70, "l": 48 }, "count": 7 },
-  { "slug": "ml-systems", "cluster": "ML Systems", "blurb": "Feature stores, model serving, LLMs.", "accent": { "h": 300, "s": 55, "l": 52 }, "count": 7 },
-  { "slug": "architecture-patterns", "cluster": "Architecture Patterns", "blurb": "Monolith, microservices, event-driven, saga.", "accent": { "h": 250, "s": 55, "l": 50 }, "count": 7 },
-  { "slug": "reliability", "cluster": "Reliability & Resilience", "blurb": "Retries, circuit breakers, bulkheads, chaos.", "accent": { "h": 10, "s": 80, "l": 50 }, "count": 7 }
+  { "slug": "caching", "cluster": "Caching", "blurb": "TTLs, eviction, stampedes, and write strategies.", "accent": { "h": 200, "s": 70, "l": 50 }, "count": 13 },
+  { "slug": "databases", "cluster": "Databases", "blurb": "Indexing, sharding, replication, consistency.", "accent": { "h": 215, "s": 75, "l": 48 }, "count": 13 },
+  { "slug": "consensus", "cluster": "Consensus & Coordination", "blurb": "Paxos, Raft, leader election, split-brain.", "accent": { "h": 270, "s": 55, "l": 52 }, "count": 13 },
+  { "slug": "rate-limiting", "cluster": "Rate Limiting", "blurb": "Algorithms, distributed coordination.", "accent": { "h": 30, "s": 80, "l": 50 }, "count": 11 },
+  { "slug": "messaging", "cluster": "Messaging & Async", "blurb": "Queues, pub/sub, Kafka, delivery guarantees.", "accent": { "h": 255, "s": 55, "l": 50 }, "count": 12 },
+  { "slug": "networking", "cluster": "Networking & Delivery", "blurb": "DNS, TCP/UDP, HTTP/2 vs 3, CDN.", "accent": { "h": 190, "s": 70, "l": 45 }, "count": 12 },
+  { "slug": "observability", "cluster": "Observability & Reliability", "blurb": "Metrics, logs, traces, SLOs, alerts.", "accent": { "h": 145, "s": 55, "l": 45 }, "count": 12 },
+  { "slug": "security", "cluster": "Security", "blurb": "Auth, TLS, secrets, DDoS, OWASP.", "accent": { "h": 0, "s": 70, "l": 48 }, "count": 12 },
+  { "slug": "ml-systems", "cluster": "ML Systems", "blurb": "Feature stores, model serving, LLMs.", "accent": { "h": 300, "s": 55, "l": 52 }, "count": 12 },
+  { "slug": "architecture-patterns", "cluster": "Architecture Patterns", "blurb": "Monolith, microservices, event-driven, saga.", "accent": { "h": 250, "s": 55, "l": 50 }, "count": 12 },
+  { "slug": "reliability", "cluster": "Reliability & Resilience", "blurb": "Retries, circuit breakers, bulkheads, chaos.", "accent": { "h": 10, "s": 80, "l": 50 }, "count": 12 }
 ]

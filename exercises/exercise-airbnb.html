@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Airbnb — Exercise</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 350; --accent-s: 72%; --accent-l: 52%; }
+    .exercise-hint { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; }
+    .exercise-hint summary { cursor: pointer; font-family: var(--font-mono); font-size: 13.5px; color: var(--accent-text); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 500; }
+    .exercise-hint p { margin: 8px 0 0; font-size: 15px; color: var(--text-secondary); }
+    .rubric-list { padding-left: 0; list-style: none; }
+    .rubric-list li { padding: 8px 12px; background: var(--bg-subtle); border-left: 3px solid var(--accent-border); border-radius: 4px; margin-bottom: 6px; font-size: 15px; }
+    .rubric-points { display: inline-block; min-width: 28px; background: var(--accent-light); color: var(--accent-text); font-family: var(--font-mono); font-size: 12px; font-weight: 600; padding: 2px 6px; border-radius: 3px; margin-right: 8px; }
+    .redflag-list { list-style: "\1F6AB "; padding-left: 28px; }
+    .redflag-list li { font-size: 15px; color: var(--text-secondary); margin-bottom: 6px; }
+    .reveal-gate { text-align: center; padding: 20px; background: var(--bg-subtle); border: 1px dashed var(--border); border-radius: 8px; color: var(--text-muted); font-size: 15px; }
+  </style>
+</head>
+<body>
+
+<main>
+
+  <div class="hero" id="problem">
+    <div class="hero-kicker">Exercise · 45 min whiteboard</div>
+    <h1 class="hero-title">Airbnb</h1>
+    <p class="hero-desc">Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.</p>
+    <div class="hero-tags">
+      <span class="tag accent">Out of 10 points</span>
+      <span class="tag">45 min whiteboard</span>
+      <span class="tag"><a href="/airbnb">Reference solution →</a></span>
+    </div>
+  </div>
+
+  <section class="section" id="prompt">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Prompt</h2></div>
+    <div class="prose">
+      <p>A two-sided marketplace with ~7M listings and ~100M nights booked per year. The hard parts: date-range availability search — &quot;find homes in Lisbon for 4 guests, June 3–10, under $200/night&quot; is a surprisingly gnarly query; no-double-booking with strong consistency on the calendar; and dynamic pricing + complex fees (cleaning fee, service fee, taxes that vary by jurisdiction) without ever showing the guest one number and charging another. Airbnb solved the &quot;Amazon but for someone's spare bedroom&quot; problem at planet scale.</p>
+      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>
+    </div>
+  </section>
+
+  <section class="section" id="hints">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Hints (progressive — click to reveal)</h2></div>
+    <div class="prose">
+
+      <details class="exercise-hint">
+        <summary>Hint 1</summary>
+        <p>Lead with the consistency split. &quot;Search is eventually consistent; booking is strongly consistent; the booking saga re-verifies authoritatively.&quot; This sentence shows you've thought about the hard part.</p>
+      </details>
+      <details class="exercise-hint">
+        <summary>Hint 2</summary>
+        <p>Date-range availability bitmaps. Mention them by name. Most candidates don't know this representation; it's specific and correct.</p>
+      </details>
+      <details class="exercise-hint">
+        <summary>Hint 3</summary>
+        <p>Price quote locking. 10-minute quote window. Prevents &quot;I see $200, I go enter my card, I see $230.&quot; A small detail that shows care for UX.</p>
+      </details>
+    </div>
+  </section>
+
+  <section class="section" id="rubric" data-reveal-gate="rubric">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Rubric — 10 points</h2></div>
+    <div class="prose">
+      <ul class="rubric-list">
+      <li><span class="rubric-points">+2</span> Lead with the consistency split. &quot;Search is eventually consistent; booking is strongly consistent; the booking saga re-verifies authoritatively.&quot; This sentence shows you've thought about the hard part.</li>
+      <li><span class="rubric-points">+2</span> Date-range availability bitmaps. Mention them by name. Most candidates don't know this representation; it's specific and correct.</li>
+      <li><span class="rubric-points">+2</span> Price quote locking. 10-minute quote window. Prevents &quot;I see $200, I go enter my card, I see $230.&quot; A small detail that shows care for UX.</li>
+      <li><span class="rubric-points">+2</span> Saga, not 2PC. Airbnb is a canonical saga example. Don't propose distributed transactions across payment + calendar.</li>
+      <li><span class="rubric-points">+2</span> Reviews and trust. Often skipped. The blind-review system is a product-design decision with a data-model implication — worth mentioning.</li>
+      </ul>
+      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>
+    </div>
+  </section>
+
+  <section class="section" id="redflags" data-reveal-gate="redflags">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Red flags (things that tank the interview)</h2></div>
+    <div class="prose">
+      <ul class="redflag-list">
+        <li>No back-of-envelope estimation — jumps straight into components without quantifying scale for Airbnb</li>
+        <li>Single point of failure — no replication, failover, or redundancy discussed</li>
+        <li>Ignores data model and storage choices — hand-waves the database layer</li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

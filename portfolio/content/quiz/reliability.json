@@ -45,6 +45,36 @@
       "choices": ["Backup every hour", "If disaster strikes, you may lose up to 1 hour of data", "Recovery takes 1 hour", "Process restart 1/hr"],
       "correct": 1,
       "explanation": "Recovery Point Objective = maximum acceptable data loss. RPO=1h → backup cadence + replication lag must be ≤1h. RTO (Recovery Time Objective) = how long to restore service. Both set by product + business."
+    },
+    {
+      "q": "Your circuit breaker for Service X is in the half-open state. It allows one probe request through. That request takes 4 seconds (timeout threshold is 2 seconds) and fails. What does the circuit breaker do next?",
+      "choices": ["Stays half-open and tries again immediately", "Transitions back to OPEN state and restarts the cooldown timer before allowing another probe", "Transitions to CLOSED", "Disables itself"],
+      "correct": 1,
+      "explanation": "Half-open is the 'test the waters' state. If the probe fails, the circuit returns to OPEN and waits another cooldown period before trying again. If the probe succeeds, it transitions to CLOSED and resumes normal traffic. This prevents a still-broken dependency from being flooded with requests after a premature recovery attempt."
+    },
+    {
+      "q": "A database outage triggers retries from 500 application servers simultaneously. Each server retries 3 times with 1-second fixed delay. The database recovers after 10 seconds but immediately gets hit with 1,500 simultaneous retry requests and goes down again. What caused this?",
+      "choices": ["Too few retries", "Retry storm: synchronized retries without jitter create a thundering herd that overwhelms the recovering service", "Database bug", "Too many app servers"],
+      "correct": 1,
+      "explanation": "Fixed-delay retries from many clients synchronize and create periodic load spikes. When the database recovers, the coordinated retry wave hits it harder than the original load. Fix: exponential backoff with full jitter (random delay between 0 and max backoff), plus a circuit breaker that stops retries entirely after detecting sustained failure."
+    },
+    {
+      "q": "Your team runs a chaos experiment: kill one of three replicas of the user-profile service. Expected: no user impact. Actual: 33% of requests fail for 45 seconds. Post-mortem reveals the load balancer had a 30-second health check interval. What's the finding?",
+      "choices": ["Chaos engineering is dangerous", "Health check interval was too long: the load balancer kept routing to the dead replica for up to 30 seconds; reduce health check interval and use faster failure detection", "Need more replicas", "Load balancer is broken"],
+      "correct": 1,
+      "explanation": "Chaos engineering exposed a hidden assumption: the team assumed failover was instant, but the load balancer's slow health checks meant prolonged routing to a dead instance. Fix: reduce health check interval (e.g., 5 seconds), use active health checks, and configure the load balancer to remove unhealthy targets after 2 consecutive failures instead of waiting for a full interval."
+    },
+    {
+      "q": "Your service has a graceful degradation path: if the recommendation engine is down, show 'trending items' instead. During a real outage, the fallback ALSO fails because the trending-items cache expired 2 hours ago and the cache-refresh job depends on... the same recommendation engine. What principle was violated?",
+      "choices": ["Redundancy", "Fallback independence: the degraded path shared a dependency with the primary path, so both failed together", "Caching strategy", "Monitoring"],
+      "correct": 1,
+      "explanation": "Fallback paths must be independently resilient. If your fallback depends on the same system that's down, it's not a real fallback. The trending-items cache should be populated by an independent pipeline (e.g., a simple popularity counter) with its own data source. Test fallback paths regularly — untested fallbacks fail when you need them most."
+    },
+    {
+      "q": "You configure retries with max 3 attempts for Service A calling Service B. Service B also retries 3 times when calling Service C. If Service C is down, how many total requests does Service C receive from a single user request?",
+      "choices": ["3", "6", "9 (3 x 3 retry amplification)", "1"],
+      "correct": 2,
+      "explanation": "Retry amplification: A retries 3 times to B, and each B attempt retries 3 times to C = 9 requests to C from one user request. With more layers, this grows exponentially. Fix: only retry at one layer (usually the closest to the caller), use circuit breakers at intermediate layers, and set retry budgets (e.g., max 10% of requests can be retries)."
     }
   ]
 }

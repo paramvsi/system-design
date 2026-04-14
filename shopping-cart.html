@@ -325,6 +325,8 @@ sequenceDiagram
         <li><strong>DynamoDB (durable, infinite scale) vs Redis-only (fast but volatile).</strong> Redis-only loses carts on crash. DynamoDB-only is too slow for hot reads (5-10 ms vs sub-ms). Hybrid: Redis for speed, DynamoDB for durability. Best of both.</li>
         <li><strong>Write-through vs write-behind.</strong> Write-through (Redis then sync DynamoDB) adds latency. Write-behind (Redis then async DynamoDB) risks data loss in Redis crash window. We choose write-behind with Kafka as a durable buffer — cart writes ack from Redis in &lt; 1 ms, Kafka ensures DynamoDB eventually gets it.</li>
         <li><strong>Merge strategy: keep-higher-qty vs keep-latest vs prompt user.</strong> Keep-higher-qty is the safest default — never lose items. Prompting the user adds friction at login. Keep-latest risks losing items from the other cart.</li>
+        <li><strong>Cart TTL (30 days) vs infinite retention.</strong> Keeping carts forever means 500M carts/day accumulate indefinitely — storage grows without bound. 30-day TTL via DynamoDB auto-delete keeps costs manageable. Power users who return after 60 days see an empty cart — acceptable tradeoff. Wishlists solve the "save for later" use case separately.</li>
+        <li><strong>Single cart per user vs multiple saved carts.</strong> Amazon allows one active cart but offers "Save for Later" and wishlists. Multiple named carts (e.g., "birthday party supplies") add UI complexity. Start with one cart + save-for-later; evolve to named carts if user research demands it.</li>
       </ul>
     </div>
   </section>
@@ -335,6 +337,8 @@ sequenceDiagram
     <div class="failure"><div class="failure-icon">--</div><div><div class="failure-title">Merge conflict on login</div><div class="failure-desc">Guest cart has SKU-A qty=3, auth cart has SKU-A qty=1. Which wins? If merge logic has a bug, items are lost or doubled.</div><div class="mitigation">Mitigation: deterministic merge rule (max qty). Log both carts before merge for audit. Expose "recently removed" so user can recover if merge drops something unexpectedly.</div></div></div>
     <div class="failure"><div class="failure-icon">--</div><div><div class="failure-title">Price change between add and checkout</div><div class="failure-desc">User adds item at $49.99, price changes to $59.99 before checkout. User feels bait-and-switched. Or price drops and you overcharge.</div><div class="mitigation">Mitigation: refresh prices on every cart GET. Show clear "price changed" banner. Let user decide to proceed or remove. Never silently charge a different price.</div></div></div>
     <div class="failure"><div class="failure-icon">--</div><div><div class="failure-title">Redis crash loses hot carts</div><div class="failure-desc">Redis cluster node fails. All carts cached on that shard are gone. Users see empty carts until DynamoDB backfill.</div><div class="mitigation">Mitigation: Redis with AOF persistence + replicas. On cache miss, load from DynamoDB (adds ~5 ms latency, not catastrophic). Kafka write-behind buffer ensures DynamoDB is never more than seconds behind Redis.</div></div></div>
+    <div class="failure"><div class="failure-icon">--</div><div><div class="failure-title">DynamoDB throttling during peak</div><div class="failure-desc">Black Friday traffic spike. DynamoDB provisioned capacity exceeded. Write-behind Kafka consumer can't keep up. Cart persistence falls behind.</div><div class="mitigation">Mitigation: DynamoDB on-demand capacity mode (auto-scales). Kafka consumer lag monitoring with alerts. If lag exceeds 60 seconds, scale consumer group partitions. Redis continues serving reads — users are unaffected even if DynamoDB is behind.</div></div></div>
+    <div class="failure"><div class="failure-icon">--</div><div><div class="failure-title">Inventory service returns stale hold status</div><div class="failure-desc">Inventory Redis and Cart Redis are separate clusters. Network partition between them. Cart thinks hold is active; inventory has already released it.</div><div class="mitigation">Mitigation: checkout always re-validates inventory with a synchronous call to the inventory service. Cart-side hold is a UX hint, not a guarantee. The guarantee comes at checkout time.</div></div></div>
   </section>
 
   <section class="section" id="similar">
@@ -354,7 +358,21 @@ sequenceDiagram
     <div class="evolution-step"><div class="evolution-marker">2</div><div class="evolution-content"><h4>Server-side DB cart</h4><p>Cart in MySQL/Postgres keyed by user_id. Cross-device. But every read hits the DB — slow under load. No guest merge.</p></div></div>
     <div class="evolution-step"><div class="evolution-marker">3</div><div class="evolution-content"><h4>Redis hot + DB cold hybrid</h4><p>Redis caches active carts for sub-ms reads. DynamoDB persists for durability. Write-behind via Kafka. 50K ops/sec handled.</p></div></div>
     <div class="evolution-step"><div class="evolution-marker">4</div><div class="evolution-content"><h4>Soft inventory hold + price lock</h4><p>Redis DECR with 15-min TTL reserves stock on cart-add. Price snapshot stored per item. Checkout friction drops dramatically.</p></div></div>
-    <div class="evolution-step"><div class="evolution-marker">5</div><div class="evolution-content"><h4>ML-driven abandon recovery + recommendations</h4><p>Flink tracks cart idle time. ML model picks optimal email send time. Cart page shows "frequently bought together" powered by collaborative filtering on cart contents.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">5</div><div class="evolution-content"><h4>ML-driven abandon recovery + recommendations</h4><p>Flink tracks cart idle time. ML model picks optimal email send time per user based on historical open/conversion rates. Cart page shows "frequently bought together" powered by collaborative filtering on cart contents. A/B testing on recovery email timing, subject lines, and discount offers drives continuous conversion improvement.</p></div></div>
+  </section>
+
+  <section class="section" id="capacity">
+    <div class="section-head"><span class="section-n">13</span><h2 class="section-title">Capacity Planning</h2></div>
+    <div class="prose">
+      <ul>
+        <li><strong>Redis cluster:</strong> 500M active carts x 2 KB avg = ~1 TB. With 24h TTL on hot carts, only ~50M are truly hot (accessed in last hour) = ~100 GB in Redis. A 10-node Redis cluster with 16 GB per node handles this with room for growth.</li>
+        <li><strong>DynamoDB:</strong> 500M items, ~2 KB each = ~1 TB. On-demand capacity: 50K WCU peak (write capacity units). Reads mostly served by Redis; DynamoDB handles ~5K RCU for cache misses. Cost: ~$1,250/month for storage + on-demand read/write.</li>
+        <li><strong>Kafka:</strong> 50K events/sec x 500 bytes = ~25 MB/sec. A 5-broker cluster with 3-day retention handles this easily. Total Kafka storage: ~6.5 TB.</li>
+        <li><strong>Network:</strong> 50K cart ops/sec x ~2 KB request/response = ~100 MB/sec at the API gateway. Standard for a CDN-fronted service.</li>
+        <li><strong>Inventory holds:</strong> At any given time, ~50M carts have active 15-min holds. Average 5 items per cart = ~250M hold keys in Redis. At ~50 bytes per key: ~12.5 GB. Fits comfortably in a dedicated Redis cluster for inventory.</li>
+        <li><strong>Merge operations:</strong> ~15% of 500M carts/day = ~75M merges/day = ~870 merges/sec. Each merge reads 2 carts, writes 1, adjusts holds. Total: ~2,600 Redis ops/sec for merges alone — negligible at cluster scale.</li>
+      </ul>
+    </div>
   </section>
 
 </main>

@@ -51,6 +51,36 @@
       "choices": ["Tells CDN to vary TTL", "Declares which request headers affect the response — cache must key by them", "Enables gzip", "Sets cache size"],
       "correct": 1,
       "explanation": "Vary: Accept-Encoding means the same URL has different cached versions based on the client's encoding support. Skipping Vary causes serving gzipped content to a client that didn't request it."
+    },
+    {
+      "q": "Your e-commerce site runs a flash sale at noon. At 12:00:01 the product-detail cache TTL expires and your DB connection pool saturates within 3 seconds. Requests start timing out. What mitigation would have prevented this?",
+      "choices": ["Increase DB connection pool to 10,000", "Request coalescing (singleflight) so only one cache miss triggers a DB fetch while others wait", "Switch to write-through caching", "Disable caching during sales"],
+      "correct": 1,
+      "explanation": "Request coalescing (Go's singleflight, nginx proxy_cache_lock) ensures only one request per key goes to the origin on a miss. All concurrent readers wait for that single fetch result. This prevents the stampede from overwhelming the DB."
+    },
+    {
+      "q": "After deploying a new app version, you notice cache hit ratio dropped from 95% to 20% even though nothing changed in the cache layer. What's the most likely cause?",
+      "choices": ["Redis ran out of memory", "The new code changed the cache key format, making all old entries unreachable", "DNS changed", "TTLs expired simultaneously"],
+      "correct": 1,
+      "explanation": "A common post-deploy issue: if cache keys include a version prefix, serialization format change, or different parameter ordering, every key becomes a new key. The old cached data is still there but unreachable. Always ensure cache key compatibility or pre-warm after key format changes."
+    },
+    {
+      "q": "Your Redis instance is at 95% memory. LRU eviction kicks in and starts evicting session tokens. Users are getting logged out randomly. How do you fix this without adding more RAM immediately?",
+      "choices": ["Increase maxmemory", "Separate session data into its own Redis instance with noeviction policy; use LRU only for the cache instance", "Switch to FIFO eviction", "Reduce TTL on all keys to 10 seconds"],
+      "correct": 1,
+      "explanation": "Mixing cache data (evictable) with session/state data (must not be evicted) in the same Redis instance is a classic mistake. Separate them: cache instance uses allkeys-lru, session instance uses noeviction and alerts when full."
+    },
+    {
+      "q": "A microservice queries a downstream API that returns user preferences. You cache the result for 5 minutes. During a 10-minute downstream outage, what happens to users whose cache entries expire mid-outage?",
+      "choices": ["They get stale data automatically", "They get errors because the cache miss triggers a failed downstream call", "The cache auto-extends TTL", "Nothing — cache never expires during outages"],
+      "correct": 1,
+      "explanation": "Standard cache-aside will try to refresh from the downstream on miss and fail. The fix is 'stale-while-revalidate' or 'stale-on-error': serve the expired cached value when the origin is unreachable. Many HTTP caches and libraries support this pattern."
+    },
+    {
+      "q": "You're running Memcached with consistent hashing across 5 nodes. One node dies. What happens to the keys that were on that node?",
+      "choices": ["All keys across all nodes are lost", "Only keys on the dead node are lost; other nodes' keys are unaffected, but the dead node's keys cause cache misses until re-populated", "Keys automatically migrate to other nodes", "Memcached replicates, so nothing is lost"],
+      "correct": 1,
+      "explanation": "Memcached has no replication. Consistent hashing means only ~1/N of keys (those on the dead node) become misses. Without consistent hashing (modulo), ALL keys would remap. The misses cause a temporary load spike on the origin until the keys are re-cached on the new ring assignment."
     }
   ]
 }

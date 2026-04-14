@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-fraud-detection",
+  "title": "Real-time Fraud Detection",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 10,
+    "s": 85,
+    "l": 50
+  },
+  "category": "Financial & Trading",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>A system that scores every incoming payment / account action in under 100 ms and decides: approve, review, or block. The hard parts: a low-latency feature store that can answer \"how many card swipes has this user made in the last 5 minutes?\" in &lt; 10 ms; an online ML model co-located with features returning a risk score in single-digit milliseconds; and a feedback loop that closes the gap between a human-confirmed chargeback (days later) and retraining the model, without letting the fraudsters get a week head-start. Stripe Radar, PayPal, Visa all run systems like this at 10K+ tx/sec.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Rules + ML hybrid. Pure-ML is wrong. Mention rule engine short-circuit as a core design piece.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Online + offline feature store. Same features for training + serving. Training-serving skew is a classic production bug; show you know about it.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Label delay is fundamental. Acknowledge chargebacks take days-to-weeks. Don't propose \"train on today's data, serve tomorrow\" without caveats.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Rules + ML hybrid. Pure-ML is wrong. Mention rule engine short-circuit as a core design piece.</li>\n      <li><span class=\"rubric-points\">+2</span> Online + offline feature store. Same features for training + serving. Training-serving skew is a classic production bug; show you know about it.</li>\n      <li><span class=\"rubric-points\">+2</span> Label delay is fundamental. Acknowledge chargebacks take days-to-weeks. Don't propose \"train on today's data, serve tomorrow\" without caveats.</li>\n      <li><span class=\"rubric-points\">+2</span> Graceful degrade. Payment auth can't hang. Fall back to rules + conservative threshold on any dependency failure. Payments &gt; precision.</li>\n      <li><span class=\"rubric-points\">+1</span> Graph features matter. Single-tx features miss rings. Shared-device-fingerprint clusters are a cheap and effective signal.</li>\n      <li><span class=\"rubric-points\">+1</span> Explainability isn't nice-to-have. Compliance requires it. SHAP or tree-derived feature contributions are the standard.</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>No back-of-envelope estimation — jumps straight into components without quantifying scale for Real-time Fraud Detection</li>\n        <li>Single point of failure — no replication, failover, or redundancy discussed</li>\n        <li>Ignores data model and storage choices — hand-waves the database layer</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

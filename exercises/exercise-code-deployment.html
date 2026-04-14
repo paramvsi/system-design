@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Code Deployment Pipeline — Exercise</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 200; --accent-s: 70%; --accent-l: 48%; }
+    .exercise-hint { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; }
+    .exercise-hint summary { cursor: pointer; font-family: var(--font-mono); font-size: 13.5px; color: var(--accent-text); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 500; }
+    .exercise-hint p { margin: 8px 0 0; font-size: 15px; color: var(--text-secondary); }
+    .rubric-list { padding-left: 0; list-style: none; }
+    .rubric-list li { padding: 8px 12px; background: var(--bg-subtle); border-left: 3px solid var(--accent-border); border-radius: 4px; margin-bottom: 6px; font-size: 15px; }
+    .rubric-points { display: inline-block; min-width: 28px; background: var(--accent-light); color: var(--accent-text); font-family: var(--font-mono); font-size: 12px; font-weight: 600; padding: 2px 6px; border-radius: 3px; margin-right: 8px; }
+    .redflag-list { list-style: "\1F6AB "; padding-left: 28px; }
+    .redflag-list li { font-size: 15px; color: var(--text-secondary); margin-bottom: 6px; }
+    .reveal-gate { text-align: center; padding: 20px; background: var(--bg-subtle); border: 1px dashed var(--border); border-radius: 8px; color: var(--text-muted); font-size: 15px; }
+  </style>
+</head>
+<body>
+
+<main>
+
+  <div class="hero" id="problem">
+    <div class="hero-kicker">Exercise · 45 min whiteboard</div>
+    <h1 class="hero-title">Code Deployment Pipeline</h1>
+    <p class="hero-desc">Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.</p>
+    <div class="hero-tags">
+      <span class="tag accent">Out of 10 points</span>
+      <span class="tag">45 min whiteboard</span>
+      <span class="tag"><a href="/code-deployment">Reference solution →</a></span>
+    </div>
+  </div>
+
+  <section class="section" id="prompt">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Prompt</h2></div>
+    <div class="prose">
+      <p>Developer pushes code. CI builds and tests inside isolated ephemeral containers. An immutable, SHA-tagged artifact is stored in an S3-backed content-addressed store. CD does a canary deploy to 1% of traffic, runs automated statistical analysis comparing canary vs baseline metrics over 15 minutes, then progressively promotes: 10% → 50% → 100%. Rollback = re-deploy the previous artifact — no new build needed. Feature flags decouple deploy from release: ship code dark, enable for 1% → 100% independently. Google, Netflix, Meta — same pattern, different scale.</p>
+      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>
+    </div>
+  </section>
+
+  <section class="section" id="hints">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Hints (progressive — click to reveal)</h2></div>
+    <div class="prose">
+
+      <details class="exercise-hint">
+        <summary>Hint 1</summary>
+        <p>Lead with immutability. &quot;Artifacts are SHA-tagged and never overwritten. Rollback is just re-pointing to the previous SHA.&quot; This single idea simplifies everything.</p>
+      </details>
+      <details class="exercise-hint">
+        <summary>Hint 2</summary>
+        <p>Name the statistical test. &quot;Mann-Whitney U for canary analysis&quot; — shows you've thought beyond &quot;just check if errors go up.&quot;</p>
+      </details>
+      <details class="exercise-hint">
+        <summary>Hint 3</summary>
+        <p>Distinguish deploy from release. &quot;Deploy puts code on servers. Release exposes it to users. Feature flags let you do these independently.&quot; This nuance impresses.</p>
+      </details>
+    </div>
+  </section>
+
+  <section class="section" id="rubric" data-reveal-gate="rubric">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Rubric — 10 points</h2></div>
+    <div class="prose">
+      <ul class="rubric-list">
+      <li><span class="rubric-points">+2</span> Lead with immutability. &quot;Artifacts are SHA-tagged and never overwritten. Rollback is just re-pointing to the previous SHA.&quot; This single idea simplifies everything.</li>
+      <li><span class="rubric-points">+2</span> Name the statistical test. &quot;Mann-Whitney U for canary analysis&quot; — shows you've thought beyond &quot;just check if errors go up.&quot;</li>
+      <li><span class="rubric-points">+2</span> Distinguish deploy from release. &quot;Deploy puts code on servers. Release exposes it to users. Feature flags let you do these independently.&quot; This nuance impresses.</li>
+      <li><span class="rubric-points">+2</span> Talk about blast radius. &quot;Canary at 1% means worst case, 1% of users see a regression for 15 minutes before auto-rollback.&quot; Quantify the risk.</li>
+      <li><span class="rubric-points">+2</span> Mention hermetic builds. &quot;No network during build. Dependencies from a pre-populated cache. Same commit = same artifact, always.&quot; Production-grade insight.</li>
+      </ul>
+      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>
+    </div>
+  </section>
+
+  <section class="section" id="redflags" data-reveal-gate="redflags">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Red flags (things that tank the interview)</h2></div>
+    <div class="prose">
+      <ul class="redflag-list">
+        <li>Deploy on Friday at 5 PM — &quot;it's just a small change&quot;</li>
+        <li>Mutable artifacts — &quot;just SSH in and patch the JAR on the production server&quot;</li>
+        <li>All-at-once deploy with no canary — &quot;we tested it in staging, ship it&quot;</li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

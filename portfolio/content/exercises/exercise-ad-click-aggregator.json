@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-ad-click-aggregator",
+  "title": "Ad Click Aggregator",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 270,
+    "s": 65,
+    "l": 50
+  },
+  "category": "Social & Feed",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>10 billion clicks per day, counted in real-time for billing and analytics. Every click is money. The hard parts: a streaming aggregation pipeline that groups clicks by campaign, ad, geo, and minute with exactly-once semantics, inline fraud detection that filters bot clicks, click farms, and SDK spoofing before they pollute billing, and an OLAP query layer that answers \"how many clicks did campaign X get in the last 24 hours?\" in under a second. Google Ads, Meta Ads, Amazon DSP — same pipeline, different scale.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Lead with the pipeline. \"Kafka ingest, inline fraud ML, Flink streaming aggregation, ClickHouse OLAP, Postgres billing.\" Name each component and why it's there. This shows you can design end-to-end streaming systems.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Exactly-once is the money question. \"Flink checkpoints + Kafka consumer offsets + ClickHouse ReplacingMergeTree for idempotent writes.\" Double-counting = overcharging = lawsuit. Under-counting = revenue leak. Get this right.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Fraud detection is not optional. In ad tech, ~30% of clicks are fraudulent. If you skip fraud detection, your billing system is fundamentally broken. Name the three types: bot fingerprint, click farm, SDK spoofing.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Lead with the pipeline. \"Kafka ingest, inline fraud ML, Flink streaming aggregation, ClickHouse OLAP, Postgres billing.\" Name each component and why it's there. This shows you can design end-to-end streaming systems.</li>\n      <li><span class=\"rubric-points\">+2</span> Exactly-once is the money question. \"Flink checkpoints + Kafka consumer offsets + ClickHouse ReplacingMergeTree for idempotent writes.\" Double-counting = overcharging = lawsuit. Under-counting = revenue leak. Get this right.</li>\n      <li><span class=\"rubric-points\">+2</span> Fraud detection is not optional. In ad tech, ~30% of clicks are fraudulent. If you skip fraud detection, your billing system is fundamentally broken. Name the three types: bot fingerprint, click farm, SDK spoofing.</li>\n      <li><span class=\"rubric-points\">+2</span> Explain the late event strategy. \"Watermark-based windowing with 5-min allowed lateness. Beyond 5 min: dead-letter queue + nightly batch reconciliation.\" This shows you understand real-world event-time challenges.</li>\n      <li><span class=\"rubric-points\">+1</span> Distinguish storage tiers. \"Raw clicks to S3 (audit), aggregates to ClickHouse (analytics), billing rows to Postgres (invoicing).\" Each store is chosen for its strength. Using one store for everything fails.</li>\n      <li><span class=\"rubric-points\">+1</span> Know your numbers. 10B clicks/day = 115K/sec avg. 500 bytes/click = 5 TB/day raw. Pre-aggregated = ~100 MB/day. These numbers justify every architecture choice.</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Count all clicks including bots — \"we'll filter later\"</li>\n        <li>Aggregate in batch hourly only — \"real-time isn't needed\"</li>\n        <li>Store raw clicks in Postgres — \"it's our standard DB\"</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

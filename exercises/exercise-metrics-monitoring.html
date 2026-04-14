@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Metrics &amp; Monitoring — Exercise</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 145; --accent-s: 60%; --accent-l: 45%; }
+    .exercise-hint { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; }
+    .exercise-hint summary { cursor: pointer; font-family: var(--font-mono); font-size: 13.5px; color: var(--accent-text); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 500; }
+    .exercise-hint p { margin: 8px 0 0; font-size: 15px; color: var(--text-secondary); }
+    .rubric-list { padding-left: 0; list-style: none; }
+    .rubric-list li { padding: 8px 12px; background: var(--bg-subtle); border-left: 3px solid var(--accent-border); border-radius: 4px; margin-bottom: 6px; font-size: 15px; }
+    .rubric-points { display: inline-block; min-width: 28px; background: var(--accent-light); color: var(--accent-text); font-family: var(--font-mono); font-size: 12px; font-weight: 600; padding: 2px 6px; border-radius: 3px; margin-right: 8px; }
+    .redflag-list { list-style: "\1F6AB "; padding-left: 28px; }
+    .redflag-list li { font-size: 15px; color: var(--text-secondary); margin-bottom: 6px; }
+    .reveal-gate { text-align: center; padding: 20px; background: var(--bg-subtle); border: 1px dashed var(--border); border-radius: 8px; color: var(--text-muted); font-size: 15px; }
+  </style>
+</head>
+<body>
+
+<main>
+
+  <div class="hero" id="problem">
+    <div class="hero-kicker">Exercise · 60 min whiteboard</div>
+    <h1 class="hero-title">Metrics &amp; Monitoring</h1>
+    <p class="hero-desc">Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.</p>
+    <div class="hero-tags">
+      <span class="tag accent">Out of 10 points</span>
+      <span class="tag">60 min whiteboard</span>
+      <span class="tag"><a href="/metrics-monitoring">Reference solution →</a></span>
+    </div>
+  </div>
+
+  <section class="section" id="prompt">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Prompt</h2></div>
+    <div class="prose">
+      <p>1M hosts each running an agent that collects CPU, memory, disk, and custom application metrics every 10-15 seconds. That is ~100M data points/sec flowing into your ingest pipeline. The hard parts: a time-series database that stores 10M unique series with columnar compression (delta-of-delta timestamps, XOR-encoded floats), a query engine that fans out across time-partitioned shards and returns aggregated results in &lt;1 second over weeks of data, and an alert evaluator that runs thousands of threshold and anomaly-detection rules every 15-60 seconds without missing a single breach. Datadog, Prometheus, New Relic, VictoriaMetrics — same architecture, different trade-offs.</p>
+      <p><strong>Time budget:</strong> 60 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>
+    </div>
+  </section>
+
+  <section class="section" id="hints">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Hints (progressive — click to reveal)</h2></div>
+    <div class="prose">
+
+      <details class="exercise-hint">
+        <summary>Hint 1</summary>
+        <p>Start with the data model. &quot;A time series is identified by (metric_name + set of tag key-value pairs). Each series has a stream of (timestamp, float_value) tuples.&quot; This grounds everything.</p>
+      </details>
+      <details class="exercise-hint">
+        <summary>Hint 2</summary>
+        <p>Name Gorilla encoding explicitly. &quot;Delta-of-delta for timestamps, XOR for float values — from Facebook's 2015 paper. Gets ~1.37 bytes/point vs 16 bytes raw.&quot; Shows depth beyond &quot;we use a TSDB.&quot;</p>
+      </details>
+      <details class="exercise-hint">
+        <summary>Hint 3</summary>
+        <p>Cardinality is the interview differentiator. Most candidates describe ingest and query. Few mention cardinality explosion. Say: &quot;The most dangerous production issue is unbounded tag cardinality — one bad deploy tagging with request_id creates millions of series and OOMs the cluster.&quot;</p>
+      </details>
+    </div>
+  </section>
+
+  <section class="section" id="rubric" data-reveal-gate="rubric">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Rubric — 10 points</h2></div>
+    <div class="prose">
+      <ul class="rubric-list">
+      <li><span class="rubric-points">+2</span> Start with the data model. &quot;A time series is identified by (metric_name + set of tag key-value pairs). Each series has a stream of (timestamp, float_value) tuples.&quot; This grounds everything.</li>
+      <li><span class="rubric-points">+2</span> Name Gorilla encoding explicitly. &quot;Delta-of-delta for timestamps, XOR for float values — from Facebook's 2015 paper. Gets ~1.37 bytes/point vs 16 bytes raw.&quot; Shows depth beyond &quot;we use a TSDB.&quot;</li>
+      <li><span class="rubric-points">+2</span> Cardinality is the interview differentiator. Most candidates describe ingest and query. Few mention cardinality explosion. Say: &quot;The most dangerous production issue is unbounded tag cardinality — one bad deploy tagging with request_id creates millions of series and OOMs the cluster.&quot;</li>
+      <li><span class="rubric-points">+2</span> Separate ingest path from query path. Draw them as independent pipelines that share TSDB storage. This shows you understand read/write isolation — writers don't block readers.</li>
+      <li><span class="rubric-points">+1</span> Address &quot;who monitors the monitoring?&quot; Dead-man's switch: alert evaluator emits a heartbeat; a separate watchdog in a different failure domain checks it. This is the kind of operational nuance that impresses.</li>
+      <li><span class="rubric-points">+1</span> Mention push vs pull trade-off proactively. &quot;Prometheus pulls, Datadog pushes. Push is better for ephemeral containers. Pull is simpler for static fleets. Modern systems support both via OpenTelemetry Collector.&quot;</li>
+      </ul>
+      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>
+    </div>
+  </section>
+
+  <section class="section" id="redflags" data-reveal-gate="redflags">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">Red flags (things that tank the interview)</h2></div>
+    <div class="prose">
+      <ul class="redflag-list">
+        <li>Store every metric data point as a row in Postgres</li>
+        <li>Allow unbounded tag cardinality (user_id, request_id as metric tags)</li>
+        <li>Alert on raw noisy metrics without smoothing</li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

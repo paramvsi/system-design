@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Databases Compared — System Design</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 215; --accent-s: 75%; --accent-l: 48%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>"Which database?" is the single most common design decision in every system design interview. Pick wrong and your design either can't scale, can't query, or can't stay consistent. PostgreSQL, MySQL, Cassandra, DynamoDB, and MongoDB each dominate a different workload shape.</p>
+      <p>This comparison arms you with a <span class="hl-accent">crisp mental model</span> so you never wave your hands when the interviewer asks "Why not just use Postgres?"</p>
+    </div>
+  </section>
+
+  <section class="section" id="comparison">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Head-to-head comparison</h2></div>
+    <table class="algo-table">
+      <thead>
+        <tr>
+          <th>Database</th>
+          <th>Consistency</th>
+          <th>Scaling model</th>
+          <th>Query flexibility</th>
+          <th>Ops complexity</th>
+          <th>Sweet spot</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="algo-name">PostgreSQL</td>
+          <td>Strong (ACID, serializable)</td>
+          <td>Vertical + read replicas; Citus for horizontal</td>
+          <td>Full SQL, JSON, CTEs, window functions</td>
+          <td>Moderate (mature tooling)</td>
+          <td>General OLTP, complex queries, ACID-critical</td>
+        </tr>
+        <tr>
+          <td class="algo-name">MySQL</td>
+          <td>Strong (InnoDB ACID)</td>
+          <td>Vertical + read replicas; Vitess for sharding</td>
+          <td>Standard SQL, decent JSON support</td>
+          <td>Low-moderate</td>
+          <td>Web apps, read-heavy OLTP, proven at scale (Meta, GitHub)</td>
+        </tr>
+        <tr>
+          <td class="algo-name">Cassandra</td>
+          <td>Tunable (ONE to ALL quorum)</td>
+          <td>Horizontal — linear write scaling, shared-nothing</td>
+          <td>CQL (no joins, no aggregations)</td>
+          <td>High (compaction tuning, repair, tombstones)</td>
+          <td>Write-heavy time-series, IoT, activity feeds</td>
+        </tr>
+        <tr>
+          <td class="algo-name">DynamoDB</td>
+          <td>Eventual by default; strong reads optional</td>
+          <td>Horizontal — fully managed, auto-partitioned</td>
+          <td>Key-value + GSI; limited query patterns</td>
+          <td>Very low (serverless)</td>
+          <td>Serverless KV, session stores, high-scale simple access</td>
+        </tr>
+        <tr>
+          <td class="algo-name">MongoDB</td>
+          <td>Strong within replica set; tunable for sharded</td>
+          <td>Horizontal via sharding (config servers + mongos)</td>
+          <td>Rich document queries, aggregation pipeline</td>
+          <td>Moderate-high (shard key selection critical)</td>
+          <td>Flexible schema prototyping, content management</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="prose">
+      <p><strong>Key insight:</strong> Relational databases (Postgres, MySQL) give you query flexibility and strong consistency at the cost of harder horizontal scaling. NoSQL databases (Cassandra, DynamoDB, MongoDB) give you horizontal scaling at the cost of query constraints or consistency trade-offs.</p>
+    </div>
+  </section>
+
+  <section class="section" id="decision">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Decision flowchart</h2></div>
+    <div class="prose">
+      <p>Walk through these questions in order during your interview:</p>
+      <ol>
+        <li><strong>Do you need ACID transactions + complex queries (joins, aggregations)?</strong> → <span class="hl-accent">PostgreSQL</span>. Default choice for most OLTP. Battle-tested, extensible, rich ecosystem.</li>
+        <li><strong>Write-heavy time-series / append-only workload at massive scale?</strong> → <span class="hl-accent">Cassandra</span>. Linear write scaling. Model data by query (denormalize aggressively). No joins.</li>
+        <li><strong>Serverless, simple key-value / key-sort access patterns?</strong> → <span class="hl-accent">DynamoDB</span>. Zero ops. Single-digit ms latency. Design your access patterns around partition key + sort key.</li>
+        <li><strong>Rapidly evolving schema, document-shaped data?</strong> → <span class="hl-accent">MongoDB</span>. Flexible schema for prototyping. Good aggregation pipeline. Careful with shard key selection for production.</li>
+        <li><strong>Read-heavy web app, proven MySQL ecosystem (Vitess, ProxySQL)?</strong> → <span class="hl-accent">MySQL</span>. Simpler than Postgres, massive community, proven at Meta/GitHub scale.</li>
+      </ol>
+      <p><strong>The interview answer:</strong> "Postgres for most OLTP. Cassandra for write-heavy time-series. DynamoDB for serverless KV. MongoDB for flexible schema prototyping."</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">When to pick what — deeper context</h2></div>
+    <div class="prose">
+      <h3>PostgreSQL — the default choice</h3>
+      <p>If you don't have a specific reason NOT to use Postgres, use Postgres. It handles JSON (JSONB), full-text search, geospatial (PostGIS), and time-series (TimescaleDB) via extensions. Horizontal scaling via Citus or read replicas covers most workloads up to ~10TB. Beyond that, consider sharding or moving hot paths to a purpose-built store.</p>
+
+      <h3>Cassandra — built for writes</h3>
+      <p>Cassandra's LSM-tree storage engine is optimized for writes. It achieves linear write scaling by partitioning data across nodes with consistent hashing. The trade-off: you must model data by query pattern (no ad-hoc joins). Reads are fast only when you query by partition key. Time-series data (metrics, IoT, activity logs) is the canonical use case.</p>
+
+      <h3>DynamoDB — zero ops at any scale</h3>
+      <p>DynamoDB's single-table design pattern packs multiple entity types into one table using composite keys. This feels unnatural to SQL developers but enables single-digit-ms reads at any scale. Watch out for hot partitions (adaptive capacity helps but doesn't eliminate the problem) and GSI cost (each GSI is essentially a full table copy).</p>
+
+      <h3>MongoDB — schema flexibility has a cost</h3>
+      <p>MongoDB's flexible schema is a double-edged sword. Great for prototyping and evolving data models, but production systems need schema validation to prevent data rot. The aggregation pipeline is surprisingly powerful. Shard key selection is make-or-break: a bad shard key creates hot spots that are painful to fix post-deployment.</p>
+
+      <h3>The polyglot persistence pattern</h3>
+      <p>Real systems often use multiple databases: Postgres for transactional core + Redis for caching + Elasticsearch for search + Cassandra for analytics. Mention this pattern in interviews to show real-world awareness, but keep your primary store choice simple and justified.</p>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

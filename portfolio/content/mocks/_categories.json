@@ -1,0 +1,15 @@
+{
+  "Social & Media": [
+    "mock-instagram"
+  ],
+  "Marketplace & Booking": [
+    "mock-uber"
+  ],
+  "Infrastructure": [
+    "mock-distributed-cache",
+    "mock-chatgpt"
+  ],
+  "Financial & Trading": [
+    "mock-payment-gateway"
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-gmail",
+  "title": "Gmail",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 0,
+    "s": 75,
+    "l": 52
+  },
+  "category": "Communication",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>An email service for ~1.8B users handling ~1B incoming emails per day plus outgoing. The hard parts: an SMTP ingress that accepts mail from anyone on the public internet while rejecting terabytes of daily spam; a per-user mailbox store sharded across thousands of machines with search, labels, and conversation threading; and delivery reputation management so your outbound mail doesn't get marked spam by other providers. Gmail pioneered \"search, don't sort\" — replaced folders with labels + full-text search, which changed the email paradigm.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>SMTP is not HTTP. Many candidates model ingress as a REST endpoint. SMTP's temp-fail retry model is core; losing that means losing mail.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Spam is 40% of the story. Not an afterthought. DKIM/SPF/DMARC + ML + user feedback loop is the engineering mass of the inbound path.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Per-user sharding + labels + search. The \"Gmail innovation\" triangle. Don't present a folder-based model — mention labels + search explicitly.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> SMTP is not HTTP. Many candidates model ingress as a REST endpoint. SMTP's temp-fail retry model is core; losing that means losing mail.</li>\n      <li><span class=\"rubric-points\">+2</span> Spam is 40% of the story. Not an afterthought. DKIM/SPF/DMARC + ML + user feedback loop is the engineering mass of the inbound path.</li>\n      <li><span class=\"rubric-points\">+2</span> Per-user sharding + labels + search. The \"Gmail innovation\" triangle. Don't present a folder-based model — mention labels + search explicitly.</li>\n      <li><span class=\"rubric-points\">+2</span> Threading is subtle. In-Reply-To + References + subject-similarity fallback. Mention all three.</li>\n      <li><span class=\"rubric-points\">+2</span> Outbound reputation matters as much as inbound filtering. Gmail's deliverability is a product feature. Don't forget to architect the send side.</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>No back-of-envelope estimation — jumps straight into components without quantifying scale for Gmail</li>\n        <li>Single point of failure — no replication, failover, or redundancy discussed</li>\n        <li>Ignores data model and storage choices — hand-waves the database layer</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-reminder-alert",
+  "title": "Reminder Alert",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 30,
+    "s": 85,
+    "l": 50
+  },
+  "category": "Communication",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>Schedule a reminder for \"Thursday 9am in America/New_York\" and have it arrive on the user's phone at exactly that local time — even when DST changes, the user moves timezones, or the delivery channel is flaky. The hard parts: time-bucketed scanning that doesn't miss or duplicate reminders across millions of users, timezone materialization that handles DST transitions correctly, and at-least-once delivery with client-side dedup so a reminder arrives once, not zero or three times. Google Calendar reminders, Slack scheduled messages, and medical appointment alerts all solve this.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Lead with time-bucketed partitioning. \"Cassandra partitioned by fire_minute_utc. Scanner reads one partition per tick.\" This is the insight.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>IANA zone, not UTC offset. Say it explicitly: \"we store America/New_York, not -05:00.\" This is the DST answer and shows you've hit this bug.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>At-least-once + dedup is the pattern. Don't propose exactly-once. Acknowledge the duplicate risk; show the mitigation (Redis SETNX + client dedup).</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Lead with time-bucketed partitioning. \"Cassandra partitioned by fire_minute_utc. Scanner reads one partition per tick.\" This is the insight.</li>\n      <li><span class=\"rubric-points\">+2</span> IANA zone, not UTC offset. Say it explicitly: \"we store America/New_York, not -05:00.\" This is the DST answer and shows you've hit this bug.</li>\n      <li><span class=\"rubric-points\">+2</span> At-least-once + dedup is the pattern. Don't propose exactly-once. Acknowledge the duplicate risk; show the mitigation (Redis SETNX + client dedup).</li>\n      <li><span class=\"rubric-points\">+2</span> Recurring = expand one ahead. Never pre-generate all future instances. Expand after each fire.</li>\n      <li><span class=\"rubric-points\">+2</span> Channel escalation. Push fails silently; SMS is more reliable; email is least timely. Escalation ladder shows product thinking.</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Store timezone as UTC offset (-05:00) instead of IANA name (America/New_York)</li>\n        <li>Full-table scan every minute looking for due reminders</li>\n        <li>Expand all future instances of \"every Monday forever\" at creation time</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>API Protocols Compared — System Design</title>
+  <style>
+/* ux-v2-bumped */
+:root { --accent-h: 145; --accent-s: 60%; --accent-l: 45%; }</style>
+</head>
+<body>
+<main>
+
+  <section class="section" id="problem">
+    <div class="section-head"><span class="section-n">01</span><h2 class="section-title">Why this matters</h2></div>
+    <div class="prose">
+      <p>Every system design starts with "how do clients talk to your service?" REST, gRPC, GraphQL, WebSocket, and SSE are not interchangeable — each optimizes for a different communication pattern. Choosing the wrong protocol means re-architecting your API layer when requirements change.</p>
+      <p>Interviewers use this question to test whether you think about <span class="hl-accent">payload efficiency, latency, streaming needs, and client constraints</span> — not just "REST because everyone uses it."</p>
+    </div>
+  </section>
+
+  <section class="section" id="comparison">
+    <div class="section-head"><span class="section-n">02</span><h2 class="section-title">Head-to-head comparison</h2></div>
+    <table class="algo-table">
+      <thead>
+        <tr>
+          <th>Protocol</th>
+          <th>Payload format</th>
+          <th>Latency</th>
+          <th>Streaming</th>
+          <th>Browser support</th>
+          <th>Best for</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="algo-name">REST</td>
+          <td>JSON (text, human-readable)</td>
+          <td>Moderate (HTTP/1.1 overhead, JSON parsing)</td>
+          <td>No native streaming</td>
+          <td>Universal</td>
+          <td>Public APIs, CRUD, broad compatibility</td>
+        </tr>
+        <tr>
+          <td class="algo-name">gRPC</td>
+          <td>Protobuf (binary, compact)</td>
+          <td>Low (HTTP/2 multiplexing, binary serialization)</td>
+          <td>Bidirectional streaming built-in</td>
+          <td>Limited (grpc-web proxy needed)</td>
+          <td>Internal service-to-service, polyglot microservices</td>
+        </tr>
+        <tr>
+          <td class="algo-name">GraphQL</td>
+          <td>JSON (client specifies shape)</td>
+          <td>Variable (depends on resolver complexity)</td>
+          <td>Subscriptions via WebSocket</td>
+          <td>Universal (HTTP POST)</td>
+          <td>Mobile/web with diverse data needs, BFF replacement</td>
+        </tr>
+        <tr>
+          <td class="algo-name">WebSocket</td>
+          <td>Any (text or binary frames)</td>
+          <td>Very low (persistent connection, no HTTP overhead)</td>
+          <td>Full-duplex bidirectional</td>
+          <td>Universal</td>
+          <td>Chat, gaming, collaborative editing, live updates</td>
+        </tr>
+        <tr>
+          <td class="algo-name">SSE (Server-Sent Events)</td>
+          <td>Text (UTF-8 event stream)</td>
+          <td>Low (long-lived HTTP connection)</td>
+          <td>Server → client only (unidirectional)</td>
+          <td>Universal (EventSource API)</td>
+          <td>Live feeds, notifications, dashboards</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="prose">
+      <p><strong>Key insight:</strong> REST is the lingua franca for external APIs. gRPC wins on efficiency for internal calls. GraphQL solves the over-fetching problem for diverse clients. WebSocket and SSE handle real-time — bidirectional vs unidirectional respectively.</p>
+    </div>
+  </section>
+
+  <section class="section" id="decision">
+    <div class="section-head"><span class="section-n">03</span><h2 class="section-title">Decision flowchart</h2></div>
+    <div class="prose">
+      <p>Ask these questions in order during your design:</p>
+      <ol>
+        <li><strong>Public-facing API with broad client support?</strong> → <span class="hl-accent">REST</span>. Ubiquitous, cacheable (HTTP caching), tooling everywhere. Use OpenAPI spec for documentation.</li>
+        <li><strong>Internal service-to-service, high throughput?</strong> → <span class="hl-accent">gRPC</span>. Protobuf is 5-10x smaller than JSON. HTTP/2 multiplexing eliminates head-of-line blocking. Codegen gives type-safe clients in any language.</li>
+        <li><strong>Diverse clients needing different data shapes?</strong> → <span class="hl-accent">GraphQL</span>. Mobile needs 3 fields, web needs 20 — one endpoint, client picks. Eliminates BFF proliferation. Watch out for N+1 query problems (use DataLoader).</li>
+        <li><strong>Bidirectional real-time?</strong> → <span class="hl-accent">WebSocket</span>. Chat, multiplayer gaming, collaborative editing. Persistent TCP connection. Requires connection management at scale (sticky sessions or pub/sub fan-out).</li>
+        <li><strong>Server-to-client push only?</strong> → <span class="hl-accent">SSE</span>. Simpler than WebSocket. Auto-reconnect built into the browser API. Great for live dashboards, notification feeds, stock tickers.</li>
+      </ol>
+      <p><strong>The interview answer:</strong> "REST for public APIs. gRPC for internal service-to-service. GraphQL for flexible client queries. WebSocket for bidirectional real-time."</p>
+    </div>
+  </section>
+
+  <section class="section" id="deep-dive">
+    <div class="section-head"><span class="section-n">04</span><h2 class="section-title">When to pick what — deeper context</h2></div>
+    <div class="prose">
+      <h3>REST — not just CRUD</h3>
+      <p>REST over HTTP/2 is faster than people assume. With gzip/brotli compression and connection multiplexing, the JSON overhead shrinks significantly. REST shines when you need HTTP caching (CDN, browser cache, reverse proxy), hypermedia discovery, and broad tooling support. For 80% of systems, REST is the right default.</p>
+
+      <h3>gRPC — the microservices backbone</h3>
+      <p>Google, Netflix, and Uber use gRPC for internal communication. The protobuf schema acts as an enforced contract between teams. Streaming RPCs (server-streaming, client-streaming, bidirectional) handle patterns that would require WebSocket in REST-land. The main pain point: debugging binary payloads is harder than JSON.</p>
+
+      <h3>GraphQL — powerful but complex</h3>
+      <p>GraphQL solves real problems (over-fetching, under-fetching, API versioning) but introduces new ones: query cost analysis (prevent expensive queries), caching complexity (no HTTP cache by default), and schema governance. Best when you have many client types with different data needs. Overkill for a single client consuming a single backend.</p>
+
+      <h3>WebSocket — connection management is the hard part</h3>
+      <p>The protocol is simple; the operations are hard. At scale, you need: (1) a pub/sub layer (Redis, Kafka) to fan messages across WebSocket servers, (2) connection state management (which user is on which server), (3) graceful reconnection handling. Load balancers need sticky sessions or connection-aware routing.</p>
+
+      <h3>SSE — the underrated option</h3>
+      <p>SSE is often overlooked in favor of WebSocket, but for server-push-only patterns (notifications, live feeds, progress updates), SSE is simpler: standard HTTP, automatic reconnection, works through most proxies. ChatGPT's streaming response uses SSE. Use it when you don't need the client to send data back over the same connection.</p>
+
+      <h3>Combining protocols</h3>
+      <p>Production systems typically use multiple protocols: REST for the public API gateway + gRPC between internal services + WebSocket for real-time features + SSE for streaming responses. Articulate this layering in interviews.</p>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

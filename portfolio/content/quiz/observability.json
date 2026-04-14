@@ -45,6 +45,36 @@
       "choices": ["Ignore", "Freeze non-critical launches; focus on reliability work until budget recovers", "Lower SLO", "Disable monitoring"],
       "correct": 1,
       "explanation": "Error budget = allowable downtime. Spent = user experience already degraded. Freezing feature work + prioritizing reliability work is the standard Google SRE response."
+    },
+    {
+      "q": "A developer adds a Prometheus metric with labels {user_id, endpoint, status_code}. With 10M users and 50 endpoints, what problem will this cause?",
+      "choices": ["Metric is too accurate", "Cardinality explosion: 10M x 50 x ~5 status codes = 2.5 billion time series, overwhelming Prometheus storage and query performance", "No problem — Prometheus handles any cardinality", "Only affects Grafana dashboards"],
+      "correct": 1,
+      "explanation": "High-cardinality labels (like user_id) create a unique time series per combination. Prometheus stores each series separately. Billions of series exhaust memory and make queries timeout. Fix: remove user_id from metric labels; use logs or traces for per-user debugging. Metrics should use bounded-cardinality labels only."
+    },
+    {
+      "q": "Your on-call engineer receives 47 alerts in 10 minutes during a cascading failure. They can't identify the root cause amid the noise. What observability practice would have helped?",
+      "choices": ["More alerts", "Alert grouping/deduplication and dependency-aware alerting: group related alerts, suppress downstream symptoms, surface only the root-cause alert", "Disable alerting during incidents", "Longer alert evaluation windows"],
+      "correct": 1,
+      "explanation": "Alert fatigue is a leading cause of slow incident response. Alertmanager-style grouping (by service, cluster) and inhibition rules (if database-down fires, suppress all dependent service alerts) reduce noise. The goal: one actionable alert per root cause, not one per symptom."
+    },
+    {
+      "q": "You sample traces at 1% (head-based sampling). A rare but critical payment failure happens on 0.01% of requests. Your traces almost never capture these failures. What sampling strategy fixes this?",
+      "choices": ["Increase to 100% sampling", "Tail-based sampling: buffer all traces briefly, then keep traces that contain errors, high latency, or specific flags regardless of head-sampling rate", "Disable sampling", "Log-based tracing only"],
+      "correct": 1,
+      "explanation": "Head-based sampling decides at the start of a request whether to trace it — before you know if it will fail. Tail-based sampling (e.g., OpenTelemetry Collector with tail_sampling processor) evaluates completed traces and retains interesting ones (errors, slow, specific attributes). This captures rare failures without the cost of 100% tracing."
+    },
+    {
+      "q": "Your p99 latency alert fires but your dashboard shows average latency is fine at 45ms. The team debates whether there's a real problem. Who is right?",
+      "choices": ["Average is fine, ignore the alert", "The p99 alert is correct: averages hide tail latency; 1% of users are experiencing severe latency that the average masks", "Both metrics are wrong", "p99 is always noisy, disable it"],
+      "correct": 1,
+      "explanation": "Averages are misleading for latency. A 45ms average can hide a p99 of 5 seconds. With 1000 requests/sec, that's 10 users/sec hitting multi-second latency. At scale, every page load likely includes at least one p99-level backend call. Alert on percentiles (p95/p99), not averages."
+    },
+    {
+      "q": "After enabling structured JSON logging across all services, your log storage costs jumped from $2K/month to $18K/month. Searches are also slower. What's the most effective cost reduction that preserves debugging ability?",
+      "choices": ["Switch back to plain text logs", "Implement log levels + sampling: DEBUG/INFO logs sampled at 10%, WARN/ERROR at 100%; add a dynamic log-level override for on-demand debugging of specific services", "Delete old logs", "Compress logs only"],
+      "correct": 1,
+      "explanation": "Most log volume is DEBUG/INFO for healthy requests. Sampling low-severity logs (or dropping them entirely in production) cuts volume dramatically. Keep 100% of WARN/ERROR. Dynamic log-level overrides let you temporarily enable DEBUG for a specific service during incidents. This is the standard approach at high-scale companies."
     }
   ]
 }

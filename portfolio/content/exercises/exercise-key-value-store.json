@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-key-value-store",
+  "title": "Key-Value Store",
+  "problemNumber": "60",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "60 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 215,
+    "s": 75,
+    "l": 48
+  },
+  "category": "Storage & Data",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>10 million requests per second, 100 TB of data, single-digit millisecond p99 at any scale. The hard parts: a consistent hash ring that routes every request to the right partition without a central coordinator, an LSM storage engine (memtable + WAL + SSTables + compaction) that turns random writes into sequential I/O, and quorum replication across three AZs so a single node or zone death never loses data and never causes downtime. Amazon DynamoDB, Apache Cassandra, Riak -- same lineage from the 2007 Dynamo paper.</p>\n      <p><strong>Time budget:</strong> 60 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Start with consistent hashing. \"hash(partition_key) maps to a virtual node on a consistent hash ring. Adding/removing nodes only remaps 1/N of keys.\" This is the foundation.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Name the LSM tree explicitly. \"Writes append to WAL + memtable, flush to SSTables, background compaction merges them. Bloom filters avoid unnecessary reads.\" Shows you understand the storage engine, not just the API.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Quorum math: W + R &gt; N. \"3 replicas, write quorum of 2, read quorum of 2. W+R=4 &gt; 3, so any read sees the latest write. For eventual consistency, R=1 is enough.\"</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Start with consistent hashing. \"hash(partition_key) maps to a virtual node on a consistent hash ring. Adding/removing nodes only remaps 1/N of keys.\" This is the foundation.</li>\n      <li><span class=\"rubric-points\">+2</span> Name the LSM tree explicitly. \"Writes append to WAL + memtable, flush to SSTables, background compaction merges them. Bloom filters avoid unnecessary reads.\" Shows you understand the storage engine, not just the API.</li>\n      <li><span class=\"rubric-points\">+2</span> Quorum math: W + R &gt; N. \"3 replicas, write quorum of 2, read quorum of 2. W+R=4 &gt; 3, so any read sees the latest write. For eventual consistency, R=1 is enough.\"</li>\n      <li><span class=\"rubric-points\">+1</span> Partition key design is the interview. High cardinality, uniform distribution, matches the access pattern. Bad PK = hot partition = system down. Give a concrete example: user_id good, date bad.</li>\n      <li><span class=\"rubric-points\">+1</span> Mention adaptive capacity. This is the detail that shows you have gone beyond textbook knowledge. \"DynamoDB borrows unused capacity from cold partitions to hot ones -- no manual intervention.\"</li>\n      <li><span class=\"rubric-points\">+1</span> Contrast with the original Dynamo paper. \"Dynamo used vector clocks and sloppy quorums for AP. DynamoDB uses a single leader per partition for CP within a region, which is a simpler model. Global tables add eventual consistency across regions.\"</li>\n      <li><span class=\"rubric-points\">+1</span> Discuss single-table design. \"Overload the sort key to store multiple entity types in one table. PK=USER#123 SK=PROFILE for metadata, SK=ORDER#2024-01-15 for orders. One Query returns all data for a user. This is the DynamoDB-native pattern.\"</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Scan entire table for analytics queries</li>\n        <li>Using a date or timestamp as partition key</li>\n        <li>Storing items larger than 400 KB inline</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

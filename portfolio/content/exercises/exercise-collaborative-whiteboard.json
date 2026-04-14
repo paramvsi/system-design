@@ -1,0 +1,51 @@
+{
+  "slug": "exercise-collaborative-whiteboard",
+  "title": "Collaborative Whiteboard",
+  "problemNumber": "45",
+  "difficulty": null,
+  "heroDescription": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "tags": [
+    "Out of 10 points",
+    "45 min whiteboard",
+    "Reference solution →"
+  ],
+  "accent": {
+    "h": 38,
+    "s": 85,
+    "l": 50
+  },
+  "category": "Communication",
+  "blurb": "Whiteboard exercise. Try the problem cold, then reveal the rubric to self-score.",
+  "sections": [
+    {
+      "id": "prompt",
+      "label": "Prompt",
+      "number": "01",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">01</span><h2 class=\"section-title\">Prompt</h2></div>\n    <div class=\"prose\">\n      <p>Infinite canvas. Shapes, text, freehand drawing. Multiple users see each other's cursors in real time. Undo/redo, zoom/pan, offline edits that sync when reconnected. Like Miro or FigJam. The hard parts: a CRDT for canvas objects so concurrent edits merge without conflicts, spatial indexing so a canvas with 100K objects only sends the ~200 in your viewport, and per-user undo that reverses your operations without undoing other people's work. Scale: boards with 100K+ objects, 50+ simultaneous editors, sub-100ms collaboration latency.</p>\n      <p><strong>Time budget:</strong> 45 min whiteboard. Draw architecture, estimate numbers, discuss tradeoffs.</p>\n    </div>"
+    },
+    {
+      "id": "hints",
+      "label": "Hints (progressive — click to reveal)",
+      "number": "02",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">02</span><h2 class=\"section-title\">Hints (progressive — click to reveal)</h2></div>\n    <div class=\"prose\">\n\n      <details class=\"exercise-hint\">\n        <summary>Hint 1</summary>\n        <p>Lead with CRDT, not OT. \"Each canvas object is a CRDT register — concurrent edits merge without a central server.\" This immediately signals you know modern collaboration architecture.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 2</summary>\n        <p>Spatial indexing is the scalability key. \"R-tree query returns only viewport objects\" — this is what makes 100K-object boards feasible. Most candidates miss this entirely.</p>\n      </details>\n      <details class=\"exercise-hint\">\n        <summary>Hint 3</summary>\n        <p>Per-user undo is non-obvious. \"Undo applies the inverse operation as a new CRDT op\" — this shows you've thought about multiplayer undo deeply, not just single-player Ctrl+Z.</p>\n      </details>\n    </div>"
+    },
+    {
+      "id": "rubric",
+      "label": "Rubric — 10 points",
+      "number": "03",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">03</span><h2 class=\"section-title\">Rubric — 10 points</h2></div>\n    <div class=\"prose\">\n      <ul class=\"rubric-list\">\n      <li><span class=\"rubric-points\">+2</span> Lead with CRDT, not OT. \"Each canvas object is a CRDT register — concurrent edits merge without a central server.\" This immediately signals you know modern collaboration architecture.</li>\n      <li><span class=\"rubric-points\">+2</span> Spatial indexing is the scalability key. \"R-tree query returns only viewport objects\" — this is what makes 100K-object boards feasible. Most candidates miss this entirely.</li>\n      <li><span class=\"rubric-points\">+2</span> Per-user undo is non-obvious. \"Undo applies the inverse operation as a new CRDT op\" — this shows you've thought about multiplayer undo deeply, not just single-player Ctrl+Z.</li>\n      <li><span class=\"rubric-points\">+2</span> Cursor optimization matters at scale. \"Viewport-filtered, 15 Hz with client interpolation\" — shows you understand the network cost of presence features.</li>\n      <li><span class=\"rubric-points\">+2</span> Distinguish from Google Docs. Docs = linear text (sequence CRDT or OT). Whiteboard = spatial objects (map CRDT with LWW registers). Different data model, different indexing strategy.</li>\n      </ul>\n      <p><strong>Self-score:</strong> tally the points you would have mentioned unprompted. 7+ is interview-ready on this problem.</p>\n    </div>"
+    },
+    {
+      "id": "redflags",
+      "label": "Red flags (things that tank the interview)",
+      "number": "04",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">04</span><h2 class=\"section-title\">Red flags (things that tank the interview)</h2></div>\n    <div class=\"prose\">\n      <ul class=\"redflag-list\">\n        <li>Send all 100K canvas objects to every client on load</li>\n        <li>Use OT (Operational Transform) instead of CRDT</li>\n        <li>Global undo stack — undo reverses the last operation on the board by any user</li>\n      </ul>\n    </div>"
+    }
+  ],
+  "archSvg": null,
+  "flow": null,
+  "mermaid": [],
+  "related": [],
+  "similar": [],
+  "readMinutes": 2
+}

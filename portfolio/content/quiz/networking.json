@@ -45,6 +45,36 @@
       "choices": ["TCP", "UDP (QUIC)", "SCTP", "New custom"],
       "correct": 1,
       "explanation": "HTTP/3 = HTTP semantics over QUIC, and QUIC is built on UDP. Per-stream loss recovery, 0-RTT resumption, connection migration across network changes."
+    },
+    {
+      "q": "Your TLS certificate expires at 3 AM on a Saturday. The on-call engineer doesn't notice. By Monday morning, all browsers show 'Your connection is not private' and API clients are refusing to connect. What's the immediate fix AND the long-term prevention?",
+      "choices": ["Restart the web server", "Immediately renew/replace the cert; long-term: use automated cert management (Let's Encrypt + certbot auto-renew) with monitoring alerts at 30/14/7 days before expiry", "Clear browser caches", "Switch to HTTP"],
+      "correct": 1,
+      "explanation": "Expired TLS certs cause hard failures — browsers and HTTPS clients refuse the connection entirely. Automated certificate management (ACME/Let's Encrypt) with renewal at 30 days before expiry eliminates manual rotation. Alert on cert-expiry-days-remaining metric as a safety net."
+    },
+    {
+      "q": "You change your primary database IP and update DNS, but your DNS records had a 24-hour TTL. For the next day, some users hit the old IP and get connection refused. What should you have done?",
+      "choices": ["Update DNS faster", "Lower the TTL to 60 seconds days BEFORE the migration, wait for the old TTL to expire, then perform the IP change, then optionally raise TTL back", "Use a CDN", "Notify all users to flush DNS"],
+      "correct": 1,
+      "explanation": "The standard DNS migration playbook: step 1, lower TTL well in advance (at least old-TTL duration before cutover). Step 2, wait for all caches to expire the old high-TTL record. Step 3, change the IP. Step 4, verify. Step 5, optionally raise TTL again. Skipping step 1 means resolvers cache the old IP for the full original TTL."
+    },
+    {
+      "q": "Your gRPC service uses HTTP/2 with a single long-lived connection to a backend behind an L4 load balancer. You scale the backend from 2 to 10 pods. Requests still only hit the original 2 pods. Why?",
+      "choices": ["gRPC doesn't support load balancing", "L4 (TCP) load balancers route per-connection, not per-request; the single persistent HTTP/2 connection was established to one backend and all multiplexed streams go there", "DNS caching", "Kubernetes bug"],
+      "correct": 1,
+      "explanation": "L4 load balancers operate at the TCP level. Once a connection is established, all traffic on it goes to the same backend. HTTP/2 multiplexes many requests over one connection, so new backends never see traffic. Fix: use an L7 (HTTP-aware) load balancer like Envoy, or implement client-side load balancing with gRPC name resolution."
+    },
+    {
+      "q": "During a regional failover, your CDN continues serving stale content from edge caches even though the origin is now in a different region with updated data. Users see data from 6 hours ago. What went wrong?",
+      "choices": ["CDN is broken", "Cache-Control max-age was set too high and no cache purge/invalidation was triggered as part of the failover runbook", "DNS didn't update", "The new origin is slow"],
+      "correct": 1,
+      "explanation": "CDN edge caches serve content until max-age expires or a purge is issued. If your failover runbook doesn't include a CDN purge/invalidation step, edges keep serving stale content from the old origin. Always include CDN invalidation in failover procedures, and consider stale-while-revalidate for graceful transitions."
+    },
+    {
+      "q": "A mobile app works fine on WiFi but fails intermittently on cellular with 'connection reset' errors. TCP connections drop when the user moves between cell towers. Which protocol feature solves this?",
+      "choices": ["TCP keepalive", "QUIC connection migration: connections survive IP address changes because they're identified by connection ID, not IP:port tuple", "HTTP long-polling", "WebSocket with auto-reconnect"],
+      "correct": 1,
+      "explanation": "TCP connections are bound to a 4-tuple (src IP:port, dst IP:port). When a mobile device switches cell towers, its IP changes, killing all TCP connections. QUIC (HTTP/3) uses a connection ID independent of IP, so the connection survives network changes transparently. This is a major reason Google pushed for QUIC on mobile."
     }
   ]
 }

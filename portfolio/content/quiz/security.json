@@ -45,6 +45,36 @@
       "choices": ["Fail-open (allow all on outage)", "Fail-closed (deny on outage)", "50/50", "Whichever"],
       "correct": 1,
       "explanation": "Login is a brute-force target. Fail-open = free path for attackers during outage. Fail-closed = temporary legit-user pain vs credential stuffing. Security > availability on auth paths."
+    },
+    {
+      "q": "An attacker steals a user's JWT access token (15-min TTL) from a compromised browser extension. The token is stateless and your backend has no revocation list. What can the attacker do and for how long?",
+      "choices": ["Nothing — JWTs are encrypted", "Full access to the user's account for up to 15 minutes until the token expires; you cannot revoke it without server-side changes", "Permanent access", "Only read access"],
+      "correct": 1,
+      "explanation": "Stateless JWTs cannot be revoked mid-TTL without adding a server-side deny-list (which defeats the stateless advantage). The attacker has full access until expiry. Mitigations: short TTL (5-15 min), token binding to IP/fingerprint, server-side revocation list for critical apps, and immediate refresh-token rotation on suspected compromise."
+    },
+    {
+      "q": "Your SPA at app.example.com makes API calls to api.example.com. A developer sets CORS to Access-Control-Allow-Origin: * with Access-Control-Allow-Credentials: true. What security hole does this create?",
+      "choices": ["No issue — same parent domain", "Any website can make credentialed requests to your API on behalf of logged-in users, enabling CSRF-like attacks", "Only affects GET requests", "CORS blocks all requests"],
+      "correct": 1,
+      "explanation": "Allow-Origin: * with Allow-Credentials: true means ANY origin can send requests with the user's cookies/tokens. An attacker's site (evil.com) can make authenticated API calls as the user. Fix: explicitly whitelist allowed origins (app.example.com) and never combine wildcard with credentials. Browsers actually block this specific combo, but misconfigurations with dynamic origin reflection create the same vulnerability."
+    },
+    {
+      "q": "You rotate your database password on a Saturday. The new password is updated in AWS Secrets Manager, but the application pods still have the old password cached from startup. Deploys happen Monday. What breaks?",
+      "choices": ["Nothing — connection pools persist", "When connection pools recycle or pods restart, they fetch the old cached password and fail to connect to the database", "The database rejects all connections immediately", "Secrets Manager auto-updates pods"],
+      "correct": 1,
+      "explanation": "Secret rotation without consumer coordination creates a gap. Best practice: applications should poll Secrets Manager periodically (or use a sidecar that watches for changes), support dual-credential windows (old + new both valid during rotation), and test rotation in staging. AWS Secrets Manager rotation lambdas can coordinate this automatically."
+    },
+    {
+      "q": "Your API accepts user-provided URLs for webhook callbacks. An attacker submits http://169.254.169.254/latest/meta-data/iam/security-credentials/ as the webhook URL. What attack is this?",
+      "choices": ["XSS", "SSRF (Server-Side Request Forgery): your server fetches the AWS metadata endpoint, leaking IAM credentials to the attacker", "SQL injection", "DDoS"],
+      "correct": 1,
+      "explanation": "SSRF exploits the server's ability to make outbound requests. The AWS instance metadata endpoint (169.254.169.254) returns IAM credentials, which the attacker receives via the webhook response. Mitigations: block private/link-local IPs in outbound requests, use IMDSv2 (requires PUT with hop-limit), and run webhooks from an isolated network without metadata access."
+    },
+    {
+      "q": "Your team stores API keys in a Git repository's .env file. Someone accidentally pushes it to a public GitHub repo. They force-push to remove the commit 5 minutes later. Are the secrets safe?",
+      "choices": ["Yes — the commit is gone", "No — GitHub events, forks, caches, and automated scanners (like TruffleHog, GitGuardian) likely captured the secrets within seconds; rotate immediately", "Yes — force-push erases history", "Only if no one saw it"],
+      "correct": 1,
+      "explanation": "Git force-push doesn't delete the commit object (it's still reachable by SHA for a while). GitHub's event API, any forks, RSS feeds, and automated secret-scanning bots index public commits in real-time. Assume the secrets are compromised the moment they hit a public remote. Rotate ALL exposed credentials immediately."
     }
   ]
 }

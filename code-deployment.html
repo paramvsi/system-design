@@ -204,6 +204,8 @@ RUN --network=none go test ./...           # tests also hermetic</code></pre>
 
       <p><strong>(b) Artifact Store.</strong> S3-backed, content-addressed by the SHA-256 of the artifact. Key design: <em>never overwrite</em>. Once <code>sha256:abc123</code> is written, it is immutable. Rollback is trivial: point the deploy config at the previous SHA. No rebuild required. Retention policy garbage-collects artifacts older than 90 days with no active deploy reference. Total store size ~50 TB across org.</p>
 
+      <p>Content-addressing gives you deduplication for free. If two services produce the same binary from the same source, they share one artifact in S3. The store is append-only — writes are idempotent (PUT with If-None-Match). Reads go through a CDN layer for geographic caching; a deploy in us-east pulls artifacts from the local edge, not cross-region. Metadata (build_id, commit, timestamp, SBOM) lives in Postgres; the blob itself lives in S3. Signed URLs ensure only authorized deploy agents can pull artifacts.</p>
+
       <pre><code>// Artifact store put — idempotent, content-addressed
 PUT /artifacts/{sha256}
   If-None-Match: *          // only write if doesn't exist
@@ -274,8 +276,60 @@ func isEnabled(flagKey string, userID int64) bool {
     </div>
   </section>
 
+  <section class="section" id="data-model">
+    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Data Model</h2></div>
+    <div class="prose">
+      <pre><code>-- Core tables
+CREATE TABLE builds (
+    build_id        UUID PRIMARY KEY,
+    repo            TEXT NOT NULL,
+    commit_sha      CHAR(40) NOT NULL,
+    branch          TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'queued',   -- queued|building|testing|passed|failed
+    artifact_sha    CHAR(64),                         -- SHA-256 of output artifact
+    started_at      TIMESTAMPTZ,
+    finished_at     TIMESTAMPTZ,
+    duration_sec    INT,
+    logs_url        TEXT,
+    created_at      TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE artifacts (
+    sha256          CHAR(64) PRIMARY KEY,             -- content-addressed
+    build_id        UUID REFERENCES builds,
+    s3_bucket       TEXT NOT NULL,
+    s3_key          TEXT NOT NULL,
+    size_bytes      BIGINT NOT NULL,
+    sbom_url        TEXT,                             -- software bill of materials
+    created_at      TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE deploys (
+    deploy_id       UUID PRIMARY KEY,
+    service         TEXT NOT NULL,
+    artifact_sha    CHAR(64) REFERENCES artifacts,
+    strategy        TEXT NOT NULL DEFAULT 'canary',   -- canary|blue_green|rolling
+    status          TEXT NOT NULL DEFAULT 'canary_1pct',
+    canary_pct      INT DEFAULT 1,
+    prev_sha        CHAR(64),                         -- for rollback
+    started_at      TIMESTAMPTZ DEFAULT now(),
+    promoted_at     TIMESTAMPTZ,
+    rolled_back     BOOLEAN DEFAULT FALSE
+);
+
+CREATE TABLE feature_flags (
+    flag_key        TEXT PRIMARY KEY,
+    description     TEXT,
+    rollout_pct     INT DEFAULT 0,                    -- 0-100
+    enabled         BOOLEAN DEFAULT FALSE,
+    created_at      TIMESTAMPTZ DEFAULT now(),
+    updated_at      TIMESTAMPTZ DEFAULT now()
+);</code></pre>
+    </div>
+  </section>
+
   <section class="section" id="antipatterns">
-    <div class="section-head"><span class="section-n">07</span><h2 class="section-title">Anti-patterns</h2></div>
+    <div class="section-head"><span class="section-n">08</span><h2 class="section-title">Anti-patterns</h2></div>
     <div class="prose">
       <div class="antipattern"><div class="icon">&#x1F6AB;</div><div><div class="bad">Deploy on Friday at 5 PM — "it's just a small change"</div><p class="why">No one is watching dashboards over the weekend. A subtle regression in p99 latency compounds for 60 hours before Monday morning. Incident response time goes from minutes to days.</p></div><div class="good"><strong>Better:</strong> Deploy windows during business hours. Freeze deploys Friday afternoon. Canary analysis requires humans on-call to respond to alerts.</div></div>
       <div class="antipattern"><div class="icon">&#x1F6AB;</div><div><div class="bad">Mutable artifacts — "just SSH in and patch the JAR on the production server"</div><p class="why">You can never reproduce what's running in prod. Rollback is impossible because the previous state is gone. Debugging requires guessing what was patched. Audit trail is destroyed.</p></div><div class="good"><strong>Better:</strong> Immutable, SHA-tagged artifacts. Every deploy is a known, reproducible state. Rollback = point to previous SHA. Always.</div></div>
@@ -284,7 +338,7 @@ func isEnabled(flagKey string, userID int64) bool {
   </section>
 
   <section class="section" id="tradeoffs">
-    <div class="section-head"><span class="section-n">08</span><h2 class="section-title">Tradeoffs &amp; Design Choices</h2></div>
+    <div class="section-head"><span class="section-n">09</span><h2 class="section-title">Tradeoffs &amp; Design Choices</h2></div>
     <div class="prose">
       <ul>
         <li><strong>Canary vs Blue-Green.</strong> Canary: gradual traffic shift (1% &rarr; 100%), fine-grained analysis, but slower rollout. Blue-Green: instant swap between two full environments, fast rollback, but double infrastructure cost and no gradual validation.</li>
@@ -292,12 +346,13 @@ func isEnabled(flagKey string, userID int64) bool {
         <li><strong>Statistical canary vs threshold-based.</strong> Threshold (e.g., "error rate &lt; 1%") gives false positives when baseline is already at 0.95%. Mann-Whitney compares distributions directly — detects real regressions even when absolute values look fine.</li>
         <li><strong>Feature flags vs deploy-gated releases.</strong> Feature flags add runtime complexity (flag evaluation on every request, stale flags accumulate). But they let you decouple risky feature rollouts from infrastructure deploys — a 10-line config change doesn't need canary analysis.</li>
         <li><strong>Monorepo vs polyrepo CI.</strong> Monorepo: one pipeline triggers affected services (Google-style). Polyrepo: each repo owns its pipeline. Monorepo is simpler for cross-service changes but requires smart build-graph analysis to avoid rebuilding everything.</li>
+        <li><strong>Fast rollback vs fast forward.</strong> Rollback (re-deploy old artifact) is instant but means running old code with possible data-schema mismatches. Forward-fix (push a new commit with the fix) is slower but maintains forward progress. Best practice: rollback immediately to stop the bleeding, then forward-fix at normal pace.</li>
       </ul>
     </div>
   </section>
 
   <section class="section" id="failures">
-    <div class="section-head"><span class="section-n">09</span><h2 class="section-title">Failure Modes</h2></div>
+    <div class="section-head"><span class="section-n">10</span><h2 class="section-title">Failure Modes</h2></div>
     <div class="failure"><div class="failure-icon">&#x1F4A5;</div><div><div class="failure-title">Build cluster overloaded — builds queued for 30+ minutes</div><div class="failure-desc">1000 developers push simultaneously after a merge window. Build queue backs up. Developer velocity drops to zero.</div><div class="mitigation">&rarr; Mitigation: auto-scale build cluster on queue depth. Priority lanes for hotfix branches. Build deduplication (same commit = reuse in-flight build).</div></div></div>
     <div class="failure"><div class="failure-icon">&#x1F525;</div><div><div class="failure-title">Canary analysis gives false positive — promotes a bad build</div><div class="failure-desc">15-minute window isn't long enough to catch a slow memory leak. Canary passes, promotes to 100%, OOM crash 2 hours later.</div><div class="mitigation">&rarr; Mitigation: post-promotion monitoring with auto-rollback triggers. Extended soak tests for memory/disk metrics. Separate slow-burn canary for latency-insensitive regressions.</div></div></div>
     <div class="failure"><div class="failure-icon">&#x1F504;</div><div><div class="failure-title">Artifact store corruption — SHA mismatch</div><div class="failure-desc">S3 returns a corrupted artifact. Deploy rolls out a broken binary to canary pods.</div><div class="mitigation">&rarr; Mitigation: verify SHA-256 checksum on pull before deploying. Content-addressed means any corruption is detectable. Fail deploy if checksum doesn't match.</div></div></div>
@@ -306,7 +361,7 @@ func isEnabled(flagKey string, userID int64) bool {
   </section>
 
   <section class="section" id="interview-tips">
-    <div class="section-head"><span class="section-n">10</span><h2 class="section-title">Interview Tips</h2></div>
+    <div class="section-head"><span class="section-n">11</span><h2 class="section-title">Interview Tips</h2></div>
     <div class="prose">
       <ol>
         <li><strong>Lead with immutability.</strong> "Artifacts are SHA-tagged and never overwritten. Rollback is just re-pointing to the previous SHA." This single idea simplifies everything.</li>
@@ -319,7 +374,7 @@ func isEnabled(flagKey string, userID int64) bool {
   </section>
 
   <section class="section" id="similar">
-    <div class="section-head"><span class="section-n">11</span><h2 class="section-title">Similar Problems</h2></div>
+    <div class="section-head"><span class="section-n">12</span><h2 class="section-title">Similar Problems</h2></div>
     <div class="similar-grid">
       <a href="distributed-job-scheduler.html" class="similar-card"><h4>Distributed Job Scheduler</h4><p>Orchestrating build jobs across a cluster of workers</p></a>
       <a href="leetcode-judge.html" class="similar-card"><h4>LeetCode Judge</h4><p>Running untrusted code in isolated containers — same sandbox pattern</p></a>
@@ -330,12 +385,12 @@ func isEnabled(flagKey string, userID int64) bool {
   </section>
 
   <section class="section" id="evolution">
-    <div class="section-head"><span class="section-n">12</span><h2 class="section-title">Evolution</h2></div>
-    <div class="evolution-step"><div class="evolution-marker">1</div><div class="evolution-content"><h4>MVP — Manual deploy via SSH</h4><p>Developer builds locally, SCPs binary to server, restarts. Works for 1 server. Doesn't scale. No rollback.</p></div></div>
-    <div class="evolution-step"><div class="evolution-marker">2</div><div class="evolution-content"><h4>CI server + scripted deploy</h4><p>Jenkins builds on push. Deploy script copies artifact to fleet. All-at-once. Rollback = re-run old build.</p></div></div>
-    <div class="evolution-step"><div class="evolution-marker">3</div><div class="evolution-content"><h4>Immutable artifacts + container orchestration</h4><p>Docker images tagged by SHA. Kubernetes rolling update. Rollback = set image to previous SHA. No rebuild.</p></div></div>
-    <div class="evolution-step"><div class="evolution-marker">4</div><div class="evolution-content"><h4>Canary deploys + automated analysis</h4><p>1% canary with statistical comparison. Auto-promote or auto-rollback. Blast radius minimized.</p></div></div>
-    <div class="evolution-step"><div class="evolution-marker">5</div><div class="evolution-content"><h4>Feature flags + hermetic builds + SBOM</h4><p>Full supply-chain security. Deploy/release decoupled. Progressive delivery with fine-grained audience targeting.</p></div></div>
+    <div class="section-head"><span class="section-n">13</span><h2 class="section-title">Evolution</h2></div>
+    <div class="evolution-step"><div class="evolution-marker">1</div><div class="evolution-content"><h4>MVP — Manual deploy via SSH</h4><p>Developer builds locally, SCPs binary to server, restarts the process manually. Works for 1 server. No rollback — if something breaks, you SSH in and fix it live. Deployment is a human ritual, not a pipeline.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">2</div><div class="evolution-content"><h4>CI server + scripted deploy</h4><p>Jenkins watches the repo, builds on push. A shell script SCPs the artifact to every server and restarts. All-at-once — if it's broken, every server is broken. Rollback = re-run the old build, which takes 5 minutes. Better, but still painful.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">3</div><div class="evolution-content"><h4>Immutable artifacts + container orchestration</h4><p>Docker images tagged by SHA-256. Kubernetes rolling update replaces pods gradually. Rollback = <code>kubectl set image deployment/X image=sha256:prev</code>. No rebuild needed. First taste of sub-minute rollback. Handles 100+ services.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">4</div><div class="evolution-content"><h4>Canary deploys + automated statistical analysis</h4><p>New artifacts go to 1% of traffic first. Canary analyzer runs Mann-Whitney test on p99 latency and error rate vs baseline over 15 minutes. Auto-promote through 10% / 50% / 100% or auto-rollback. Blast radius limited to 1% of users for at most 15 minutes.</p></div></div>
+    <div class="evolution-step"><div class="evolution-marker">5</div><div class="evolution-content"><h4>Feature flags + hermetic builds + SBOM</h4><p>Full supply-chain security with hermetic builds and software bill of materials. Feature flags decouple deploy from release — ship code dark, enable gradually. Progressive delivery with fine-grained audience targeting (by user segment, geography, device). Flag hygiene automation cleans up stale flags.</p></div></div>
   </section>
 
 </main>
