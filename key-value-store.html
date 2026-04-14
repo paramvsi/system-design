@@ -376,25 +376,46 @@ sequenceDiagram
     <div class="evolution-step"><div class="evolution-marker">5</div><div class="evolution-content"><h4>Global tables + PITR + export-to-S3</h4><p>Multi-region active-active replication via global tables with last-writer-wins conflict resolution. Point-in-time recovery (continuous backups, restore to any second in the last 35 days). Native export to S3 for analytics -- reads from snapshots, zero impact on live table throughput. PartiQL support for SQL-like queries.</p></div></div>
   </section>
 
-
   <section class="section" id="references">
     <div class="section-head"><span class="section-n">📺</span><h2 class="section-title">References &amp; Videos</h2></div>
     <div class="prose">
       <div class="ref-grid">
-      <div class="ref-video">
-        <iframe src="https://www.youtube.com/embed/rnZmdmlR-2M" title="Design a Key-Value Store" loading="lazy" allowfullscreen></iframe>
+      <a href="https://www.youtube.com/watch?v=rnZmdmlR-2M" class="ref-video" target="_blank" rel="noopener">
+        <div class="ref-thumb">
+          <img src="https://i.ytimg.com/vi/rnZmdmlR-2M/maxresdefault.jpg"
+               alt="Design a Key-Value Store" loading="lazy"
+               onerror="this.src='https://i.ytimg.com/vi/rnZmdmlR-2M/hqdefault.jpg'"/>
+          <div class="ref-play"><div class="ref-play-icon"><svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg></div></div>
+        </div>
         <div class="ref-meta">
           <div class="ref-title">Design a Key-Value Store</div>
           <div class="ref-source">ByteByteGo · 12 min</div>
         </div>
-      </div>
-      <div class="ref-video">
-        <iframe src="https://www.youtube.com/embed/APnOe7N_Hwk" title="Amazon DynamoDB Deep Dive" loading="lazy" allowfullscreen></iframe>
+      </a>
+      <a href="https://www.youtube.com/watch?v=APnOe7N_Hwk" class="ref-video" target="_blank" rel="noopener">
+        <div class="ref-thumb">
+          <img src="https://i.ytimg.com/vi/APnOe7N_Hwk/maxresdefault.jpg"
+               alt="Amazon DynamoDB Deep Dive" loading="lazy"
+               onerror="this.src='https://i.ytimg.com/vi/APnOe7N_Hwk/hqdefault.jpg'"/>
+          <div class="ref-play"><div class="ref-play-icon"><svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg></div></div>
+        </div>
         <div class="ref-meta">
           <div class="ref-title">Amazon DynamoDB Deep Dive</div>
           <div class="ref-source">AWS re:Invent · 45 min</div>
         </div>
-      </div>
+      </a>
+      <a href="https://www.youtube.com/watch?v=UBO7yNlhHbo" class="ref-video" target="_blank" rel="noopener">
+        <div class="ref-thumb">
+          <img src="https://i.ytimg.com/vi/UBO7yNlhHbo/maxresdefault.jpg"
+               alt="Design a Key-Value Store — LSM Trees + Compaction" loading="lazy"
+               onerror="this.src='https://i.ytimg.com/vi/UBO7yNlhHbo/hqdefault.jpg'"/>
+          <div class="ref-play"><div class="ref-play-icon"><svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg></div></div>
+        </div>
+        <div class="ref-meta">
+          <div class="ref-title">Design a Key-Value Store — LSM Trees + Compaction</div>
+          <div class="ref-source">Jordan Has No Life · 35 min</div>
+        </div>
+      </a>
       <a href="https://www.allthingsdistributed.com/2007/10/amazons_dynamo.html" class="ref-link" target="_blank" rel="noopener">
         <div class="ref-title">Dynamo: Amazon's Key-Value Store</div>
         <div class="ref-source">Werner Vogels</div>

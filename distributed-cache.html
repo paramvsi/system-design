@@ -375,32 +375,46 @@ return 1  -- allowed</code></pre>
     <div class="evolution-step"><div class="evolution-marker">5</div><div class="evolution-content"><h4>Tiered cache: L1 local + L2 Redis + L3 DB</h4><p>Process-local cache (Caffeine/Guava) for ultra-hot keys. Redis cluster for warm keys. Database for cold reads. Each tier absorbs misses from the tier above. Total hit rate approaches 99.9%. Invalidation via Redis pub/sub or Redis 6 client tracking notifications.</p></div></div>
   </section>
 
-
   <section class="section" id="references">
     <div class="section-head"><span class="section-n">📺</span><h2 class="section-title">References &amp; Videos</h2></div>
     <div class="prose">
       <div class="ref-grid">
-      <div class="ref-video">
-        <iframe src="https://www.youtube.com/embed/iuqZvajTOyA" title="Redis In-Memory Database Crash Course" loading="lazy" allowfullscreen></iframe>
+      <a href="https://www.youtube.com/watch?v=iuqZvajTOyA" class="ref-video" target="_blank" rel="noopener">
+        <div class="ref-thumb">
+          <img src="https://i.ytimg.com/vi/iuqZvajTOyA/maxresdefault.jpg"
+               alt="Redis In-Memory Database Crash Course" loading="lazy"
+               onerror="this.src='https://i.ytimg.com/vi/iuqZvajTOyA/hqdefault.jpg'"/>
+          <div class="ref-play"><div class="ref-play-icon"><svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg></div></div>
+        </div>
         <div class="ref-meta">
           <div class="ref-title">Redis In-Memory Database Crash Course</div>
           <div class="ref-source">Hussein Nasser · 35 min</div>
         </div>
-      </div>
-      <div class="ref-video">
-        <iframe src="https://www.youtube.com/embed/DUbEgNw-F9c" title="Redis System Design — Distributed Cache" loading="lazy" allowfullscreen></iframe>
+      </a>
+      <a href="https://www.youtube.com/watch?v=DUbEgNw-F9c" class="ref-video" target="_blank" rel="noopener">
+        <div class="ref-thumb">
+          <img src="https://i.ytimg.com/vi/DUbEgNw-F9c/maxresdefault.jpg"
+               alt="Redis System Design — Distributed Cache" loading="lazy"
+               onerror="this.src='https://i.ytimg.com/vi/DUbEgNw-F9c/hqdefault.jpg'"/>
+          <div class="ref-play"><div class="ref-play-icon"><svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg></div></div>
+        </div>
         <div class="ref-meta">
           <div class="ref-title">Redis System Design — Distributed Cache</div>
           <div class="ref-source">ByteByteGo · 12 min</div>
         </div>
-      </div>
-      <div class="ref-video">
-        <iframe src="https://www.youtube.com/embed/U3RkDLtS7uY" title="Caching — System Design Interview" loading="lazy" allowfullscreen></iframe>
-        <div class="ref-meta">
-          <div class="ref-title">Caching — System Design Interview</div>
-          <div class="ref-source">Gaurav Sen · 10 min</div>
+      </a>
+      <a href="https://www.youtube.com/watch?v=pAP6KUhEqkE" class="ref-video" target="_blank" rel="noopener">
+        <div class="ref-thumb">
+          <img src="https://i.ytimg.com/vi/pAP6KUhEqkE/maxresdefault.jpg"
+               alt="Design a Distributed Cache — Full Deep Dive" loading="lazy"
+               onerror="this.src='https://i.ytimg.com/vi/pAP6KUhEqkE/hqdefault.jpg'"/>
+          <div class="ref-play"><div class="ref-play-icon"><svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg></div></div>
         </div>
-      </div>
+        <div class="ref-meta">
+          <div class="ref-title">Design a Distributed Cache — Full Deep Dive</div>
+          <div class="ref-source">Jordan Has No Life · 30 min</div>
+        </div>
+      </a>
       <a href="https://redis.io/docs/latest/operate/oss_and_stack/management/scaling/" class="ref-link" target="_blank" rel="noopener">
         <div class="ref-title">Scaling with Redis Cluster</div>
         <div class="ref-source">Redis Official Docs</div>

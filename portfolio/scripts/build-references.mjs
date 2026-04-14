@@ -25,8 +25,8 @@ const REFS = {
 
   "instagram": [
     { type: "video", id: "VJpfO6KdyWE", title: "Designing Instagram", source: "Gaurav Sen", dur: "14 min" },
-    { type: "video", id: "hnpzNAPiC0E", title: "Design Instagram — System Design Interview", source: "Tech Dummies", dur: "25 min" },
     { type: "video", id: "QmX2NPkJTKg", title: "System Design: Instagram", source: "ByteByteGo", dur: "12 min" },
+    { type: "video", id: "S2y9_XYOZsg", title: "Design Instagram — Complete Walkthrough", source: "Jordan Has No Life", dur: "35 min" },
     { type: "blog", url: "https://blog.algomaster.io/p/design-instagram-system-design-interview", title: "Design Instagram — System Design Interview", source: "AlgoMaster" },
     { type: "blog", url: "https://www.geeksforgeeks.org/design-instagram-a-system-design-interview-question/", title: "Designing Instagram", source: "GeeksforGeeks" },
   ],
@@ -53,15 +53,15 @@ const REFS = {
   ],
   "002-news-feed": [
     { type: "video", id: "pUHkRGpfu4o", title: "Design Twitter — System Design Interview", source: "Gaurav Sen", dur: "15 min" },
-    { type: "video", id: "wYk0xPP_P_8", title: "Design Facebook's Newsfeed", source: "Tech Dummies", dur: "25 min" },
     { type: "video", id: "R4-ippqELG0", title: "Design a News Feed System", source: "ByteByteGo", dur: "11 min" },
+    { type: "video", id: "6QwqtdBx0oE", title: "Design Twitter — Fan-out Deep Dive", source: "Jordan Has No Life", dur: "32 min" },
     { type: "blog", url: "https://blog.algomaster.io/p/design-a-news-feed-system", title: "Design a News Feed System", source: "AlgoMaster" },
     { type: "blog", url: "https://www.geeksforgeeks.org/design-twitter-a-system-design-interview-question/", title: "Design Twitter", source: "GeeksforGeeks" },
   ],
   "005-youtube-netflix": [
     { type: "video", id: "jPKTo1iGQiE", title: "System Design: YouTube", source: "Gaurav Sen", dur: "18 min" },
-    { type: "video", id: "lYoSd2WCJTo", title: "Design Netflix — System Design", source: "Tech Dummies", dur: "30 min" },
     { type: "video", id: "ryw1jgmGJkM", title: "How Netflix Really Works", source: "ByteByteGo", dur: "12 min" },
+    { type: "video", id: "a_Zy1DBUL5U", title: "Design YouTube — The Hard Parts", source: "Jordan Has No Life", dur: "28 min" },
     { type: "blog", url: "https://blog.bytebytego.com/p/ep130-design-a-system-like-youtube", title: "Design a System Like YouTube", source: "ByteByteGo Blog" },
     { type: "blog", url: "https://netflixtechblog.com/", title: "Netflix Tech Blog — Engineering at Scale", source: "Netflix Engineering" },
   ],
@@ -131,13 +131,14 @@ const REFS = {
   "distributed-cache": [
     { type: "video", id: "iuqZvajTOyA", title: "Redis In-Memory Database Crash Course", source: "Hussein Nasser", dur: "35 min" },
     { type: "video", id: "DUbEgNw-F9c", title: "Redis System Design — Distributed Cache", source: "ByteByteGo", dur: "12 min" },
-    { type: "video", id: "U3RkDLtS7uY", title: "Caching — System Design Interview", source: "Gaurav Sen", dur: "10 min" },
+    { type: "video", id: "pAP6KUhEqkE", title: "Design a Distributed Cache — Full Deep Dive", source: "Jordan Has No Life", dur: "30 min" },
     { type: "blog", url: "https://redis.io/docs/latest/operate/oss_and_stack/management/scaling/", title: "Scaling with Redis Cluster", source: "Redis Official Docs" },
     { type: "blog", url: "https://blog.bytebytego.com/p/a-crash-course-in-caching", title: "A Crash Course in Caching", source: "ByteByteGo Blog" },
   ],
   "key-value-store": [
     { type: "video", id: "rnZmdmlR-2M", title: "Design a Key-Value Store", source: "ByteByteGo", dur: "12 min" },
     { type: "video", id: "APnOe7N_Hwk", title: "Amazon DynamoDB Deep Dive", source: "AWS re:Invent", dur: "45 min" },
+    { type: "video", id: "UBO7yNlhHbo", title: "Design a Key-Value Store — LSM Trees + Compaction", source: "Jordan Has No Life", dur: "35 min" },
     { type: "blog", url: "https://www.allthingsdistributed.com/2007/10/amazons_dynamo.html", title: "Dynamo: Amazon's Key-Value Store", source: "Werner Vogels" },
     { type: "blog", url: "https://blog.algomaster.io/p/design-a-key-value-store", title: "Design a Key-Value Store", source: "AlgoMaster" },
   ],
@@ -383,16 +384,22 @@ const REFS = {
 // ══════════════════════════════════════════════════════════════════════
 
 function buildRefSection(refs) {
+  const playIcon = `<svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>`;
   const items = refs.map((r) => {
     if (r.type === "video") {
       return `
-      <div class="ref-video">
-        <iframe src="https://www.youtube.com/embed/${r.id}" title="${r.title}" loading="lazy" allowfullscreen></iframe>
+      <a href="https://www.youtube.com/watch?v=${r.id}" class="ref-video" target="_blank" rel="noopener">
+        <div class="ref-thumb">
+          <img src="https://i.ytimg.com/vi/${r.id}/maxresdefault.jpg"
+               alt="${r.title}" loading="lazy"
+               onerror="this.src='https://i.ytimg.com/vi/${r.id}/hqdefault.jpg'"/>
+          <div class="ref-play"><div class="ref-play-icon">${playIcon}</div></div>
+        </div>
         <div class="ref-meta">
           <div class="ref-title">${r.title}</div>
           <div class="ref-source">${r.source}${r.dur ? ` · ${r.dur}` : ""}</div>
         </div>
-      </div>`;
+      </a>`;
     }
     return `
       <a href="${r.url}" class="ref-link" target="_blank" rel="noopener">
