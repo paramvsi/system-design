@@ -60,6 +60,12 @@
       "label": "Used in problems",
       "number": "08",
       "html": "<div class=\"section-head\"><span class=\"section-n\">08</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Count active users uses gossip-like approximation algorithms (HyperLogLog unions). Distributed logging uses gossip for log-ingest membership.</p></div>"
+    },
+    {
+      "id": "references",
+      "label": "References & Videos",
+      "number": "📺",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">📺</span><h2 class=\"section-title\">References &amp; Videos</h2></div>\n    <div class=\"prose\">\n      <div class=\"ref-grid\">\n      <a href=\"https://www.youtube.com/watch?v=FY6OhPoT-As\" class=\"ref-video\" target=\"_blank\" rel=\"noopener\">\n        <div class=\"ref-thumb\">\n          <img src=\"https://i.ytimg.com/vi/FY6OhPoT-As/maxresdefault.jpg\" alt=\"Gossip Protocol Explained\" loading=\"lazy\" onerror=\"this.src='https://i.ytimg.com/vi/FY6OhPoT-As/hqdefault.jpg'\">\n          <div class=\"ref-play\"><div class=\"ref-play-icon\"><svg viewBox=\"0 0 24 24\"><polygon points=\"5,3 19,12 5,21\"></polygon></svg></div></div>\n        </div>\n        <div class=\"ref-meta\">\n          <div class=\"ref-title\">Gossip Protocol Explained</div>\n          <div class=\"ref-source\">Arpit Bhayani · 18 min</div>\n        </div>\n      </a>\n      <a href=\"https://www.youtube.com/watch?v=KmGy3sU6Xw8\" class=\"ref-video\" target=\"_blank\" rel=\"noopener\">\n        <div class=\"ref-thumb\">\n          <img src=\"https://i.ytimg.com/vi/KmGy3sU6Xw8/maxresdefault.jpg\" alt=\"Distributed Systems Concepts\" loading=\"lazy\" onerror=\"this.src='https://i.ytimg.com/vi/KmGy3sU6Xw8/hqdefault.jpg'\">\n          <div class=\"ref-play\"><div class=\"ref-play-icon\"><svg viewBox=\"0 0 24 24\"><polygon points=\"5,3 19,12 5,21\"></polygon></svg></div></div>\n        </div>\n        <div class=\"ref-meta\">\n          <div class=\"ref-title\">Distributed Systems Concepts</div>\n          <div class=\"ref-source\">Gaurav Sen · 12 min</div>\n        </div>\n      </a>\n      <a href=\"https://www.geeksforgeeks.org/gossip-protocol-in-distributed-systems/\" class=\"ref-link\" target=\"_blank\" rel=\"noopener\">\n        <div class=\"ref-title\">Gossip Protocol in Distributed Systems</div>\n        <div class=\"ref-source\">GeeksforGeeks</div>\n      </a>\n      <a href=\"https://cassandra.apache.org/doc/latest/cassandra/architecture/gossip.html\" class=\"ref-link\" target=\"_blank\" rel=\"noopener\">\n        <div class=\"ref-title\">Gossip in Apache Cassandra</div>\n        <div class=\"ref-source\">Cassandra Docs</div>\n      </a>\n      </div>\n    </div>"
     }
   ],
   "archSvg": null,
@@ -73,5 +79,5 @@
   ],
   "related": [],
   "similar": [],
-  "readMinutes": 3
+  "readMinutes": 4
 }

@@ -54,6 +54,12 @@
       "label": "Used in problems",
       "number": "07",
       "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>Payment gateway is fundamentally a tokenization service. E-commerce checkout integrates a tokenization layer (Stripe / Braintree) to stay PCI SAQ A. Bidding platforms and crypto exchanges use similar patterns for sensitive financial identifiers.</p></div>"
+    },
+    {
+      "id": "references",
+      "label": "References & Videos",
+      "number": "📺",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">📺</span><h2 class=\"section-title\">References &amp; Videos</h2></div>\n    <div class=\"prose\">\n      <div class=\"ref-grid\">\n      <a href=\"https://www.youtube.com/watch?v=olfaBgJrUBI\" class=\"ref-video\" target=\"_blank\" rel=\"noopener\">\n        <div class=\"ref-thumb\">\n          <img src=\"https://i.ytimg.com/vi/olfaBgJrUBI/maxresdefault.jpg\" alt=\"Payment Security — Tokenization\" loading=\"lazy\" onerror=\"this.src='https://i.ytimg.com/vi/olfaBgJrUBI/hqdefault.jpg'\">\n          <div class=\"ref-play\"><div class=\"ref-play-icon\"><svg viewBox=\"0 0 24 24\"><polygon points=\"5,3 19,12 5,21\"></polygon></svg></div></div>\n        </div>\n        <div class=\"ref-meta\">\n          <div class=\"ref-title\">Payment Security — Tokenization</div>\n          <div class=\"ref-source\">ByteByteGo · 12 min</div>\n        </div>\n      </a>\n      <a href=\"https://www.youtube.com/watch?v=fyTxwIa-1U0\" class=\"ref-video\" target=\"_blank\" rel=\"noopener\">\n        <div class=\"ref-thumb\">\n          <img src=\"https://i.ytimg.com/vi/fyTxwIa-1U0/maxresdefault.jpg\" alt=\"Tokenization &amp; PCI Compliance\" loading=\"lazy\" onerror=\"this.src='https://i.ytimg.com/vi/fyTxwIa-1U0/hqdefault.jpg'\">\n          <div class=\"ref-play\"><div class=\"ref-play-icon\"><svg viewBox=\"0 0 24 24\"><polygon points=\"5,3 19,12 5,21\"></polygon></svg></div></div>\n        </div>\n        <div class=\"ref-meta\">\n          <div class=\"ref-title\">Tokenization &amp; PCI Compliance</div>\n          <div class=\"ref-source\">ByteByteGo · 10 min</div>\n        </div>\n      </a>\n      <a href=\"https://stripe.com/docs/security\" class=\"ref-link\" target=\"_blank\" rel=\"noopener\">\n        <div class=\"ref-title\">Stripe Security &amp; PCI</div>\n        <div class=\"ref-source\">Stripe Docs</div>\n      </a>\n      <a href=\"https://www.geeksforgeeks.org/tokenization-in-system-design/\" class=\"ref-link\" target=\"_blank\" rel=\"noopener\">\n        <div class=\"ref-title\">Tokenization in System Design</div>\n        <div class=\"ref-source\">GeeksforGeeks</div>\n      </a>\n      </div>\n    </div>"
     }
   ],
   "archSvg": null,
@@ -61,5 +67,5 @@
   "mermaid": [],
   "related": [],
   "similar": [],
-  "readMinutes": 3
+  "readMinutes": 4
 }

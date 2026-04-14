@@ -103,6 +103,46 @@ session.execute(select(like_count), ConsistencyLevel.ONE);       // eventual</pr
     <div class="prose"><p>News feed mixes QUORUM writes (post creation) with ONE reads (feed display). E-commerce checkout uses QUORUM for orders + ONE for product-view-count updates. Google Docs uses linearizable for OT operations + bounded staleness for "saved" indicators.</p></div>
   </section>
 
+  <section class="section" id="references">
+    <div class="section-head"><span class="section-n">📺</span><h2 class="section-title">References &amp; Videos</h2></div>
+    <div class="prose">
+      <div class="ref-grid">
+      <a href="https://www.youtube.com/watch?v=uNxl3BFcKFQ" class="ref-video" target="_blank" rel="noopener">
+        <div class="ref-thumb">
+          <img src="https://i.ytimg.com/vi/uNxl3BFcKFQ/maxresdefault.jpg"
+               alt="Tunable Consistency — Distributed Databases" loading="lazy"
+               onerror="this.src='https://i.ytimg.com/vi/uNxl3BFcKFQ/hqdefault.jpg'"/>
+          <div class="ref-play"><div class="ref-play-icon"><svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg></div></div>
+        </div>
+        <div class="ref-meta">
+          <div class="ref-title">Tunable Consistency — Distributed Databases</div>
+          <div class="ref-source">Jordan Has No Life · 15 min</div>
+        </div>
+      </a>
+      <a href="https://www.youtube.com/watch?v=KmGy3sU6Xw8" class="ref-video" target="_blank" rel="noopener">
+        <div class="ref-thumb">
+          <img src="https://i.ytimg.com/vi/KmGy3sU6Xw8/maxresdefault.jpg"
+               alt="Consistency Models — Distributed Systems" loading="lazy"
+               onerror="this.src='https://i.ytimg.com/vi/KmGy3sU6Xw8/hqdefault.jpg'"/>
+          <div class="ref-play"><div class="ref-play-icon"><svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg></div></div>
+        </div>
+        <div class="ref-meta">
+          <div class="ref-title">Consistency Models — Distributed Systems</div>
+          <div class="ref-source">Gaurav Sen · 12 min</div>
+        </div>
+      </a>
+      <a href="https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html" class="ref-link" target="_blank" rel="noopener">
+        <div class="ref-title">Tunable Consistency in Cassandra</div>
+        <div class="ref-source">Cassandra Docs</div>
+      </a>
+      <a href="https://www.geeksforgeeks.org/eventual-consistency-vs-strong-consistency/" class="ref-link" target="_blank" rel="noopener">
+        <div class="ref-title">Eventual vs Strong Consistency</div>
+        <div class="ref-source">GeeksforGeeks</div>
+      </a>
+      </div>
+    </div>
+  </section>
+
 </main>
 </body>
 </html>

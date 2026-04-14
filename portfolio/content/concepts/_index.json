@@ -162,7 +162,7 @@
     "category": "Data Structures",
     "blurb": "Storing 1 PB of files with 3× replication = 3 PB of disk. Storage at scale is dominated by disk cost, and 3× is expensive — Facebook's photos, Netflix's video, Google's mail all add up to exabytes. Erasure coding achieve",
     "problemNumber": null,
-    "readMinutes": 3
+    "readMinutes": 4
   },
   {
     "slug": "geospatial-indexes",
@@ -192,7 +192,7 @@
     "category": "Data Structures",
     "blurb": "\"How many unique visitors did we have today?\" Naive: keep a Set<user_id>. For 100M users, that's 6+ GB of RAM. Do it per-URL or per-minute and you're out of memory fast. HyperLogLog answers the same question with 12 KB, ",
     "problemNumber": null,
-    "readMinutes": 3
+    "readMinutes": 4
   },
   {
     "slug": "memory-mapped-files",
@@ -237,7 +237,7 @@
     "category": "Data Structures",
     "blurb": "\"Make me a short URL.\" Sounds trivial. The shortcode must be: unique, URL-safe, short (6-8 chars), and ideally non-guessable. Plus, you need to mint billions of them at thousands per second without coordination overhead.",
     "problemNumber": null,
-    "readMinutes": 3
+    "readMinutes": 4
   },
   {
     "slug": "acid-vs-base",
@@ -267,7 +267,7 @@
     "category": "Databases",
     "blurb": "Every distributed database picks one of two behaviors when the network between nodes breaks: return stale data or refuse to serve the request. CAP is the formal statement that you cannot avoid this choice. Pretending oth",
     "problemNumber": null,
-    "readMinutes": 3
+    "readMinutes": 4
   },
   {
     "slug": "cdc-change-data-capture",
@@ -537,7 +537,7 @@
     "category": "Distributed Systems",
     "blurb": "1000 nodes in a Cassandra cluster. Each needs to know about the others — who's alive, what ranges they own, their load. Centralized approach (one server polls all 1000) creates a SPOF and a bottleneck. Broadcasting (each",
     "problemNumber": null,
-    "readMinutes": 3
+    "readMinutes": 4
   },
   {
     "slug": "heartbeat-failure-detection",
@@ -837,7 +837,7 @@
     "category": "Frontend & Mobile",
     "blurb": "Sending a push notification to 10 million users sounds simple — until you confront that you're not actually delivering the notification. Apple is. Google is. The browser vendor is. Your server hands the message to APNs (",
     "problemNumber": null,
-    "readMinutes": 3
+    "readMinutes": 4
   },
   {
     "slug": "service-workers-pwa-offline",
@@ -1107,7 +1107,7 @@
     "category": "Networking & Delivery",
     "blurb": "Every request to your API starts with \"what IP is api.example.com?\" That's DNS. Get it wrong and users can't reach you. Configure TTLs wrong and users are stuck on a dead IP for hours after you change it. Pick the wrong ",
     "problemNumber": null,
-    "readMinutes": 3
+    "readMinutes": 4
   },
   {
     "slug": "edge-computing",
@@ -1182,7 +1182,7 @@
     "category": "Networking & Delivery",
     "blurb": "You have 50 microservices in production. Every service-to-service call needs: TLS encryption, mTLS auth, retries, timeouts, circuit breaking, observability, traffic routing. Implementing all of that in every service, in ",
     "problemNumber": null,
-    "readMinutes": 3
+    "readMinutes": 4
   },
   {
     "slug": "tcp-vs-udp",
@@ -1227,7 +1227,7 @@
     "category": "Networking & Delivery",
     "blurb": "Stripe processes a payment. Your app needs to know when it succeeds. Two options:",
     "problemNumber": null,
-    "readMinutes": 3
+    "readMinutes": 4
   },
   {
     "slug": "websockets-sse-polling",
@@ -1287,7 +1287,7 @@
     "category": "Observability & Security",
     "blurb": "\"Our database is encrypted.\" Sounds great. Look closer: encrypted at rest with a single key controlled by the cloud provider. A DBA, a compromised app, an SRE running SELECT * sees plaintext. Encryption-at-rest only prot",
     "problemNumber": null,
-    "readMinutes": 3
+    "readMinutes": 4
   },
   {
     "slug": "gdpr-right-to-be-forgotten",
@@ -1347,7 +1347,7 @@
     "category": "Observability & Security",
     "blurb": "Your e-commerce app needs to store credit card numbers so customers don't re-enter them every time. The moment you do, your entire stack — every server that touches that data, every database that stores it, every backup ",
     "problemNumber": null,
-    "readMinutes": 3
+    "readMinutes": 4
   },
   {
     "slug": "zero-trust-networking",

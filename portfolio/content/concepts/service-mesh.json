@@ -54,6 +54,12 @@
       "label": "Used in problems",
       "number": "07",
       "html": "<div class=\"section-head\"><span class=\"section-n\">07</span><h2 class=\"section-title\">Used in problems</h2></div>\n    <div class=\"prose\"><p>News feed's microservices run inside Istio for mTLS + uniform observability. Uber's massive microservice fleet uses Envoy-based mesh internally. E-commerce uses mesh for traffic shaping during checkout-flow experiments.</p></div>"
+    },
+    {
+      "id": "references",
+      "label": "References & Videos",
+      "number": "📺",
+      "html": "<div class=\"section-head\"><span class=\"section-n\">📺</span><h2 class=\"section-title\">References &amp; Videos</h2></div>\n    <div class=\"prose\">\n      <div class=\"ref-grid\">\n      <a href=\"https://www.youtube.com/watch?v=16fgzklcF7Y\" class=\"ref-video\" target=\"_blank\" rel=\"noopener\">\n        <div class=\"ref-thumb\">\n          <img src=\"https://i.ytimg.com/vi/16fgzklcF7Y/maxresdefault.jpg\" alt=\"Service Mesh Explained\" loading=\"lazy\" onerror=\"this.src='https://i.ytimg.com/vi/16fgzklcF7Y/hqdefault.jpg'\">\n          <div class=\"ref-play\"><div class=\"ref-play-icon\"><svg viewBox=\"0 0 24 24\"><polygon points=\"5,3 19,12 5,21\"></polygon></svg></div></div>\n        </div>\n        <div class=\"ref-meta\">\n          <div class=\"ref-title\">Service Mesh Explained</div>\n          <div class=\"ref-source\">TechWorld with Nana · 15 min</div>\n        </div>\n      </a>\n      <a href=\"https://www.youtube.com/watch?v=lTAcCNbJ7KE\" class=\"ref-video\" target=\"_blank\" rel=\"noopener\">\n        <div class=\"ref-thumb\">\n          <img src=\"https://i.ytimg.com/vi/lTAcCNbJ7KE/maxresdefault.jpg\" alt=\"Microservices Communication — Service Mesh\" loading=\"lazy\" onerror=\"this.src='https://i.ytimg.com/vi/lTAcCNbJ7KE/hqdefault.jpg'\">\n          <div class=\"ref-play\"><div class=\"ref-play-icon\"><svg viewBox=\"0 0 24 24\"><polygon points=\"5,3 19,12 5,21\"></polygon></svg></div></div>\n        </div>\n        <div class=\"ref-meta\">\n          <div class=\"ref-title\">Microservices Communication — Service Mesh</div>\n          <div class=\"ref-source\">ByteByteGo · 10 min</div>\n        </div>\n      </a>\n      <a href=\"https://istio.io/latest/docs/concepts/what-is-istio/\" class=\"ref-link\" target=\"_blank\" rel=\"noopener\">\n        <div class=\"ref-title\">What is Istio?</div>\n        <div class=\"ref-source\">Istio Docs</div>\n      </a>\n      <a href=\"https://www.geeksforgeeks.org/what-is-a-service-mesh/\" class=\"ref-link\" target=\"_blank\" rel=\"noopener\">\n        <div class=\"ref-title\">What is a Service Mesh?</div>\n        <div class=\"ref-source\">GeeksforGeeks</div>\n      </a>\n      </div>\n    </div>"
     }
   ],
   "archSvg": null,
@@ -67,5 +73,5 @@
   ],
   "related": [],
   "similar": [],
-  "readMinutes": 3
+  "readMinutes": 4
 }
