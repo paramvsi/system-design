@@ -2,7 +2,7 @@
   "slug": "001-url-shortener",
   "title": "URL Shortener",
   "problemNumber": null,
-  "difficulty": "MEDIUM",
+  "difficulty": "EASY",
   "heroDescription": "A URL shortener maps long, unwieldy URLs to short memorable codes and redirects anyone who clicks them. The concept is trivial — a key-value lookup. The challenge is serving <span class=\"hl\">billions of redirects per day</span> with sub-100ms latency globally, zero collisions, and four-nines availability.",
   "tags": [
     "⚡ Core: Caching + Key Generation",

@@ -2,7 +2,7 @@
   "slug": "design-cdn",
   "title": "CDN",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "A global Content Delivery Network: serve cached copies of customer content from <strong>hundreds of edge points-of-presence</strong> (PoPs), delivering to users with sub-50ms RTT anywhere on Earth. The hard parts:\n      <span class=\"hl\">global routing</span> so requests land at the closest healthy PoP (Anycast);\n      a <span class=\"hl-accent\">cache hierarchy</span> that protects origin from stampedes at 10M+ req/sec;\n      and <span class=\"hl-accent\">cache invalidation</span> that reliably purges stale content from ~300 locations in seconds, not hours.\n      Cloudflare: 300+ PoPs, ~55M HTTP req/sec, serves ~20% of internet traffic. Akamai: 4000+ PoPs, older + deeper model.",
   "tags": [
     "⚡ Core: Anycast + Cache Hierarchy + Purge",

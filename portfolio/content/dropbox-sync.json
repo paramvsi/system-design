@@ -2,7 +2,7 @@
   "slug": "dropbox-sync",
   "title": "Dropbox Sync",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "A two-way file sync engine: every file in a user's \"Dropbox\" folder should appear identically across all their devices within seconds of any change. The hard parts:\n      a <span class=\"hl\">content-addressable block store</span> that deduplicates chunks across users for massive storage savings;\n      a <span class=\"hl-accent\">metadata service</span> that tells clients exactly which blocks to fetch/push per file version;\n      and a <span class=\"hl-accent\">sync loop</span> that reconciles local file-system changes with remote state while handling conflicts, offline edits, and flaky networks.\n      Dropbox stores exabytes of user data; clients sync ~billions of file events per day.",
   "tags": [
     "⚡ Core: Block Dedup + Metadata + Sync Loop",

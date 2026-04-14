@@ -2,7 +2,7 @@
   "slug": "google-calendar",
   "title": "Google Calendar",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "A calendar and scheduling platform handling recurring events, calendar sharing, and free/busy queries for 1.5 billion users across every timezone. The hard parts:\n      an <span class=\"hl\">RRULE recurrence engine</span> that expands \"every Monday forever\" into concrete instances on read without infinite storage, a <span class=\"hl-accent\">free/busy query system</span> that resolves availability across N calendars in milliseconds,\n      and a sync layer that keeps events consistent across web, mobile, and CalDAV clients even after offline edits. iCal defined the spec; Google Calendar made it work at planet scale.",
   "tags": [
     "Core: RRULE Expansion + Free/Busy",

@@ -2,7 +2,7 @@
   "slug": "008-web-crawler",
   "title": "Web Crawler",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "A system that automatically traverses the web — starting from seed URLs, fetching pages, extracting links, and repeating — to build a searchable index of internet content. Deceptively simple at small scale; one of the hardest distributed systems problems at Google scale.",
   "tags": [
     "⚡ Core: URL Frontier + Deduplication",

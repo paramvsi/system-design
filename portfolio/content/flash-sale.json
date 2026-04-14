@@ -2,7 +2,7 @@
   "slug": "flash-sale",
   "title": "Flash Sale",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "HARD",
   "heroDescription": "100K users hit \"Buy\" at the exact same second for 1K limited items. <strong>No overselling.</strong> The hard parts:\n      a <span class=\"hl\">waiting room</span> that absorbs the thundering herd without crashing your backend,\n      <span class=\"hl-accent\">atomic inventory decrement</span> that never goes negative even under 100K concurrent requests,\n      and a <span class=\"hl-accent\">payment pipeline</span> that pre-authorizes cards before entering the queue so checkout is instant for winners.\n      Amazon Prime Day, Xiaomi phone drops, Supreme releases — same pattern, different merch.",
   "tags": [
     "⚡ Core: Waiting Room + Atomic Inventory + Fair Queue",

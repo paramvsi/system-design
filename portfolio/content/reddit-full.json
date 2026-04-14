@@ -2,7 +2,7 @@
   "slug": "reddit-full",
   "title": "Reddit",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "1.7 billion monthly visits across millions of subreddit communities. The hard parts:\n      a <span class=\"hl\">Hot ranking algorithm</span> that decays old posts and surfaces fresh content without scanning every post on every page load,\n      <span class=\"hl-accent\">nested comment trees</span> stored efficiently for fast subtree retrieval and sorted by Wilson score,\n      and a <span class=\"hl-accent\">vote counting pipeline</span> that handles 50K votes/sec without hot-row contention or data loss.\n      Upvotes, downvotes, karma, moderation, subreddit-scoped feeds -- same bones as any community platform, but at massive scale.",
   "tags": [
     "Core: Hot Ranking + Comment Trees + Vote Pipeline",

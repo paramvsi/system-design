@@ -22,8 +22,14 @@ export function setRead(kind: ReadKind, slug: string, value: boolean): void {
   if (typeof window === "undefined") return;
   try {
     const key = storageKey(kind, slug);
-    if (value) window.localStorage.setItem(key, "1");
-    else window.localStorage.removeItem(key);
+    const tsKey = `read_ts:${kind}:${slug}`;
+    if (value) {
+      window.localStorage.setItem(key, "1");
+      window.localStorage.setItem(tsKey, String(Date.now()));
+    } else {
+      window.localStorage.removeItem(key);
+      window.localStorage.removeItem(tsKey);
+    }
     window.dispatchEvent(
       new CustomEvent("progress:change", {
         detail: { kind, slug, read: value },

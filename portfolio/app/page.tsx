@@ -4,7 +4,9 @@ import Link from "next/link";
 import Topbar from "@/components/Topbar";
 import Footer from "@/components/Footer";
 import ProblemCard from "@/components/ProblemCard";
+import BrowseSection from "@/components/BrowseSection";
 import ProgressStats from "@/components/ProgressStats";
+import SRSTracker from "@/components/SRSTracker";
 import ReadStateHydrator from "@/components/ReadStateHydrator";
 import type { IndexEntry } from "@/types/content";
 
@@ -337,6 +339,7 @@ export default async function LandingPage() {
             total={index.length}
             categories={categories}
           />
+          <SRSTracker />
         </section>
 
         {/* ═══════════════════ BROWSE BY CATEGORY ═══════════════════ */}
@@ -346,26 +349,7 @@ export default async function LandingPage() {
             <h2 className="lead-title">Browse by category</h2>
           </div>
 
-          {Object.entries(categories).map(([cat, slugs]) => {
-            const entries = slugs
-              .map((s) => bySlug.get(s))
-              .filter((e): e is IndexEntry => !!e);
-            entries.forEach((e) => seen.add(e.slug));
-            if (entries.length === 0) return null;
-            return (
-              <section className="category-block" key={cat}>
-                <div className="category-header">
-                  <h2>{cat}</h2>
-                  <span className="count">{entries.length} problems</span>
-                </div>
-                <div className="problem-grid">
-                  {entries.map((e) => (
-                    <ProblemCard key={e.slug} entry={e} />
-                  ))}
-                </div>
-              </section>
-            );
-          })}
+          <BrowseSection index={index} categories={categories} />
 
           {(() => {
             const other = index.filter((e) => !seen.has(e.slug));

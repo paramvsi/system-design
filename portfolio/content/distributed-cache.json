@@ -2,7 +2,7 @@
   "slug": "distributed-cache",
   "title": "Distributed Cache",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "An in-memory key-value store serving ~1M ops/sec per node with sub-millisecond latency. The hard parts:\n      <span class=\"hl\">hash-slot sharding</span> across a cluster of ~100 nodes so any key routes deterministically,\n      <span class=\"hl-accent\">eviction policies</span> (LRU/LFU) that keep hot data in RAM while memory stays bounded,\n      and a <span class=\"hl-accent\">replication + persistence</span> layer (leader-follower async replication, RDB snapshots + AOF logs) that survives node crashes without losing writes.\n      Redis, Memcached, Dragonfly -- same core pattern, different tradeoffs.",
   "tags": [
     "Core: Hash-Slot Sharding + Eviction + Replication",

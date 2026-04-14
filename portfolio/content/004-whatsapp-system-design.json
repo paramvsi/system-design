@@ -2,7 +2,7 @@
   "slug": "004-whatsapp-system-design",
   "title": "WhatsApp",
   "problemNumber": "04",
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "A real-time messaging system supporting one-to-one and group chat, delivery receipts, and offline message queuing at 2 billion user scale. The core challenge: maintaining 50 million persistent WebSocket connections while routing messages across hundreds of stateful servers in under 100ms.",
   "tags": [
     "⚡ Core: WebSockets + Real-time Routing",

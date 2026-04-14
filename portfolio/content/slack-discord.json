@@ -2,7 +2,7 @@
   "slug": "slack-discord",
   "title": "Slack / Discord",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "A real-time messaging platform with channels, DMs, threads, reactions, presence, and file sharing. The hard parts:\n      a <span class=\"hl\">persistent WebSocket fleet</span> holding tens of millions of long-lived connections, <span class=\"hl-accent\">message fan-out</span>\n      into channels with up to hundreds of thousands of members, and a <span class=\"hl-accent\">presence system</span> that reliably tells everyone who's online without collapsing under the cross-product of \"everyone watching everyone.\"\n      Discord carries ~200M MAU; Slack ~35M DAU. Both push billions of messages per day through hot WebSocket paths.",
   "tags": [
     "⚡ Core: WebSockets + Fan-Out + Presence",

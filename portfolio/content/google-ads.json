@@ -2,7 +2,7 @@
   "slug": "google-ads",
   "title": "Google Ads",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "HARD",
   "heroDescription": "Advertiser creates a campaign. Every search query or page-view triggers an <span class=\"hl\">ad auction</span> in under 100 ms.\n      The winner's ad is shown, the <span class=\"hl-accent\">click is tracked</span>, and the advertiser is billed on a CPC basis.\n      Scale: <strong>10M+ auctions per second</strong>. The hard parts:\n      a <span class=\"hl\">second-price auction</span> with quality scoring so the best ad wins (not just the richest bidder),\n      <span class=\"hl-accent\">budget pacing</span> that spends the daily budget evenly instead of blowing it in one hour,\n      and <span class=\"hl-accent\">click-fraud detection</span> that filters bots and click farms before billing advertisers.\n      Google, Meta, Amazon — same pattern, different inventory.",
   "tags": [
     "Core: Auction + Quality Score + Budget Pacing + Click Tracking",

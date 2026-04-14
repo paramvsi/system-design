@@ -2,7 +2,7 @@
   "slug": "instagram",
   "title": "Instagram",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "A photo and short-video sharing platform with feeds, stories, reels, and direct messaging serving 2 billion monthly active users. The hard parts:\n      a <span class=\"hl\">media upload pipeline</span> handling 95M+ daily uploads with on-the-fly transcoding, a <span class=\"hl-accent\">ranked feed</span> blending followed accounts and algorithmic recommendations,\n      and a stories/reels delivery system that's effectively a global short-video CDN. Twitter solved feeds; Instagram solved feeds + media at heavier per-item cost.",
   "tags": [
     "⚡ Core: Media Pipeline + Ranked Feed",

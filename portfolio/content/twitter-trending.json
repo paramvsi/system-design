@@ -2,7 +2,7 @@
   "slug": "twitter-trending",
   "title": "Twitter Trending",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "Surface the top-10 trending topics — hashtags, phrases, named entities — from the firehose of all tweets, refreshed every few minutes, per geo and per user. The hard parts:\n      <span class=\"hl\">approximate top-K</span> over a high-velocity stream where storing exact counts for every term is impossible;\n      <span class=\"hl-accent\">distinguishing a trend from steady background noise</span> (#love is always common, so it's not trending);\n      and <span class=\"hl-accent\">filtering spam + bot amplification</span> before a coordinated campaign games the list.\n      X/Twitter does ~500M tweets/day, ~6K/sec; trending updates for 400+ geos every ~5 minutes.",
   "tags": [
     "⚡ Core: Stream Top-K + Novelty + Anti-Spam",

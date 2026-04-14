@@ -2,7 +2,7 @@
   "slug": "search-engine",
   "title": "Search Engine",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "A web-scale search engine — crawl the public web, build an inverted index, serve queries in under 200 ms with high-quality ranked results. Google handles <strong>~100K queries per second</strong> over an index of <strong>hundreds of billions of pages</strong>, ~400 PB of data.\n      The hard parts: an <span class=\"hl\">inverted index</span> that fits across thousands of machines, a <span class=\"hl-accent\">query serving pipeline</span> that aggregates shard responses in milliseconds, and a <span class=\"hl-accent\">ranking system</span> that blends lexical match, link authority, and learned relevance.",
   "tags": [
     "⚡ Core: Inverted Index + Ranking",

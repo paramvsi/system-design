@@ -2,7 +2,7 @@
   "slug": "stock-exchange",
   "title": "High-Throughput Stock Exchange",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "HARD",
   "heroDescription": "Design a NASDAQ-scale order-matching system that processes millions of orders per second with single-digit microsecond latency, maintains deterministic fairness guarantees, and broadcasts every state change to thousands of participants in real-time.",
   "tags": [
     "Matching Engine",

@@ -2,7 +2,7 @@
   "slug": "leetcode-judge",
   "title": "LeetCode",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "Users submit code solutions in 15+ languages. The system compiles, runs against hidden test cases with strict time/memory limits, and returns a verdict — all within seconds. The hard parts:\n      <span class=\"hl\">sandboxed execution</span> that prevents user code from escaping or consuming unbounded resources,\n      a <span class=\"hl-accent\">judge queue</span> that handles 10K concurrent contest submissions without starving practice users,\n      and <span class=\"hl-accent\">plagiarism detection</span> across millions of historical submissions. LeetCode processes ~10M submissions/day.",
   "tags": [
     "⚡ Core: Sandbox + Judge Queue + Verdicts",

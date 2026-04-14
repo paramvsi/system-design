@@ -2,7 +2,7 @@
   "slug": "youtube-likes-counter",
   "title": "YouTube Likes Counter",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "EASY",
   "heroDescription": "A distributed counter system that handles 10M+ increments per second across 10B+ videos with eventual consistency for display.\n      The hard parts: a <span class=\"hl\">sharded counter architecture</span> that absorbs bursty write traffic without hot rows,\n      a <span class=\"hl-accent\">deduplication layer</span> ensuring each user can like a video only once,\n      and a read path from <span class=\"hl\">Redis cache</span> that serves stale-but-fast counts within ~5 seconds of real-time.\n      Instagram solved media pipelines; this problem isolates the counter subsystem at YouTube's write volume.",
   "tags": [
     "Core: Sharded Counters + Dedup",

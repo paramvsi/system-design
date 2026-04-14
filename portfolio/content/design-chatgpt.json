@@ -2,7 +2,7 @@
   "slug": "design-chatgpt",
   "title": "ChatGPT",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "HARD",
   "heroDescription": "User sends a prompt. API gateway routes it through a tokenizer to a <span class=\"hl\">GPU cluster of ~10K A100s</span>\n      running autoregressive inference. Tokens stream back via server-sent events — the user sees words appearing\n      one by one. The hard parts: a <span class=\"hl-accent\">KV-cache</span> that avoids O(N²) recomputation on every token,\n      <span class=\"hl-accent\">continuous batching</span> (vLLM/Orca) that keeps GPU utilization at ~80% instead of ~30%,\n      <span class=\"hl-accent\">tensor + pipeline parallelism</span> to shard 70B+ parameter models across multiple GPUs,\n      a <span class=\"hl-accent\">safety pipeline</span> (pre-classifier + post-classifier + RLHF alignment), and\n      per-token billing that meters usage accurately at 1B tokens/day.",
   "tags": [
     "Core: KV-Cache + Continuous Batching + Tensor Parallelism",

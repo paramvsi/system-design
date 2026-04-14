@@ -2,7 +2,7 @@
   "slug": "google-news",
   "title": "Google News",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "Crawl 50K+ news sources worldwide, rank by freshness + authority + personalization, and serve a unique feed to each of 1B users.\n      The hard parts: <span class=\"hl\">near-duplicate clustering</span> so users see one card per story with \"N sources\" instead of 50 identical headlines,\n      <span class=\"hl-accent\">freshness decay</span> that surfaces breaking news in seconds but lets evergreen content linger,\n      and a <span class=\"hl-accent\">diversity constraint</span> (greedy MMR) that prevents any single source from dominating the feed.\n      Google News, Apple News, MSN News, Flipboard -- same pattern, different editorial stance.\n      The system must balance three competing goals:\n      <strong>recency</strong> (show what's happening now),\n      <strong>authority</strong> (from trustworthy sources), and\n      <strong>relevance</strong> (personalized to each user's interests).",
   "tags": [
     "Core: Crawl + Cluster + Rank + Personalize",

@@ -2,7 +2,7 @@
   "slug": "fraud-detection",
   "title": "Real-time Fraud Detection",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "HARD",
   "heroDescription": "A system that scores every incoming payment / account action in under 100 ms and decides: approve, review, or block. The hard parts:\n      a <span class=\"hl\">low-latency feature store</span> that can answer \"how many card swipes has this user made in the last 5 minutes?\" in &lt; 10 ms;\n      an <span class=\"hl-accent\">online ML model</span> co-located with features returning a risk score in single-digit milliseconds;\n      and a <span class=\"hl-accent\">feedback loop</span> that closes the gap between a human-confirmed chargeback (days later) and retraining the model, without letting the fraudsters get a week head-start.\n      Stripe Radar, PayPal, Visa all run systems like this at 10K+ tx/sec.",
   "tags": [
     "⚡ Core: Online Features + ML Scoring + Feedback",

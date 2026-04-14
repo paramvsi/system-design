@@ -2,7 +2,7 @@
   "slug": "s3-object-storage",
   "title": "Amazon S3",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "A bucket-and-key object store with read-your-writes consistency, ~<strong>11 nines of durability</strong>, and exabyte-scale capacity. The hard parts:\n      a <span class=\"hl\">key → bytes</span> service that doesn't fall over at millions of requests per second;\n      <span class=\"hl-accent\">erasure-coded durability</span> cheaper than 3× replication but rebuilds gracefully;\n      and a <span class=\"hl-accent\">partition-key-hot-spot</span> story — what happens when everyone writes to keys starting with <code>2026-04-12/</code>.\n      S3 stores hundreds of trillions of objects and serves tens of millions of requests per second.",
   "tags": [
     "⚡ Core: Durability + Hot-Partition Handling",

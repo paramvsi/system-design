@@ -2,7 +2,7 @@
   "slug": "count-active-users",
   "title": "Count Unique Active Users",
   "problemNumber": "016",
-  "difficulty": "HARD",
+  "difficulty": "MEDIUM",
   "heroDescription": "Design a system to count DAU, WAU, and MAU at massive scale — balancing exact accuracy for financial reporting against real-time approximate answers for dashboards, using probabilistic data structures.",
   "tags": [
     "HyperLogLog",

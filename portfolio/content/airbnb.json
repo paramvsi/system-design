@@ -2,7 +2,7 @@
   "slug": "airbnb",
   "title": "Airbnb",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "A two-sided marketplace with ~7M listings and ~100M nights booked per year. The hard parts:\n      <span class=\"hl\">date-range availability search</span> — \"find homes in Lisbon for 4 guests, June 3–10, under $200/night\" is a surprisingly gnarly query;\n      <span class=\"hl-accent\">no-double-booking</span> with strong consistency on the calendar;\n      and <span class=\"hl-accent\">dynamic pricing</span> + complex fees (cleaning fee, service fee, taxes that vary by jurisdiction) without ever showing the guest one number and charging another.\n      Airbnb solved the \"Amazon but for someone's spare bedroom\" problem at planet scale.",
   "tags": [
     "⚡ Core: Availability + Pricing + Booking",

@@ -2,7 +2,7 @@
   "slug": "shopping-cart",
   "title": "Shopping Cart",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "500M carts updated daily across every device. <strong>Never lose a cart.</strong> The hard parts:\n      a <span class=\"hl\">hybrid storage layer</span> that keeps hot carts in Redis for sub-ms reads while persisting to DynamoDB for durability,\n      <span class=\"hl-accent\">guest-to-authenticated cart merge</span> that unions items without losing anything on login,\n      and <span class=\"hl-accent\">inventory soft-reservation with TTL</span> that holds stock for 15 minutes without hard-locking millions of abandoned items.\n      Amazon, Walmart, Shopify — every cart looks simple until it runs at 50K ops/sec.",
   "tags": [
     "Core: Add/Remove/Merge + Soft Hold + Price Lock",

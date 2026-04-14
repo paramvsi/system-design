@@ -2,7 +2,7 @@
   "slug": "crypto-exchange",
   "title": "Crypto Exchange",
   "problemNumber": "24",
-  "difficulty": null,
+  "difficulty": "HARD",
   "heroDescription": "A cryptocurrency exchange like Coinbase or Binance: order-book trading across hundreds of coin pairs, wallets for hundreds of coins, deposits + withdrawals to the public blockchain, 24/7 operation. The hard parts:\n      a <span class=\"hl\">matching engine</span> that's stricter than a stock exchange (never miss a trade, but also never double-spend);\n      <span class=\"hl-accent\">multi-chain wallet management</span> with hot/cold segregation — exchanges that hold everything in hot wallets get catastrophically hacked (Mt. Gox, FTX's neighbors);\n      and <span class=\"hl-accent\">deposit detection from blockchain</span> — monitoring 20+ chains' finality rules simultaneously without over-crediting reorg-able transactions.\n      Binance does ~$50B+ daily volume; peak trading is 100K+ trades/sec.",
   "tags": [
     "⚡ Core: Matching + Wallets + Blockchain Ingress",

@@ -1724,6 +1724,102 @@ a { color: inherit; }
   border-color: var(--accent-border);
 }
 
+/* ── SRS Tracker ── */
+.srs-tracker {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px 28px;
+  margin-bottom: 40px;
+}
+.srs-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.srs-icon { font-size: 24px; line-height: 1; }
+.srs-title {
+  font-family: var(--font-sans);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+.srs-subtitle {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.srs-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.srs-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.15s;
+}
+.srs-item:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-light);
+}
+.srs-item-title {
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.srs-item-badge {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.srs-item-badge[data-urgency="low"] {
+  background: hsl(200, 60%, 92%);
+  color: hsl(200, 60%, 35%);
+}
+.srs-item-badge[data-urgency="med"] {
+  background: hsl(38, 70%, 90%);
+  color: hsl(38, 70%, 30%);
+}
+.srs-item-badge[data-urgency="high"] {
+  background: hsl(0, 65%, 92%);
+  color: hsl(0, 65%, 35%);
+}
+[data-theme="dark"] .srs-tracker {
+  background: var(--bg-subtle);
+  border-color: var(--border);
+}
+[data-theme="dark"] .srs-item {
+  background: var(--bg);
+  border-color: var(--border);
+}
+[data-theme="dark"] .srs-item-badge[data-urgency="low"] {
+  background: hsla(200, 40%, 20%, 0.6);
+  color: hsl(200, 50%, 65%);
+}
+[data-theme="dark"] .srs-item-badge[data-urgency="med"] {
+  background: hsla(38, 40%, 18%, 0.6);
+  color: hsl(38, 50%, 60%);
+}
+[data-theme="dark"] .srs-item-badge[data-urgency="high"] {
+  background: hsla(0, 40%, 18%, 0.6);
+  color: hsl(0, 50%, 65%);
+}
+
 /* ── Filter bar (F4) ── */
 .filter-bar {
   display: flex;

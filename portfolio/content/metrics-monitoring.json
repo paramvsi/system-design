@@ -2,7 +2,7 @@
   "slug": "metrics-monitoring",
   "title": "Metrics & Monitoring",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "1M hosts each running an agent that collects CPU, memory, disk, and custom application metrics every 10-15 seconds. That is <strong>~100M data points/sec</strong> flowing into your ingest pipeline. The hard parts:\n      a <span class=\"hl\">time-series database</span> that stores 10M unique series with columnar compression (delta-of-delta timestamps, XOR-encoded floats),\n      a <span class=\"hl-accent\">query engine</span> that fans out across time-partitioned shards and returns aggregated results in &lt;1 second over weeks of data,\n      and an <span class=\"hl-accent\">alert evaluator</span> that runs thousands of threshold and anomaly-detection rules every 15-60 seconds without missing a single breach.\n      Datadog, Prometheus, New Relic, VictoriaMetrics — same architecture, different trade-offs.",
   "tags": [
     "Core: Agents + TSDB + Query Engine + Alerting",

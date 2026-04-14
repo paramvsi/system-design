@@ -2,7 +2,7 @@
   "slug": "key-value-store",
   "title": "Key-Value Store",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "10 million requests per second, 100 TB of data, single-digit millisecond p99 at any scale.\n      The hard parts:\n      a <span class=\"hl\">consistent hash ring</span> that routes every request to the right partition\n      without a central coordinator,\n      an <span class=\"hl-accent\">LSM storage engine</span> (memtable + WAL + SSTables + compaction) that turns\n      random writes into sequential I/O,\n      and <span class=\"hl-accent\">quorum replication</span> across three AZs so a single node or zone death\n      never loses data and never causes downtime.\n      Amazon DynamoDB, Apache Cassandra, Riak -- same lineage from the 2007 Dynamo paper.",
   "tags": [
     "Core: Consistent Hashing + LSM Engine + Quorum Replication",

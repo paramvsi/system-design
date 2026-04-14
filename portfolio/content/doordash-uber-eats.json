@@ -2,7 +2,7 @@
   "slug": "doordash-uber-eats",
   "title": "DoorDash / Uber Eats",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "A three-sided marketplace: <strong>eaters</strong> order, <strong>merchants</strong> prepare, <strong>Dashers</strong> deliver. The hard parts:\n      a <span class=\"hl\">dispatch engine</span> that assigns the right Dasher to the right order in real-time optimizing for ETA, efficiency, and driver earnings; a <span class=\"hl-accent\">live ETA system</span> updating predictions every few seconds based on traffic, restaurant prep time, and Dasher position;\n      and a <span class=\"hl-accent\">transactional order lifecycle</span> that doesn't lose your $47 burrito when the payment processor burps. DoorDash does ~2B orders/year; ~6M orders/day.",
   "tags": [
     "⚡ Core: Dispatch + ETA + Transactions",

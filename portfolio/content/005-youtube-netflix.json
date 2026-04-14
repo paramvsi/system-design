@@ -2,7 +2,7 @@
   "slug": "005-youtube-netflix",
   "title": "YouTube / Netflix",
   "problemNumber": "05",
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "A video streaming platform that ingests raw user-uploaded content (YouTube) or studio-licensed media (Netflix), transcodes it into adaptive renditions, and delivers billions of views globally with sub-2-second start times. The hard problems live in two separate worlds: the write path (encoding pipeline) and the read path (CDN delivery).",
   "tags": [
     "⚡ Core: Video Encoding Pipeline",

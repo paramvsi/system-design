@@ -2,7 +2,7 @@
   "slug": "collaborative-whiteboard",
   "title": "Collaborative Whiteboard",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "Infinite canvas. Shapes, text, freehand drawing. Multiple users see each other's <span class=\"hl\">cursors in real time</span>.\n      Undo/redo, zoom/pan, offline edits that sync when reconnected. Like <strong>Miro</strong> or <strong>FigJam</strong>.\n      The hard parts: a <span class=\"hl-accent\">CRDT for canvas objects</span> so concurrent edits merge without conflicts,\n      <span class=\"hl\">spatial indexing</span> so a canvas with 100K objects only sends the ~200 in your viewport,\n      and <span class=\"hl-accent\">per-user undo</span> that reverses your operations without undoing other people's work.\n      Scale: boards with 100K+ objects, 50+ simultaneous editors, sub-100ms collaboration latency.",
   "tags": [
     "Core: CRDT + Spatial Index + Real-Time Cursors + Per-User Undo",

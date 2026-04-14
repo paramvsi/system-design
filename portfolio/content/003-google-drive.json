@@ -2,7 +2,7 @@
   "slug": "003-google-drive",
   "title": "Google Drive",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "A cloud file storage and synchronisation service that lets users upload any file, access it from any device, share it with others, and keep it in sync across all their machines — even after offline edits. The hard part is not storing files. It's storing them efficiently, keeping them consistent, and syncing them reliably at petabyte scale.",
   "tags": [
     "⚡ Core: Chunk + Sync",

@@ -2,7 +2,7 @@
   {
     "slug": "004-whatsapp-system-design",
     "title": "WhatsApp",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 145,
       "s": 63,
@@ -66,7 +66,7 @@
   {
     "slug": "collaborative-whiteboard",
     "title": "Collaborative Whiteboard",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 38,
       "s": 85,
@@ -87,7 +87,7 @@
   {
     "slug": "gmail",
     "title": "Gmail",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 0,
       "s": 75,
@@ -108,7 +108,7 @@
   {
     "slug": "google-calendar",
     "title": "Google Calendar",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 210,
       "s": 80,
@@ -129,7 +129,7 @@
   {
     "slug": "reminder-alert",
     "title": "Reminder Alert",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 30,
       "s": 85,
@@ -150,7 +150,7 @@
   {
     "slug": "slack-discord",
     "title": "Slack / Discord",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 250,
       "s": 65,
@@ -213,7 +213,7 @@
   {
     "slug": "crypto-exchange",
     "title": "Crypto Exchange",
-    "difficulty": null,
+    "difficulty": "HARD",
     "accent": {
       "h": 42,
       "s": 90,
@@ -234,7 +234,7 @@
   {
     "slug": "google-ads",
     "title": "Google Ads",
-    "difficulty": null,
+    "difficulty": "HARD",
     "accent": {
       "h": 145,
       "s": 75,
@@ -255,7 +255,7 @@
   {
     "slug": "stock-exchange",
     "title": "High-Throughput Stock Exchange",
-    "difficulty": null,
+    "difficulty": "HARD",
     "accent": {
       "h": 230,
       "s": 75,
@@ -279,7 +279,7 @@
   {
     "slug": "fraud-detection",
     "title": "Real-time Fraud Detection",
-    "difficulty": null,
+    "difficulty": "HARD",
     "accent": {
       "h": 10,
       "s": 85,
@@ -364,7 +364,7 @@
   {
     "slug": "count-active-users",
     "title": "Count Unique Active Users",
-    "difficulty": "HARD",
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 234,
       "s": 70,
@@ -426,7 +426,7 @@
   {
     "slug": "design-cdn",
     "title": "CDN",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 270,
       "s": 55,
@@ -447,7 +447,7 @@
   {
     "slug": "design-chatgpt",
     "title": "ChatGPT",
-    "difficulty": null,
+    "difficulty": "HARD",
     "accent": {
       "h": 170,
       "s": 65,
@@ -468,7 +468,7 @@
   {
     "slug": "code-deployment",
     "title": "Code Deployment Pipeline",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 200,
       "s": 70,
@@ -489,7 +489,7 @@
   {
     "slug": "distributed-cache",
     "title": "Distributed Cache",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 0,
       "s": 70,
@@ -510,7 +510,7 @@
   {
     "slug": "leetcode-judge",
     "title": "LeetCode",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 38,
       "s": 90,
@@ -531,7 +531,7 @@
   {
     "slug": "metrics-monitoring",
     "title": "Metrics & Monitoring",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 145,
       "s": 60,
@@ -573,7 +573,7 @@
   {
     "slug": "unique-id-generator",
     "title": "Unique ID Generator",
-    "difficulty": null,
+    "difficulty": "EASY",
     "accent": {
       "h": 270,
       "s": 60,
@@ -657,7 +657,7 @@
   {
     "slug": "airbnb",
     "title": "Airbnb",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 350,
       "s": 72,
@@ -678,7 +678,7 @@
   {
     "slug": "doordash-uber-eats",
     "title": "DoorDash / Uber Eats",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 15,
       "s": 80,
@@ -699,7 +699,7 @@
   {
     "slug": "flash-sale",
     "title": "Flash Sale",
-    "difficulty": null,
+    "difficulty": "HARD",
     "accent": {
       "h": 350,
       "s": 80,
@@ -720,7 +720,7 @@
   {
     "slug": "shopping-cart",
     "title": "Shopping Cart",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 30,
       "s": 80,
@@ -741,7 +741,7 @@
   {
     "slug": "001-url-shortener",
     "title": "URL Shortener",
-    "difficulty": "MEDIUM",
+    "difficulty": "EASY",
     "accent": {
       "h": 217,
       "s": 91,
@@ -763,7 +763,7 @@
   {
     "slug": "005-youtube-netflix",
     "title": "YouTube / Netflix",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 0,
       "s": 78,
@@ -827,7 +827,7 @@
   {
     "slug": "google-news",
     "title": "Google News",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 215,
       "s": 85,
@@ -870,7 +870,7 @@
   {
     "slug": "search-engine",
     "title": "Search Engine",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 205,
       "s": 75,
@@ -891,7 +891,7 @@
   {
     "slug": "008-web-crawler",
     "title": "Web Crawler",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 234,
       "s": 70,
@@ -1018,7 +1018,7 @@
   {
     "slug": "ad-click-aggregator",
     "title": "Ad Click Aggregator",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 270,
       "s": 65,
@@ -1039,7 +1039,7 @@
   {
     "slug": "instagram",
     "title": "Instagram",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 330,
       "s": 72,
@@ -1082,7 +1082,7 @@
   {
     "slug": "reddit-full",
     "title": "Reddit",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 16,
       "s": 100,
@@ -1103,7 +1103,7 @@
   {
     "slug": "twitter-trending",
     "title": "Twitter Trending",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 200,
       "s": 80,
@@ -1124,7 +1124,7 @@
   {
     "slug": "youtube-likes-counter",
     "title": "YouTube Likes Counter",
-    "difficulty": null,
+    "difficulty": "EASY",
     "accent": {
       "h": 0,
       "s": 80,
@@ -1166,7 +1166,7 @@
   {
     "slug": "s3-object-storage",
     "title": "Amazon S3",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 28,
       "s": 88,
@@ -1208,7 +1208,7 @@
   {
     "slug": "dropbox-sync",
     "title": "Dropbox Sync",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 215,
       "s": 75,
@@ -1229,7 +1229,7 @@
   {
     "slug": "003-google-drive",
     "title": "Google Drive",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 217,
       "s": 91,
@@ -1251,7 +1251,7 @@
   {
     "slug": "key-value-store",
     "title": "Key-Value Store",
-    "difficulty": null,
+    "difficulty": "MEDIUM",
     "accent": {
       "h": 215,
       "s": 75,

@@ -2,7 +2,7 @@
   "slug": "ad-click-aggregator",
   "title": "Ad Click Aggregator",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "10 billion clicks per day, counted in real-time for billing and analytics. <strong>Every click is money.</strong> The hard parts:\n      a <span class=\"hl\">streaming aggregation pipeline</span> that groups clicks by campaign, ad, geo, and minute with exactly-once semantics,\n      <span class=\"hl-accent\">inline fraud detection</span> that filters bot clicks, click farms, and SDK spoofing before they pollute billing,\n      and an <span class=\"hl-accent\">OLAP query layer</span> that answers \"how many clicks did campaign X get in the last 24 hours?\" in under a second.\n      Google Ads, Meta Ads, Amazon DSP — same pipeline, different scale.",
   "tags": [
     "Core: Stream Aggregate + Fraud Filter + OLAP Query",

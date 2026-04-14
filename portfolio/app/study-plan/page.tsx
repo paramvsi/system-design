@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Topbar from "@/components/Topbar";
 import Footer from "@/components/Footer";
+import SRSTracker from "@/components/SRSTracker";
 
 export const metadata = {
   title: "30-Day Study Plan",
@@ -328,6 +329,8 @@ export default function StudyPlanPage() {
             <span><b>50+</b> concepts &middot; <b>30+</b> problems &middot; <b>20+</b> exercises</span>
           </div>
         </header>
+
+        <SRSTracker />
 
         {phases.map((phase, pi) => (
           <section className="category-block" key={pi}>

@@ -2,7 +2,7 @@
   "slug": "gmail",
   "title": "Gmail",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "An email service for ~1.8B users handling ~1B incoming emails per day plus outgoing. The hard parts:\n      an <span class=\"hl\">SMTP ingress</span> that accepts mail from anyone on the public internet while rejecting terabytes of daily spam;\n      a <span class=\"hl-accent\">per-user mailbox store</span> sharded across thousands of machines with search, labels, and conversation threading;\n      and <span class=\"hl-accent\">delivery reputation management</span> so your outbound mail doesn't get marked spam by other providers.\n      Gmail pioneered \"search, don't sort\" — replaced folders with labels + full-text search, which changed the email paradigm.",
   "tags": [
     "⚡ Core: SMTP Ingress + Spam + Search",

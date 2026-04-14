@@ -2,7 +2,7 @@
   "slug": "code-deployment",
   "title": "Code Deployment Pipeline",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "Developer pushes code. CI builds and tests inside <span class=\"hl\">isolated ephemeral containers</span>. An immutable,\n      SHA-tagged artifact is stored in an S3-backed content-addressed store. CD does a\n      <span class=\"hl-accent\">canary deploy to 1% of traffic</span>, runs automated statistical analysis comparing\n      canary vs baseline metrics over 15 minutes, then progressively promotes: 10% → 50% → 100%.\n      <span class=\"hl-accent\">Rollback = re-deploy the previous artifact</span> — no new build needed.\n      Feature flags decouple deploy from release: ship code dark, enable for 1% → 100% independently.\n      Google, Netflix, Meta — same pattern, different scale.",
   "tags": [
     "Core: Hermetic Build + Immutable Artifact + Canary Analysis",

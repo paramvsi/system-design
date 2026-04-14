@@ -2,7 +2,7 @@
   "slug": "reminder-alert",
   "title": "Reminder Alert",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "MEDIUM",
   "heroDescription": "Schedule a reminder for \"Thursday 9am in America/New_York\" and have it arrive on the user's phone at exactly that local time — even when DST changes, the user moves timezones, or the delivery channel is flaky. The hard parts:\n      <span class=\"hl\">time-bucketed scanning</span> that doesn't miss or duplicate reminders across millions of users,\n      <span class=\"hl-accent\">timezone materialization</span> that handles DST transitions correctly,\n      and <span class=\"hl-accent\">at-least-once delivery</span> with client-side dedup so a reminder arrives once, not zero or three times.\n      Google Calendar reminders, Slack scheduled messages, and medical appointment alerts all solve this.",
   "tags": [
     "⚡ Core: Time Buckets + Timezone + At-Least-Once",

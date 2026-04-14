@@ -2,7 +2,7 @@
   "slug": "unique-id-generator",
   "title": "Unique ID Generator",
   "problemNumber": null,
-  "difficulty": null,
+  "difficulty": "EASY",
   "heroDescription": "Generate globally unique, k-sortable, compact identifiers at over 1 million IDs per second across N machines with zero coordination.\n      The hard parts: a <span class=\"hl\">bit-layout balancing timestamp, machine, and sequence</span> that stays unique without a central authority,\n      handling <span class=\"hl-accent\">clock skew from NTP corrections</span> that can break monotonicity,\n      and keeping IDs compact enough (~11 chars base62) for URL-friendly use while encoding enough entropy to avoid collisions across 1,024 machines.",
   "tags": [
     "Core: Snowflake-style Distributed IDs",
