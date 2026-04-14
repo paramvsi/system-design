@@ -1,30 +1,62 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import FlowStepper from "./FlowStepper";
 import type { AccentHSL, ProblemSection } from "@/types/content";
 
 let mermaidModulePromise: Promise<typeof import("mermaid").default> | null = null;
+
+function isDark() {
+  return document.documentElement.getAttribute("data-theme") === "dark";
+}
 
 async function getMermaid(accentH: number) {
   if (!mermaidModulePromise) {
     mermaidModulePromise = import("mermaid").then((m) => m.default);
   }
   const mermaid = await mermaidModulePromise;
+  const dark = isDark();
   mermaid.initialize({
     startOnLoad: false,
     theme: "base",
     securityLevel: "loose",
-    themeVariables: {
-      primaryColor: `hsl(${accentH}, 80%, 94%)`,
-      primaryBorderColor: `hsl(${accentH}, 60%, 80%)`,
-      primaryTextColor: "#111110",
-      lineColor: "#ccc9c4",
-      secondaryColor: "#f7f7f5",
-      tertiaryColor: "#ffffff",
-      fontFamily: "Geist, system-ui, sans-serif",
-      fontSize: "13px",
-    },
+    themeVariables: dark
+      ? {
+          primaryColor: `hsl(${accentH}, 40%, 22%)`,
+          primaryBorderColor: `hsl(${accentH}, 35%, 35%)`,
+          primaryTextColor: "#eeeee8",
+          lineColor: "#3a3a36",
+          secondaryColor: "#1e1e1c",
+          tertiaryColor: "#161614",
+          noteBkgColor: "#1e1e1c",
+          noteTextColor: "#a8a8a2",
+          noteBorderColor: "#3a3a36",
+          actorTextColor: "#eeeee8",
+          actorBkg: `hsl(${accentH}, 40%, 18%)`,
+          actorBorder: `hsl(${accentH}, 35%, 30%)`,
+          actorLineColor: "#3a3a36",
+          signalColor: "#a8a8a2",
+          signalTextColor: "#eeeee8",
+          labelBoxBkgColor: "#1e1e1c",
+          labelBoxBorderColor: "#3a3a36",
+          labelTextColor: "#eeeee8",
+          loopTextColor: "#a8a8a2",
+          activationBkgColor: `hsl(${accentH}, 30%, 20%)`,
+          activationBorderColor: `hsl(${accentH}, 35%, 35%)`,
+          sequenceNumberColor: "#eeeee8",
+          fontFamily: "Geist, system-ui, sans-serif",
+          fontSize: "13px",
+        }
+      : {
+          primaryColor: `hsl(${accentH}, 80%, 94%)`,
+          primaryBorderColor: `hsl(${accentH}, 60%, 80%)`,
+          primaryTextColor: "#111110",
+          lineColor: "#ccc9c4",
+          secondaryColor: "#f7f7f5",
+          tertiaryColor: "#ffffff",
+          fontFamily: "Geist, system-ui, sans-serif",
+          fontSize: "13px",
+        },
     sequence: { useMaxWidth: true },
     flowchart: { useMaxWidth: true, htmlLabels: true },
   });
@@ -41,6 +73,17 @@ export default function ProblemSectionBody({
   accent: AccentHSL;
 }) {
   const bodyRef = useRef<HTMLDivElement>(null);
+  const [theme, setTheme] = useState("light");
+
+  // Watch for theme changes so Mermaid re-renders with correct colors
+  useEffect(() => {
+    setTheme(document.documentElement.getAttribute("data-theme") || "light");
+    const obs = new MutationObserver(() => {
+      setTheme(document.documentElement.getAttribute("data-theme") || "light");
+    });
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => obs.disconnect();
+  }, []);
 
   // Click delegation for architecture SVG node highlighting
   // (extractor rewrote `onclick="hlNode('x')"` → `data-hl-node="x"`).
@@ -154,6 +197,9 @@ export default function ProblemSectionBody({
       const wraps = root.querySelectorAll<HTMLElement>(".mermaid");
       if (wraps.length === 0) return;
 
+      // Reset mermaid module so it re-initializes with current theme colors
+      mermaidModulePromise = null;
+
       let mermaid: Awaited<ReturnType<typeof getMermaid>>;
       try {
         mermaid = await getMermaid(accent.h);
@@ -165,7 +211,7 @@ export default function ProblemSectionBody({
       for (let i = 0; i < wraps.length; i++) {
         if (cancelled) return;
         const wrap = wraps[i];
-        if (wrap.getAttribute("data-mermaid-rendered") === "1") continue;
+        // Always re-render on theme change (theme is in deps)
 
         const src =
           wrap.getAttribute("data-mermaid-source") ??
@@ -195,7 +241,7 @@ export default function ProblemSectionBody({
     return () => {
       cancelled = true;
     };
-  }, [section.id, accent.h, section.html]);
+  }, [section.id, accent.h, section.html, theme]);
 
   return (
     <section className="section" id={section.id} data-pagefind-body>
