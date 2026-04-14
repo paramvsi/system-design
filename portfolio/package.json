@@ -12,7 +12,7 @@
     "extract:mocks": "node scripts/extract.mjs --kind=mocks",
     "dev": "next dev",
     "build": "next build",
-    "index": "pagefind --site out --output-subdir pagefind",
+    "index": "npx pagefind --site out --output-subdir pagefind",
     "postbuild": "npm run index",
     "start": "npx serve out",
     "lint": "next lint"
