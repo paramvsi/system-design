@@ -18,7 +18,7 @@
     "category": "Communication",
     "blurb": "A real-time messaging system supporting one-to-one and group chat, delivery receipts, and offline message queuing at 2 billion user scale. The core challenge: maintaining 50 million persistent WebSocket connections while",
     "problemNumber": "04",
-    "readMinutes": 11
+    "readMinutes": 12
   },
   {
     "slug": "notification-system",
@@ -61,7 +61,7 @@
     "category": "Communication",
     "blurb": "Design a real-time video conferencing platform like Zoom or Microsoft Teams — delivering sub-300ms audio/video to millions of concurrent participants across the globe while adapting to wildly varying network conditions.",
     "problemNumber": "16",
-    "readMinutes": 13
+    "readMinutes": 14
   },
   {
     "slug": "collaborative-whiteboard",
@@ -229,7 +229,7 @@
     "category": "Financial & Trading",
     "blurb": "A cryptocurrency exchange like Coinbase or Binance: order-book trading across hundreds of coin pairs, wallets for hundreds of coins, deposits + withdrawals to the public blockchain, 24/7 operation. The hard parts: a matc",
     "problemNumber": "24",
-    "readMinutes": 9
+    "readMinutes": 10
   },
   {
     "slug": "google-ads",
@@ -295,7 +295,7 @@
     "category": "Financial & Trading",
     "blurb": "A system that scores every incoming payment / account action in under 100 ms and decides: approve, review, or block. The hard parts: a low-latency feature store that can answer \"how many card swipes has this user made in",
     "problemNumber": null,
-    "readMinutes": 9
+    "readMinutes": 10
   },
   {
     "slug": "stock-trading-platform",
@@ -400,7 +400,7 @@
     "category": "Infrastructure",
     "blurb": "How do you reliably execute millions of scheduled tasks at precisely the right time across a fleet of unreliable machines, ensuring no job is missed and no job runs twice?",
     "problemNumber": "016",
-    "readMinutes": 13
+    "readMinutes": 14
   },
   {
     "slug": "distributed-locking",
@@ -421,7 +421,7 @@
     "category": "Infrastructure",
     "blurb": "How do you guarantee that at most one process operates on a shared resource at any time, across machines that can crash, networks that can partition, and clocks that can drift?",
     "problemNumber": "017",
-    "readMinutes": 11
+    "readMinutes": 12
   },
   {
     "slug": "design-cdn",
@@ -631,7 +631,7 @@
     "category": "Marketplace & Booking",
     "blurb": "Design a real-time ride-hailing platform that matches riders with nearby drivers, tracks trips live on a map, handles geographic demand spikes, and calculates ETAs — all at city-scale.",
     "problemNumber": "05",
-    "readMinutes": 20
+    "readMinutes": 21
   },
   {
     "slug": "ecommerce-system-design",
@@ -865,7 +865,7 @@
     "category": "Search & Discovery",
     "blurb": "A typeahead system that returns ranked suggestions on every keystroke — at sub-100ms latency, for billions of daily searches. The challenge isn't finding matches. It's pre-organizing data so matches are already waiting.",
     "problemNumber": null,
-    "readMinutes": 10
+    "readMinutes": 11
   },
   {
     "slug": "search-engine",
@@ -929,7 +929,7 @@
     "category": "Search & Discovery",
     "blurb": "A local business discovery platform where users search for nearby restaurants, shops, and services by location, category, and filters. The core challenge is answering \"what is near me?\" across 100 million listings in und",
     "problemNumber": null,
-    "readMinutes": 11
+    "readMinutes": 12
   },
   {
     "slug": "leaderboard",
@@ -1140,7 +1140,7 @@
     "category": "Social & Feed",
     "blurb": "A distributed counter system that handles 10M+ increments per second across 10B+ videos with eventual consistency for display. The hard parts: a sharded counter architecture that absorbs bursty write traffic without hot ",
     "problemNumber": null,
-    "readMinutes": 8
+    "readMinutes": 9
   },
   {
     "slug": "google-docs",

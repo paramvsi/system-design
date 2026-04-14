@@ -63,6 +63,8 @@ const KNOWN_IDS = new Set([
   "comparison","decision",
   // Mock transcript sections
   "transcript","annotations",
+  // References
+  "references",
 ]);
 const isKnownSectionId = (id) => KNOWN_IDS.has(id) || id.startsWith("deep-dive");
 

@@ -397,6 +397,37 @@ CREATE TABLE usage (
     <div class="evolution-step"><div class="evolution-marker">5</div><div class="evolution-content"><h4>Model routing + speculative decoding + multimodal</h4><p>Route simple queries ("what's 2+2?") to a fast 7B model; complex queries to the full 70B. Speculative decoding: a small draft model proposes N tokens, the large model verifies in one forward pass — 2x throughput for free. Vision encoder for image inputs, audio encoder for voice. Prefix caching for system prompts shared across requests.</p></div></div>
   </section>
 
+
+  <section class="section" id="references">
+    <div class="section-head"><span class="section-n">📺</span><h2 class="section-title">References &amp; Videos</h2></div>
+    <div class="prose">
+      <div class="ref-grid">
+      <div class="ref-video">
+        <iframe src="https://www.youtube.com/embed/jkrNMKz9pWU" title="How ChatGPT Works Technically" loading="lazy" allowfullscreen></iframe>
+        <div class="ref-meta">
+          <div class="ref-title">How ChatGPT Works Technically</div>
+          <div class="ref-source">ByteByteGo · 10 min</div>
+        </div>
+      </div>
+      <div class="ref-video">
+        <iframe src="https://www.youtube.com/embed/bZQun8Y4L2A" title="LLM Inference Optimization" loading="lazy" allowfullscreen></iframe>
+        <div class="ref-meta">
+          <div class="ref-title">LLM Inference Optimization</div>
+          <div class="ref-source">Arpit Bhayani · 30 min</div>
+        </div>
+      </div>
+      <a href="https://lilianweng.github.io/posts/2023-01-27-the-transformer-family-v2/" class="ref-link" target="_blank" rel="noopener">
+        <div class="ref-title">The Transformer Family</div>
+        <div class="ref-source">Lilian Weng (OpenAI)</div>
+      </a>
+      <a href="https://vllm.ai/" class="ref-link" target="_blank" rel="noopener">
+        <div class="ref-title">vLLM: Easy, Fast, and Cheap LLM Serving</div>
+        <div class="ref-source">vLLM Project</div>
+      </a>
+      </div>
+    </div>
+  </section>
+
 </main>
 
 <script>
